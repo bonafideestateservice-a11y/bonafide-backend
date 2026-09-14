@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "description": "Modular, role-based Node.js + Express + TypeScript + Prisma API boilerplate",
   "main": "dist/server.js",
- "scripts": {
+  "prisma": {
+    "seed": "ts-node --transpile-only prisma/seed.ts"
+  },
+  "scripts": {
     "migrate": "npx prisma migrate dev",
+    "db:seed": "npx prisma db seed",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prisma:generate": "NODE_OPTIONS=--max_old_space_size=4096 npx prisma generate",
     "build": "rm -rf ./dist && tsc",
