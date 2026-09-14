@@ -11,7 +11,6 @@ export interface CreateClientData {
   termsAndCondition?: boolean;
   provider?: string | null;
   providerId?: string | null;
-  emailVerified?: boolean;
 }
 
 export interface UpdateClientData {
@@ -22,7 +21,6 @@ export interface UpdateClientData {
   termsAndCondition?: boolean;
   provider?: string | null;
   providerId?: string | null;
-  emailVerified?: boolean;
 }
 
 export interface FindClientUnique {
@@ -41,7 +39,6 @@ export const createClient = async (data: CreateClientData): Promise<User> => {
         termsAndCondition: data.termsAndCondition ?? false,
         provider: data.provider ?? "local",
         providerId: data.providerId ?? null,
-        emailVerified: data.emailVerified ?? false,
       },
     });
     logger.info(

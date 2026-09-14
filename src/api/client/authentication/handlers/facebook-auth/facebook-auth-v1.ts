@@ -8,8 +8,8 @@ import {
   findClient,
   updateClient,
 } from "../../services/database/client";
-import { logger } from "../../../../utils/logger";
-import { HttpStatusCode } from "../../../../exceptions";
+import { logger } from "../../../../../utils/logger";
+import { HttpStatusCode } from "../../../../../exceptions";
 
 passport.use(
   new FacebookStrategy(
@@ -19,13 +19,20 @@ passport.use(
       callbackURL: process.env.FACEBOOK_CALLBACK_URL!,
       profileFields: ["id", "displayName", "emails", "name"],
     },
-    async (_accessToken, _refreshToken, profile: Profile, done) => {
+    async (
+      _accessToken: string,
+      _refreshToken: string,
+      profile: Profile,
+      done: (err: unknown, user?: any) => void,
+    ) => {
       try {
         const email = profile.emails?.[0]?.value?.toLowerCase().trim();
         const facebookId = profile.id;
 
         if (!email) {
-          logger.error("No email found in Facebook profile", { profile });
+          logger.error(
+            `No email found in Facebook profile: ${JSON.stringify(profile)}`,
+          );
           return done(new Error("No email found in Facebook profile"));
         }
 
@@ -44,25 +51,25 @@ passport.use(
             password: null,
             provider: "facebook",
             providerId: facebookId,
-            emailVerified: true,
             role: ROLE.CLIENT,
           });
-          logger.info("New Facebook user created", { email });
+          logger.info(`New Facebook user created: ${email}`);
         } else if (!user.providerId || user.providerId !== facebookId) {
           user = await updateClient(
             { id: user.id },
             {
               provider: "facebook",
               providerId: facebookId,
-              emailVerified: true,
             },
           );
-          logger.info("Linked existing user with Facebook", { email });
+          logger.info(`Linked existing user with Facebook: ${email}`);
         }
 
         return done(null, user);
       } catch (err) {
-        logger.error("Facebook OAuth error", { error: err });
+        logger.error(
+          `Facebook OAuth error: ${err instanceof Error ? err.message : String(err)}`,
+        );
         return done(err);
       }
     },
@@ -70,14 +77,16 @@ passport.use(
 );
 
 passport.serializeUser((user: any, done) => {
-  logger.info("Serializing user for session (Facebook)", { userId: user?.id });
+  logger.info(
+    `Serializing user for session (Facebook): ${user?.id ?? "unknown"}`,
+  );
   done(null, user);
 });
 
 passport.deserializeUser((user: any, done) => {
-  logger.info("Deserializing user from session (Facebook)", {
-    userId: user?.id,
-  });
+  logger.info(
+    `Deserializing user from session (Facebook): ${user?.id ?? "unknown"}`,
+  );
   done(null, user);
 });
 
@@ -91,8 +100,7 @@ export const handleFacebookCallback = [
   }),
   (req: Request, res: Response) => {
     logger.info(
-      "Facebook OAuth callback successful, redirecting to /auth/facebook/success",
-      { userId: (req.user as any)?.id },
+      `Facebook OAuth callback successful, redirecting to /auth/facebook/success for userId=${(req.user as any)?.id ?? "unknown"}`,
     );
     return res.redirect("/api/:version/client/auth/facebook/success");
   },
@@ -109,7 +117,9 @@ export const facebookLoginSuccess = (req: Request, res: Response) => {
   }
 
   const { password, ...userWithoutPassword } = req.user as any;
-  logger.info("Facebook login successful", { userId: userWithoutPassword?.id });
+  logger.info(
+    `Facebook login successful for userId=${userWithoutPassword?.id ?? "unknown"}`,
+  );
   return res.status(HttpStatusCode.OK).json({ user: userWithoutPassword });
 };
 
@@ -124,7 +134,9 @@ export const facebookLogout = (req: Request, res: Response) => {
   try {
     req.logout((err) => {
       if (err) {
-        logger.error("Error during Facebook signout:", err);
+        logger.error(
+          `Error during Facebook signout: ${err instanceof Error ? err.message : String(err)}`,
+        );
         return res
           .status(HttpStatusCode.INTERNAL_SERVER)
           .json({ message: "Failed to sign out fb user" });
@@ -133,7 +145,9 @@ export const facebookLogout = (req: Request, res: Response) => {
       return res.status(HttpStatusCode.OK).json({ message: "Signed out" });
     });
   } catch (err) {
-    logger.error("Failed to sign out user via Facebook", { error: err });
+    logger.error(
+      `Failed to sign out user via Facebook: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return res
       .status(HttpStatusCode.BAD_REQUEST)
       .json({ message: "Failed to sign out user" });

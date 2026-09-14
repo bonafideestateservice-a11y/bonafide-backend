@@ -6,7 +6,7 @@ import type { Prisma } from "@prisma/client";
 export interface CreateAdminData {
   fullName: string;
   email: string;
-  password: string;
+  password?: string | null;
   role?: ROLE;
   termsAndCondition?: boolean;
 }
@@ -14,7 +14,7 @@ export interface CreateAdminData {
 export interface UpdateAdminData {
   fullName?: string;
   email?: string;
-  password?: string;
+  password?: string | null;
   role?: ROLE;
   termsAndCondition?: boolean;
 }
@@ -30,12 +30,14 @@ export const createAdmin = async (data: CreateAdminData): Promise<User> => {
       data: {
         fullName: data.fullName,
         email: data.email,
-        password: data.password,
+        password: data.password ?? null,
         role: data.role ?? ROLE.CLIENT,
         termsAndCondition: data.termsAndCondition ?? false,
       },
     });
-    logger.info(`User created successfully userId=${user.id} email=${user.email}`);
+    logger.info(
+      `User created successfully userId=${user.id} email=${user.email}`,
+    );
     return user;
   } catch (error) {
     logger.error(`Error creating user ${error}`);
@@ -57,7 +59,7 @@ export const getAllAdmins = async (): Promise<User[]> => {
 };
 
 export const findAdmin = async (
-  unique: FindAdminUnique
+  unique: FindAdminUnique,
 ): Promise<User | null> => {
   try {
     const where: Prisma.UserWhereUniqueInput = unique.id
@@ -65,17 +67,21 @@ export const findAdmin = async (
       : { email: unique.email! };
 
     const user = await prismaClient.user.findUnique({ where });
-    logger.info(`User lookup criteria=${JSON.stringify(unique)} found=${!!user}`);
+    logger.info(
+      `User lookup criteria=${JSON.stringify(unique)} found=${!!user}`,
+    );
     return user;
   } catch (error) {
-    logger.error(`Error finding user ${error} criteria=${JSON.stringify(unique)}`);
+    logger.error(
+      `Error finding user ${error} criteria=${JSON.stringify(unique)}`,
+    );
     throw error;
   }
 };
 
 export const updateAdmin = async (
   where: Prisma.UserWhereUniqueInput,
-  data: UpdateAdminData
+  data: UpdateAdminData,
 ): Promise<User> => {
   try {
     const updated = await prismaClient.user.update({ where, data });
@@ -88,7 +94,7 @@ export const updateAdmin = async (
 };
 
 export const deleteAdmin = async (
-  where: Prisma.UserWhereUniqueInput
+  where: Prisma.UserWhereUniqueInput,
 ): Promise<User> => {
   try {
     const deleted = await prismaClient.user.delete({ where });

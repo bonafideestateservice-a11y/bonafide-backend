@@ -8,9 +8,9 @@ import {
   findClient,
   updateClient,
 } from "../../services/database/client";
-import { logger } from "../../../../utils/logger";
-import { HttpStatusCode } from "../../../../exceptions";
-import { generateToken } from "../../../../utils/jwt";
+import { logger } from "../../../../../utils/logger";
+import { HttpStatusCode } from "../../../../../exceptions";
+import { generateToken } from "../../../../../utils/jwt";
 
 passport.use(
   new GoogleStrategy(
@@ -20,13 +20,20 @@ passport.use(
       callbackURL: process.env.GOOGLE_CALLBACK_URL!,
       passReqToCallback: false,
     },
-    async (_accessToken, _refreshToken, profile: Profile, done) => {
+    async (
+      _accessToken: string,
+      _refreshToken: string,
+      profile: Profile,
+      done: (err: unknown, user?: any) => void,
+    ) => {
       try {
         const email = profile.emails?.[0]?.value?.toLowerCase().trim();
         const googleId = profile.id;
 
         if (!email) {
-          logger.error("No email found in Google profile", { profile });
+          logger.error(
+            `No email found in Google profile: ${JSON.stringify(profile)}`,
+          );
           return done(new Error("No email found in Google profile"));
         }
 
@@ -48,25 +55,25 @@ passport.use(
             password: null,
             provider: "google",
             providerId: googleId,
-            emailVerified: true,
             role: ROLE.CLIENT,
           });
-          logger.info("New Google user created", { email });
+          logger.info(`New Google user created: ${email}`);
         } else if (!user.providerId || user.providerId !== googleId) {
           user = await updateClient(
             { id: user.id },
             {
               provider: "google",
               providerId: googleId,
-              emailVerified: true,
             },
           );
-          logger.info("Linked existing user with Google", { email });
+          logger.info(`Linked existing user with Google: ${email}`);
         }
 
         return done(null, user);
       } catch (err) {
-        logger.error("Google OAuth error", { err });
+        logger.error(
+          `Google OAuth error: ${err instanceof Error ? err.message : String(err)}`,
+        );
         return done(err);
       }
     },
@@ -74,12 +81,12 @@ passport.use(
 );
 
 passport.serializeUser((user: any, done) => {
-  logger.info("Serializing user for session", { userId: user?.id });
+  logger.info(`Serializing user for session: ${user?.id ?? "unknown"}`);
   done(null, user);
 });
 
 passport.deserializeUser((user: any, done) => {
-  logger.info("Deserializing user from session", { userId: user?.id });
+  logger.info(`Deserializing user from session: ${user?.id ?? "unknown"}`);
   done(null, user);
 });
 
@@ -104,18 +111,18 @@ export const handleGoogleCallback = [
 
     try {
       const token = generateToken({ id: user.id });
-      logger.info("Google OAuth callback successful, JWT generated", {
-        userId: user.id,
-      });
+      logger.info(
+        `Google OAuth callback successful, JWT generated for userId=${user.id}`,
+      );
 
       return res.status(HttpStatusCode.OK).json({
         status: "ok",
         data: { token },
       });
     } catch (err) {
-      logger.error("Failed to generate token after Google login", {
-        error: err,
-      });
+      logger.error(
+        `Failed to generate token after Google login: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return res
         .status(HttpStatusCode.INTERNAL_SERVER)
         .json({ message: "Token generation failed" });
@@ -134,7 +141,9 @@ export const googleLoginSuccess = (req: Request, res: Response) => {
   }
 
   const { password, ...userWithoutPassword } = req.user as any;
-  logger.info("Google login successful", { userId: userWithoutPassword?.id });
+  logger.info(
+    `Google login successful for userId=${userWithoutPassword?.id ?? "unknown"}`,
+  );
   return res.status(HttpStatusCode.OK).json({ user: userWithoutPassword });
 };
 
@@ -150,9 +159,9 @@ export const googleLogout = (req: Request, res: Response) => {
     if (req.session) {
       req.session.destroy((err) => {
         if (err) {
-          logger.error("Error destroying session during Google logout", {
-            error: err,
-          });
+          logger.error(
+            `Error destroying session during Google logout: ${err instanceof Error ? err.message : String(err)}`,
+          );
           return res
             .status(HttpStatusCode.INTERNAL_SERVER)
             .json({ message: "Failed to destroy session" });
@@ -171,9 +180,9 @@ export const googleLogout = (req: Request, res: Response) => {
       .status(HttpStatusCode.OK)
       .json({ message: "No session found, but logged out" });
   } catch (err: any) {
-    logger.error("Failed to sign out user via Google", {
-      error: err?.message || err,
-    });
+    logger.error(
+      `Failed to sign out user via Google: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return res
       .status(HttpStatusCode.BAD_REQUEST)
       .json({ message: "Failed to sign out user" });
