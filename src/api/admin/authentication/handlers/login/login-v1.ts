@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import bcrypt from "bcryptjs";
 
 import { findAdmin } from "../../services/database/admin";
 import {
@@ -8,6 +7,7 @@ import {
   ApiError,
 } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
+import { verifyPassword } from "../../../../../utils/password";
 import { generateToken } from "../../../../../utils/jwt";
 import { ROLE } from "@prisma/client";
 
@@ -61,7 +61,7 @@ export const login = async (
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(password, admin.password);
+    const isPasswordValid = await verifyPassword(password, admin.password);
 
     if (!isPasswordValid) {
       logger.warn(`Invalid password attempt for admin: ${email}`);

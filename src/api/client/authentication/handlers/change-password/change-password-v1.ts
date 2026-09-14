@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import bcrypt from "bcryptjs";
 import {
   HttpStatusCode,
   ApiError,
@@ -8,6 +7,7 @@ import {
 } from "../../../../../exceptions";
 import { findClient, updateClient } from "../../services/database/client";
 import { logger } from "../../../../../utils/logger";
+import { hashPassword, verifyPassword } from "../../../../../utils/password";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 
 /**
@@ -87,7 +87,7 @@ export const changePassword = async (
       );
     }
 
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    const isMatch = await verifyPassword(currentPassword, user.password);
 
     if (!isMatch) {
       logger.warn(`Incorrect current password for userId=${user.id}`);
@@ -95,7 +95,7 @@ export const changePassword = async (
     }
 
     // --- Hash and update new password ---
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    const hashedPassword = await hashPassword(newPassword);
 
     await updateClient({ id: user.id }, { password: hashedPassword });
 

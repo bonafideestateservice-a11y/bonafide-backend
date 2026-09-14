@@ -26,7 +26,7 @@ export const generateToken = (
     notBefore: "0", // Cannot use before now, can be configured to be deferred.
     algorithm: "HS256",
     // audience: config.JWT_AUDIENCE,
-    issuer: config.JWT_ISSUER,
+    ...(config.JWT_ISSUER && { issuer: config.JWT_ISSUER }),
   };
 
   return jwt.sign(payload, config.JWT_SECRET || "secret", options);
@@ -56,7 +56,7 @@ export const verifyToken = (token: string): Promise<AuthTokenPayload> => {
       config.JWT_SECRET || "",
       {
         algorithms: ["HS256"],
-        issuer: config.JWT_ISSUER,
+        ...(config.JWT_ISSUER && { issuer: config.JWT_ISSUER }),
       },
       (err, decoded) => {
         if (err) return reject(err);

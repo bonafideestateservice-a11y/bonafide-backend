@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import { ROLE } from "@prisma/client";
-import bcrypt from "bcryptjs";
 
 import { createClient, findClient } from "../../services/database/client";
 import {
@@ -10,6 +9,7 @@ import {
 } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
 import { generateToken } from "../../../../../utils/jwt";
+import { hashPassword } from "../../../../../utils/password";
 
 export const signUp = async (
   req: Request,
@@ -57,7 +57,7 @@ export const signUp = async (
         : ROLE.CLIENT;
 
     // --- Hash password ---
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
 
     // --- Create user ---
     const user = await createClient({

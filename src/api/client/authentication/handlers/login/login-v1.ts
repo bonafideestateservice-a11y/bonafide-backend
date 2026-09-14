@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import bcrypt from "bcryptjs";
 
 import { findClient } from "../../services/database/client";
 import {
@@ -9,6 +8,7 @@ import {
 } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
 import { generateToken } from "../../../../../utils/jwt";
+import { verifyPassword } from "../../../../../utils/password";
 
 export const login = async (
   req: Request,
@@ -54,7 +54,7 @@ export const login = async (
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await verifyPassword(password, user.password);
 
     if (!isPasswordValid) {
       logger.warn(`Invalid password attempt for user: ${email}`);

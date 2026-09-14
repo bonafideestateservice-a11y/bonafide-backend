@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import {
   HttpStatusCode,
@@ -7,6 +6,7 @@ import {
   InternalServerError,
 } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
+import { hashPassword } from "../../../../../utils/password";
 import { findValidResetToken, markTokenAsUsed } from "../../../../services/database/password-reset-token";
 import { updateAdmin } from "../../services/database/admin";
 
@@ -36,7 +36,7 @@ export const resetPassword = async (
       return next(new BadRequestError("Token is invalid or has expired."));
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await hashPassword(password);
 
     await updateAdmin({ id: resetRecord.userId }, { password: hashedPassword });
     logger.info(`Password reset successful for admin: ${resetRecord.userId}`);

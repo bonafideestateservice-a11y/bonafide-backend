@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import bcrypt from "bcryptjs";
 import {
   HttpStatusCode,
   ApiError,
@@ -8,6 +7,7 @@ import {
 } from "../../../../../exceptions";
 import { findAdmin, updateAdmin } from "../../services/database/admin";
 import { logger } from "../../../../../utils/logger";
+import { hashPassword, verifyPassword } from "../../../../../utils/password";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 
 /**
@@ -85,7 +85,7 @@ export const changePassword = async (
       );
     }
 
-    const isMatch = await bcrypt.compare(currentPassword, admin.password);
+    const isMatch = await verifyPassword(currentPassword, admin.password);
 
     if (!isMatch) {
       logger.warn(`Incorrect current password for adminId=${admin.id}`);
@@ -93,7 +93,7 @@ export const changePassword = async (
     }
 
     // --- Hash and update new password ---
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    const hashedPassword = await hashPassword(newPassword);
 
     await updateAdmin({ id: admin.id }, { password: hashedPassword });
 
