@@ -8,13 +8,14 @@ import {
 import { logger } from "../../../../../utils/logger";
 import { hashPassword } from "../../../../../utils/password";
 import { findValidResetToken, markTokenAsUsed } from "../../../../services/database/password-reset-token";
-import { updateClient } from "../../services/database/client";
+import { findClient, updateClient } from "../../services/database/client";
 
 /**
- * Handler for resetting a user's password using a reset token.
- * - Verifies the token and expiry via the PasswordResetToken database service
+ * Handler for resetting a user's password using a reset OTP.
+ * - Verifies the OTP and expiry via the PasswordResetToken database service
+ * - Verifies the OTP belongs to the provided email
  * - Updates the user's password
- * - Marks the token as used
+ * - Marks the OTP as used
  */
 export const resetPassword = async (
   req: Request,
@@ -22,24 +23,28 @@ export const resetPassword = async (
   next: NextFunction
 ) => {
   try {
-    const { token } = req.params;
-    const { password } = req.body;
+    const { email, otp, password } = req.body;
 
-    if (!token || !password) {
-      logger.warn("Token and password are required for password reset.");
-      return next(new BadRequestError("Token and password are required."));
+    if (!email || !otp || !password) {
+      logger.warn("Email, OTP, and password are required for password reset.");
+      return next(new BadRequestError("Email, OTP, and password are required."));
+    }
+
+    const user = await findClient({ email: email.toLowerCase().trim() });
+    if (!user) {
+      return next(new BadRequestError("Invalid email or OTP."));
     }
 
     const tokenHash = crypto
       .createHash("sha256")
-      .update(token.trim())
+      .update(otp.trim())
       .digest("hex");
 
     const resetRecord = await findValidResetToken(tokenHash);
 
-    if (!resetRecord) {
-      logger.warn("Invalid or expired password reset token.");
-      return next(new BadRequestError("Token is invalid or has expired."));
+    if (!resetRecord || resetRecord.userId !== user.id) {
+      logger.warn(`Invalid or expired password reset OTP for email: ${email}`);
+      return next(new BadRequestError("OTP is invalid or has expired."));
     }
 
     const hashedPassword = await hashPassword(password);

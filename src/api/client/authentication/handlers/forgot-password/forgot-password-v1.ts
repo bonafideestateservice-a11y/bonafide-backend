@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
-import { createPasswordResetToken } from "../../../../../utils/jwt";
+import { generateNumericOTP } from "../../../../../utils/otp";
 import { HttpStatusCode, NotFoundError, ApiError } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
 import { appEvents, AppEventTypes } from "../../../../../events";
@@ -36,35 +36,33 @@ export const forgotPassword = async (
       return next(new NotFoundError("No account found with that email address."));
     }
 
-    // --- Generate reset token and hash ---
-    const { resetToken, passwordResetExpires } = createPasswordResetToken();
-    const tokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
+    // --- Generate OTP and hash ---
+    const otp = generateNumericOTP(6);
+    const tokenHash = crypto.createHash("sha256").update(otp).digest("hex");
+    const passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-    // --- Persist hashed token ---
+    // --- Persist hashed OTP ---
     await persistPasswordResetToken({
       userId: user.id,
       tokenHash,
       expiresAt: new Date(passwordResetExpires),
     });
 
-    // --- Build reset link ---
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-
     // --- Emit event (handled by listeners for email delivery) ---
     appEvents.emit(AppEventTypes.FORGOT_PASSWORD, {
       userId: user.id,
       email: user.email,
-      resetLink,
-      expiresIn: "1 hour",
+      otp, // Sending OTP instead of resetLink
+      expiresIn: "10 minutes",
     });
 
-    logger.info(`Password reset token generated for userId=${user.id} email=${user.email}`);
+    logger.info(`Password reset OTP generated for userId=${user.id} email=${user.email}`);
 
     res.status(HttpStatusCode.OK).json({
       status: "success",
-      message: "Password reset link sent to email.",
-      // TODO: Remove token from response in production — rely on email delivery only
-      token: resetToken,
+      message: "Password reset OTP sent to email.",
+      // TODO: Remove OTP from response in production — rely on email delivery only
+      otp,
     });
   } catch (error) {
     logger.error(`Error in forgot password handler: ${error}`);

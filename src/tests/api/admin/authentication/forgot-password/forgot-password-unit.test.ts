@@ -3,14 +3,14 @@
 
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
-import { forgotPassword } from "../../../../../api/client/authentication/handlers/forgot-password";
-import { findClient } from "../../../../../api/client/authentication/services/database/client";
+import { forgotPassword } from "../../../../../api/admin/authentication/handlers/forgot-password";
+import { findAdmin } from "../../../../../api/admin/authentication/services/database/admin";
 import { generateNumericOTP } from "../../../../../utils/otp";
 import { createPasswordResetToken as persistPasswordResetToken } from "../../../../../api/services/database/password-reset-token";
 import { HttpStatusCode, NotFoundError, ApiError } from "../../../../../exceptions";
 
 // --- Mock all dependencies ---
-jest.mock("../../../../../api/client/authentication/services/database/client");
+jest.mock("../../../../../api/admin/authentication/services/database/admin");
 jest.mock("../../../../../utils/otp");
 jest.mock("../../../../../api/services/database/password-reset-token");
 jest.mock("../../../../../utils/logger", () => ({
@@ -21,7 +21,7 @@ jest.mock("../../../../../events", () => ({
   AppEventTypes: { FORGOT_PASSWORD: "FORGOT_PASSWORD" },
 }));
 
-const mockedFindClient = findClient as jest.Mock;
+const mockedFindAdmin = findAdmin as jest.Mock;
 const mockedGenerateOTP = generateNumericOTP as jest.Mock;
 const mockedPersistResetToken = persistPasswordResetToken as jest.Mock;
 
@@ -64,17 +64,17 @@ describe("forgotPassword handler (unit)", () => {
   });
 
   it("returns 404 when user is not found", async () => {
-    mockedFindClient.mockResolvedValue(null);
+    mockedFindAdmin.mockResolvedValue(null);
     const { req, res, next } = buildMockReqRes({ email: "ghost@example.com" });
 
     await forgotPassword(req, res, next);
 
-    expect(mockedFindClient).toHaveBeenCalledWith({ email: "ghost@example.com" });
+    expect(mockedFindAdmin).toHaveBeenCalledWith({ email: "ghost@example.com" });
     expect(next).toHaveBeenCalledWith(expect.any(NotFoundError));
   });
 
   it("returns 200 with OTP on success", async () => {
-    mockedFindClient.mockResolvedValue({ id: "u1", email: "user@example.com" });
+    mockedFindAdmin.mockResolvedValue({ id: "u1", email: "user@example.com" });
     mockedGenerateOTP.mockReturnValue("123456");
     mockedPersistResetToken.mockResolvedValue({ id: "t1" });
 
@@ -99,7 +99,7 @@ describe("forgotPassword handler (unit)", () => {
   });
 
   it("calls next with 500 when an unexpected error is thrown", async () => {
-    mockedFindClient.mockRejectedValue(new Error("DB fail"));
+    mockedFindAdmin.mockRejectedValue(new Error("DB fail"));
     const { req, res, next } = buildMockReqRes({ email: "user@example.com" });
 
     await forgotPassword(req, res, next);

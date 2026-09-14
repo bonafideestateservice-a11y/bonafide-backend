@@ -5,6 +5,7 @@ import { login } from "./handlers/login";
 import { changePassword } from "./handlers/change-password";
 import { forgotPassword } from "./handlers/forgot-password";
 import { resetPassword } from "./handlers/reset-password";
+import { verifyOtp } from "./handlers/verify-otp/verify-otp-v1";
 import {
   initiateGoogleLogin,
   handleGoogleCallback,
@@ -191,42 +192,67 @@ router.post("/forgot-password", forgotPassword);
 
 /**
  * @swagger
- * /api/{version}/auth/reset-password/{token}:
+ * /api/{version}/client/verify-otp:
  *   post:
  *     tags: [Authentication]
- *     summary: Reset a password using a valid reset token
+ *     summary: Verify a password reset OTP
  *     security: []
  *     parameters:
  *       - in: path
  *         name: version
  *         required: true
  *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [otp]
+ *             properties:
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP is valid
+ *       400:
+ *         description: Invalid or expired OTP
+ */
+router.post("/verify-otp", verifyOtp);
+
+/**
+ * @swagger
+ * /api/{version}/client/reset-password:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Reset a password using a valid OTP
+ *     security: []
+ *     parameters:
  *       - in: path
- *         name: token
+ *         name: version
  *         required: true
- *         description: Plain reset token received via email
  *         schema: { type: string }
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/ResetPasswordRequest'
+ *             type: object
+ *             required: [email, otp, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *               password:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Password reset successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/StatusMessageResponse'
  *       400:
- *         description: Invalid/expired token or missing password
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: Invalid/expired OTP or missing fields
  */
-router.post("/reset-password/:token", resetPassword);
+router.post("/reset-password", resetPassword);
 
 /**
  * @swagger

@@ -12,6 +12,7 @@ import { logger } from "../../../../../utils/logger";
 import { HttpStatusCode } from "../../../../../exceptions";
 import { generateToken } from "../../../../../utils/jwt";
 
+if (process.env.GOOGLE_CLIENT_ID) {
 passport.use(
   new GoogleStrategy(
     {
@@ -79,6 +80,7 @@ passport.use(
     },
   ),
 );
+}
 
 passport.serializeUser((user: any, done) => {
   logger.info(`Serializing user for session: ${user?.id ?? "unknown"}`);

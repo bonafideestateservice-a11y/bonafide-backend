@@ -8,16 +8,16 @@ datasource db {
 }
 
 model User {
-  id                 String              @id @default(uuid())
-  fullName           String
-  email              String              @unique
-  termsAndCondition  Boolean             @default(false)
-  password           String?
-  provider           String?             @default("local")
-  providerId         String?             @unique
-  role               ROLE                @default(CLIENT)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                  String               @id @default(uuid())
+  fullName            String
+  email               String               @unique
+  termsAndCondition   Boolean              @default(false)
+  password            String?
+  provider            String?              @default("local")
+  providerId          String?              @unique
+  role                ROLE                 @default(CLIENT)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   passwordResetTokens PasswordResetToken[]
 
   @@index([role, createdAt])
@@ -42,4 +42,56 @@ enum ROLE {
   CLIENT
   ADMIN
   AGENT
+}
+
+enum VERIFICATION_FREQUENCY {
+  ONE_TIME
+  MONTHLY
+  QUARTERLY
+}
+
+model Service {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+
+  verificationTypes VerificationType[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationType {
+  id          String  @id @default(cuid())
+  serviceId   String
+  service     Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String  @unique
+  description String?
+  icon        String?
+
+  verificationPlans VerificationPlan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([serviceId])
+}
+
+model VerificationPlan {
+  id                 String                 @id @default(cuid())
+  verificationTypeId String
+  verificationType   VerificationType       @relation(fields: [verificationTypeId], references: [id], onDelete: Cascade)
+  frequency          VERIFICATION_FREQUENCY
+  name               String
+  description        String?
+  priceInCents       Int
+  currency           String                 @default("NGN")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([verificationTypeId, frequency])
+  @@index([verificationTypeId])
 }

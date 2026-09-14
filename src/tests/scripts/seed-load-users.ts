@@ -17,6 +17,15 @@ async function main() {
       role: ROLE.CLIENT
     });
   }
+  for (let i = 1; i <= 100; i++) {
+    usersToCreate.push({
+      email: `adminloadtest${i}@example.com`,
+      fullName: `Admin Load Test User ${i}`,
+      password: passwordHash,
+      termsAndCondition: true,
+      role: ROLE.AGENT
+    });
+  }
 
   // Use createMany to insert users in bulk
   try {

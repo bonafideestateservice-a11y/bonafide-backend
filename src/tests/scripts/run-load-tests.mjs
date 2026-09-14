@@ -1,7 +1,7 @@
 // run-load-tests.mjs
-// Runs all client-auth k6 load scripts against the server URL from .env
-// (BASE_URL defaults to https://bonafide-backend-9mly.onrender.com), so the
-// load tests model the real user experience against the deployed API.
+// Runs all auth k6 load scripts (client + admin) against the server URL
+// from .env (BASE_URL defaults to the deployed Render URL), so the load
+// tests model the real user experience against the deployed API.
 //
 // Usage:
 //   node src/tests/scripts/run-load-tests.mjs
@@ -19,23 +19,27 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const K6_BIN = process.env.K6_BIN || "/tmp/opencode/k6/k6-v2.2.0-linux-amd64/k6";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPTS = [
+
+const CLIENT_SCRIPTS = [
   "login",
   "sign-up",
   "change-password",
   "forgot-password",
   "reset-password",
 ].map((endpoint) =>
-  path.join(
-    __dirname,
-    "..",
-    "api",
-    "client",
-    "authentication",
-    endpoint,
-    `${endpoint}-load.js`
-  )
+  path.join(__dirname, "..", "api", "client", "authentication", endpoint, `${endpoint}-load.js`)
 );
+
+const ADMIN_SCRIPTS = [
+  "login",
+  "change-password",
+  "forgot-password",
+  "reset-password",
+].map((endpoint) =>
+  path.join(__dirname, "..", "api", "admin", "authentication", endpoint, `${endpoint}-load.js`)
+);
+
+const SCRIPTS = [...CLIENT_SCRIPTS, ...ADMIN_SCRIPTS];
 
 let failed = false;
 

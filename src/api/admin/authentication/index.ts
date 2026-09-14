@@ -74,7 +74,7 @@ router.post("/change-password", checkJwt, adminOrAgent, AuthenticationController
  * /api/{version}/admin/forgot-password:
  *   post:
  *     tags: [Admin Authentication]
- *     summary: Request a password reset token for an admin
+ *     summary: Request a password reset OTP for an admin
  *     security: []
  *     parameters:
  *       - in: path
@@ -98,18 +98,14 @@ router.post("/forgot-password", AuthenticationController.forgotPassword);
 
 /**
  * @swagger
- * /api/{version}/admin/reset-password/{token}:
+ * /api/{version}/admin/verify-otp:
  *   post:
  *     tags: [Admin Authentication]
- *     summary: Reset a password using a valid reset token
+ *     summary: Verify a password reset OTP
  *     security: []
  *     parameters:
  *       - in: path
  *         name: version
- *         required: true
- *         schema: { type: string }
- *       - in: path
- *         name: token
  *         required: true
  *         schema: { type: string }
  *     requestBody:
@@ -118,13 +114,50 @@ router.post("/forgot-password", AuthenticationController.forgotPassword);
  *         application/json:
  *           schema:
  *             type: object
+ *             required: [otp]
  *             properties:
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP is valid
+ *       400:
+ *         description: Invalid or expired OTP
+ */
+router.post("/verify-otp", AuthenticationController.verifyOtp);
+
+/**
+ * @swagger
+ * /api/{version}/admin/reset-password:
+ *   post:
+ *     tags: [Admin Authentication]
+ *     summary: Reset a password using a valid OTP
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, otp, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *               otp:
+ *                 type: string
  *               password:
  *                 type: string
  *     responses:
  *       200:
  *         description: Password reset successfully
+ *       400:
+ *         description: Invalid/expired OTP or missing fields
  */
-router.post("/reset-password/:token", AuthenticationController.resetPassword);
+router.post("/reset-password", AuthenticationController.resetPassword);
 
 export default router;
