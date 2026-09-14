@@ -38,6 +38,18 @@ export class ConflictError extends ApiError {
   }
 }
 
+export class BadRequestError extends ApiError {
+  constructor(message = "Bad request") {
+    super(HttpStatusCode.BAD_REQUEST, message);
+  }
+}
+
+export class InternalServerError extends ApiError {
+  constructor(message = "Internal server error") {
+    super(HttpStatusCode.INTERNAL_SERVER, message);
+  }
+}
+
 export class NotFoundError extends ApiError {
   constructor(message = "Not found") {
     super(HttpStatusCode.NOT_FOUND, message);

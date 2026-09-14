@@ -1,1 +1,0 @@
-export { getProfileHandler } from "./profile/get-profile-v1";

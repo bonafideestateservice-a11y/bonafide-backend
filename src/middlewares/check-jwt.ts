@@ -1,44 +1,81 @@
 import { NextFunction, Request, Response } from "express";
-import jwt from "jsonwebtoken";
+import { TokenExpiredError } from "jsonwebtoken";
+import { UnauthorizedError, ForbiddenError } from "../exceptions";
+import { prismaClient } from "../utils/prisma";
+import {
+  extractTokenFromHeaders,
+  verifyToken,
+  AuthTokenPayload,
+} from "../utils/jwt";
+import type { User, ROLE } from "@prisma/client";
 
-import { config } from "../config";
-import { HttpStatusCode } from "../exceptions";
-
-export interface AuthTokenPayload {
-  id: string;
-  email: string;
-  role: string;
-}
-
+// CustomRequest interface to provide JWTs to controllers
 export interface CustomRequest extends Request {
   token?: AuthTokenPayload;
-  user?: Express.User;
+  user?: User;
 }
 
-export const checkJwt = (
+export const checkJwt = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const header = req.headers.authorization;
-
-    if (!header || !header.startsWith("Bearer ")) {
-      return res.status(HttpStatusCode.UNAUTHORIZED).json({
-        status: "error",
-        message: "Missing or malformed Authorization header.",
-      });
+    // Get the JWT from the request header.
+    const token = extractTokenFromHeaders(req);
+    if (!token) {
+      throw new UnauthorizedError("No token provided");
     }
 
-    const token = header.split(" ")[1];
-    const payload = jwt.verify(token, config.jwt.secret) as AuthTokenPayload;
+    let payload: AuthTokenPayload;
+    try {
+      payload = await verifyToken(token);
+    } catch (error) {
+      if (error instanceof TokenExpiredError) {
+        throw new UnauthorizedError("Token expired");
+      }
+      throw new UnauthorizedError("Invalid token");
+    }
 
-    (req as CustomRequest).token = payload;
-    next();
-  } catch {
-    return res.status(HttpStatusCode.UNAUTHORIZED).json({
-      status: "error",
-      message: "Invalid or expired token.",
+    // Check if the token has the required properties
+    if (!payload.id) {
+      throw new UnauthorizedError("Malformed token");
+    }
+
+    // Fetch the user from the database
+    const user = await prismaClient.user.findUnique({
+      where: {
+        id: payload.id as string,
+      },
     });
+
+    if (!user) {
+      throw new UnauthorizedError("User not found");
+    }
+
+    // Explicitly cast req to CustomRequest and assign values
+    (req as CustomRequest).user = user;
+    (req as CustomRequest).token = payload;
+
+    next();
+  } catch (error) {
+    next(error);
   }
+};
+
+// Middleware to handle role-based access for CLIENT, ADMIN, and AGENT
+export const requireRole = (roles: ROLE[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as CustomRequest).user;
+    
+    if (!user) {
+      return next(new UnauthorizedError("User not authenticated"));
+    }
+
+    if (!roles.includes(user.role)) {
+      return next(new ForbiddenError("Insufficient permissions to access this resource"));
+    }
+
+    next();
+  };
 };

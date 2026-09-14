@@ -1,34 +1,37 @@
 import { NextFunction, Request, Response } from "express";
 
 import { CustomRequest } from "./check-jwt";
-import { HttpStatusCode } from "../exceptions";
+import { ForbiddenError, UnauthorizedError } from "../exceptions";
+import { ROLE } from "@prisma/client";
 
 export const checkIsAdmin = (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
-  const token = (req as CustomRequest).token;
+  const user = (req as CustomRequest).user;
 
-  if (!token || token.role !== "ADMIN") {
-    return res.status(HttpStatusCode.FORBIDDEN).json({
-      status: "error",
-      message: "Insufficient permissions.",
-    });
+  if (!user) {
+    return next(new UnauthorizedError("User not authenticated"));
+  }
+
+  if (user.role !== ROLE.ADMIN) {
+    return next(new ForbiddenError("Insufficient permissions. Admin access required."));
   }
 
   next();
 };
 
-export const checkRoles = (roles: string[]) => {
+export const checkRoles = (roles: ROLE[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const token = (req as CustomRequest).token;
+    const user = (req as CustomRequest).user;
 
-    if (!token || !roles.includes(token.role)) {
-      return res.status(HttpStatusCode.FORBIDDEN).json({
-        status: "error",
-        message: "Insufficient permissions.",
-      });
+    if (!user) {
+      return next(new UnauthorizedError("User not authenticated"));
+    }
+
+    if (!roles.includes(user.role)) {
+      return next(new ForbiddenError("Insufficient permissions."));
     }
 
     next();

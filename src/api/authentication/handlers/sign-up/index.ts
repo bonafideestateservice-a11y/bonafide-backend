@@ -1,1 +1,0 @@
-export { signUpHandler } from "./sign-up-v1";

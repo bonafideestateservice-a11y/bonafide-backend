@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 
-import { HttpStatusCode } from "../exceptions";
+import { ApiError, HttpStatusCode } from "../exceptions";
 import { logger } from "../utils/logger";
 
 export const notFoundHandler = (_req: Request, res: Response) => {
@@ -16,6 +16,15 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ) => {
+  if (error instanceof ApiError) {
+    logger.warn(error.message);
+    res.status(error.statusCode).json({
+      status: "error",
+      message: error.message,
+    });
+    return;
+  }
+
   logger.error(error.message);
 
   res.status(HttpStatusCode.INTERNAL_SERVER).json({

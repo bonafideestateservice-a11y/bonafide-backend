@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-namespace */
 import { Request } from "express";
-import { AuthTokenPayload } from "../middlewares/check-jwt";
+import { AuthTokenPayload } from "../utils/jwt";
 
 declare global {
   namespace Express {
