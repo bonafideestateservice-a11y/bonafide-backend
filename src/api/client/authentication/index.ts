@@ -5,6 +5,20 @@ import { login } from "./handlers/login";
 import { changePassword } from "./handlers/change-password";
 import { forgotPassword } from "./handlers/forgot-password";
 import { resetPassword } from "./handlers/reset-password";
+import {
+  initiateGoogleLogin,
+  handleGoogleCallback,
+  googleLoginSuccess,
+  googleLoginError,
+  googleLogout,
+} from "./handlers/google-auth";
+import {
+  initiateFacebookLogin,
+  handleFacebookCallback,
+  facebookLoginSuccess,
+  facebookLoginError,
+  facebookLogout,
+} from "./handlers/facebook-auth";
 
 const router = Router();
 
@@ -213,5 +227,197 @@ router.post("/forgot-password", forgotPassword);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post("/reset-password/:token", resetPassword);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/google:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Redirect the user to Google OAuth consent
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       302:
+ *         description: Redirect to Google login page
+ */
+router.get("/auth/google", initiateGoogleLogin);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/google/callback:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Handle the Google OAuth callback and return a JWT
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Google login completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token:
+ *                       type: string
+ */
+router.get("/auth/google/callback", handleGoogleCallback);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/google/success:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Return the logged-in Google user payload
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Google login success payload
+ */
+router.get("/auth/google/success", googleLoginSuccess);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/google/error:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Return a Google auth failure response
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       401:
+ *         description: Google authentication failed
+ */
+router.get("/auth/google/error", googleLoginError);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/google/logout:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Destroy the Google session and logout the user
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Session destroyed successfully
+ */
+router.get("/auth/google/logout", googleLogout);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/facebook:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Redirect the user to Facebook OAuth consent
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       302:
+ *         description: Redirect to Facebook login page
+ */
+router.get("/auth/facebook", initiateFacebookLogin);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/facebook/callback:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Handle the Facebook OAuth callback and return a JWT
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Facebook login completed successfully
+ */
+router.get("/auth/facebook/callback", handleFacebookCallback);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/facebook/success:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Return the logged-in Facebook user payload
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Facebook login success payload
+ */
+router.get("/auth/facebook/success", facebookLoginSuccess);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/facebook/error:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Return a Facebook auth failure response
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       401:
+ *         description: Facebook authentication failed
+ */
+router.get("/auth/facebook/error", facebookLoginError);
+
+/**
+ * @swagger
+ * /api/{version}/client/auth/facebook/logout:
+ *   get:
+ *     tags: [Client Authentication]
+ *     summary: Destroy the Facebook session and logout the user
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Session destroyed successfully
+ */
+router.get("/auth/facebook/logout", facebookLogout);
 
 export default router;

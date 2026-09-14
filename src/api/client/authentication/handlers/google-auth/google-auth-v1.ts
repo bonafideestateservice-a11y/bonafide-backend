@@ -1,7 +1,13 @@
-import express, { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import passport from "passport";
 import { Strategy as GoogleStrategy, Profile } from "passport-google-oauth20";
-import { createUser, findUser, updateUser } from "../../services/database/user";
+import { ROLE } from "@prisma/client";
+
+import {
+  createClient,
+  findClient,
+  updateClient,
+} from "../../services/database/client";
 import { logger } from "../../../../utils/logger";
 import { HttpStatusCode } from "../../../../exceptions";
 import { generateToken } from "../../../../utils/jwt";
@@ -12,10 +18,11 @@ passport.use(
       clientID: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       callbackURL: process.env.GOOGLE_CALLBACK_URL!,
+      passReqToCallback: false,
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (_accessToken, _refreshToken, profile: Profile, done) => {
       try {
-        const email = profile.emails?.[0]?.value;
+        const email = profile.emails?.[0]?.value?.toLowerCase().trim();
         const googleId = profile.id;
 
         if (!email) {
@@ -23,38 +30,35 @@ passport.use(
           return done(new Error("No email found in Google profile"));
         }
 
-        // Look for existing user by providerId (preferred) or fallback to email
-        let user = await findUser({
-          providerId: googleId,
-        });
-        if (!user) {
-          user = await findUser({ email });
-        }
+        let user = await findClient({ email });
 
-        // If user does not exist, create a new one
         if (!user) {
-          const firstName = (profile as any).name?.givenName || "";
-          const lastName = (profile as any).name?.familyName || "";
+          const firstName = profile.name?.givenName || "";
+          const lastName = profile.name?.familyName || "";
           const middleName = (profile as any).name?.middleName || "";
-          user = await createUser({
-            firstName,
-            middleName,
-            lastName,
+          const fullName =
+            [firstName, middleName, lastName]
+              .filter(Boolean)
+              .join(" ")
+              .trim() || email.split("@")[0];
+
+          user = await createClient({
+            fullName,
             email,
-            password: "", // No password needed for Google users
+            password: null,
             provider: "google",
             providerId: googleId,
             emailVerified: true,
-            // Optionally add role if required, e.g. role: UserRole.CLIENT,
+            role: ROLE.CLIENT,
           });
           logger.info("New Google user created", { email });
-        } else if (!user.providerId) {
-          // Link existing local account to Google (optional)
-          user = await updateUser(
+        } else if (!user.providerId || user.providerId !== googleId) {
+          user = await updateClient(
             { id: user.id },
             {
               provider: "google",
               providerId: googleId,
+              emailVerified: true,
             },
           );
           logger.info("Linked existing user with Google", { email });
@@ -73,6 +77,7 @@ passport.serializeUser((user: any, done) => {
   logger.info("Serializing user for session", { userId: user?.id });
   done(null, user);
 });
+
 passport.deserializeUser((user: any, done) => {
   logger.info("Deserializing user from session", { userId: user?.id });
   done(null, user);
@@ -85,8 +90,7 @@ export const initiateGoogleLogin = passport.authenticate("google", {
 export const handleGoogleCallback = [
   passport.authenticate("google", {
     session: false,
-    failureRedirect:
-      "https://ajsrental-ajarra-backend.onrender.com/api/:version/auth/google/error",
+    failureRedirect: "/api/:version/client/auth/google/error",
   }),
   async (req: Request, res: Response) => {
     const user = req.user as any;
@@ -100,7 +104,6 @@ export const handleGoogleCallback = [
 
     try {
       const token = generateToken({ id: user.id });
-
       logger.info("Google OAuth callback successful, JWT generated", {
         userId: user.id,
       });
@@ -109,9 +112,6 @@ export const handleGoogleCallback = [
         status: "ok",
         data: { token },
       });
-
-      // Optional: redirect and pass token in query
-      // res.redirect(`https://your-frontend.com/google/success?token=${token}`);
     } catch (err) {
       logger.error("Failed to generate token after Google login", {
         error: err,
@@ -132,14 +132,17 @@ export const googleLoginSuccess = (req: Request, res: Response) => {
       .status(HttpStatusCode.UNAUTHORIZED)
       .json({ message: "Not authenticated" });
   }
+
   const { password, ...userWithoutPassword } = req.user as any;
   logger.info("Google login successful", { userId: userWithoutPassword?.id });
-  res.status(HttpStatusCode.OK).json({ user: userWithoutPassword });
+  return res.status(HttpStatusCode.OK).json({ user: userWithoutPassword });
 };
 
-export const googleLoginError = (req: Request, res: Response) => {
+export const googleLoginError = (_req: Request, res: Response) => {
   logger.error("Error logging in via Google");
-  res.send("Error logging in via Google..");
+  return res.status(HttpStatusCode.UNAUTHORIZED).json({
+    message: "Error logging in via Google",
+  });
 };
 
 export const googleLogout = (req: Request, res: Response) => {
@@ -150,22 +153,29 @@ export const googleLogout = (req: Request, res: Response) => {
           logger.error("Error destroying session during Google logout", {
             error: err,
           });
-          return res.status(500).send({ message: "Failed to destroy session" });
-        } else {
-          logger.info("Session destroyed during Google logout");
-          return res.status(200).json({ message: "Logged out successfully" });
+          return res
+            .status(HttpStatusCode.INTERNAL_SERVER)
+            .json({ message: "Failed to destroy session" });
         }
+
+        logger.info("Session destroyed during Google logout");
+        return res
+          .status(HttpStatusCode.OK)
+          .json({ message: "Logged out successfully" });
       });
-    } else {
-      logger.warn("No session found during Google logout");
-      return res
-        .status(200)
-        .json({ message: "No session found, but logged out" });
+      return;
     }
+
+    logger.warn("No session found during Google logout");
+    return res
+      .status(HttpStatusCode.OK)
+      .json({ message: "No session found, but logged out" });
   } catch (err: any) {
     logger.error("Failed to sign out user via Google", {
       error: err?.message || err,
     });
-    res.status(400).send({ message: "Failed to sign out user" });
+    return res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json({ message: "Failed to sign out user" });
   }
 };
