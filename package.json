@@ -7,7 +7,7 @@
     "migrate": "npx prisma migrate dev",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prisma:generate": "NODE_OPTIONS=--max_old_space_size=4096 npx prisma generate",
-    "build": "rm -rf ./dist && tsc && tsc-alias",
+    "build": "rm -rf ./dist && tsc",
     "build:prod": "NODE_OPTIONS=--max_old_space_size=4096 npx prisma generate && rimraf ./dist && tsc && npm prune --omit=dev",
     "start": "npx prisma migrate deploy && node dist/server.js",
     "dev": "ts-node-dev --poll src/server.ts",
