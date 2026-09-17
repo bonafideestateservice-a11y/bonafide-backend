@@ -1,3 +1,8 @@
+import dotenv from "dotenv";
+import path from "path";
+
+dotenv.config({ path: path.resolve(__dirname, "../src/.env") });
+
 import { ROLE, VERIFICATION_FREQUENCY } from "@prisma/client";
 import { prismaClient } from "../src/utils/prisma";
 import { hashPassword } from "../src/utils/password";

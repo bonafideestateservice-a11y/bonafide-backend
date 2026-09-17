@@ -17,7 +17,7 @@
     "dev": "ts-node-dev --poll src/server.ts",
     "dev:watch": "nodemon --watch src --exec ts-node src/server.ts",
     "cron:test": "jest src/jobs/__tests__/",
-    "postinstall": "npm rebuild sharp --force --platform=linux --arch=x64 --libc=glibc && prisma generate && npx puppeteer browsers install chrome"
+    "postinstall": "npm rebuild sharp --force --platform=linux --arch=x64 --libc=glibc && prisma generate && npx --yes puppeteer@22.15.0 browsers install chrome"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -48,7 +48,7 @@
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.14.0",
     "@types/passport": "^1.0.17",
-"@types/passport-facebook": "^2.0.0",
+    "@types/passport-facebook": "^2.0.0",
     "@types/passport-google-oauth20": "^2.0.0",
     "@types/supertest": "^7.2.1",
     "@types/swagger-jsdoc": "^6.0.4",
