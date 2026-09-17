@@ -19,6 +19,7 @@ model User {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   passwordResetTokens PasswordResetToken[]
+  verificationRequests VerificationRequest[]
 
   @@index([role, createdAt])
   @@index([createdAt])
@@ -72,6 +73,7 @@ model VerificationType {
   icon        String?
 
   verificationPlans VerificationPlan[]
+  verificationRequests VerificationRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -89,9 +91,100 @@ model VerificationPlan {
   priceInCents       Int
   currency           String                 @default("NGN")
 
+  verificationRequests VerificationRequest[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([verificationTypeId, frequency])
   @@index([verificationTypeId])
+}
+
+enum VerificationStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PAYMENT_FAILED
+  SUBMITTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CARD
+  PAYPAL
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model VerificationRequest {
+  id                  String              @id @default(cuid())
+  userId              String
+  user                User                @relation(fields: [userId], references: [id])
+  verificationTypeId  String
+  verificationType    VerificationType    @relation(fields: [verificationTypeId], references: [id])
+  verificationPlanId  String?
+  verificationPlan    VerificationPlan?   @relation(fields: [verificationPlanId], references: [id])
+  status              VerificationStatus  @default(DRAFT)
+  details             Json
+  additionalNote      String?
+
+  documents           Document[]
+  transaction         Transaction?
+  report              VerificationReport?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([verificationTypeId])
+}
+
+model Document {
+  id                    String              @id @default(cuid())
+  verificationRequestId String
+  verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id], onDelete: Cascade)
+  url                   String
+  fileName              String
+  fileType              String
+  fileSizeBytes         Int
+
+  createdAt DateTime @default(now())
+
+  @@index([verificationRequestId])
+}
+
+model Transaction {
+  id                    String              @id @default(cuid())
+  verificationRequestId String              @unique
+  verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id])
+  amountInCents         Int
+  currency              String              @default("NGN")
+  method                PaymentMethod
+  status                PaymentStatus       @default(PENDING)
+  providerRef           String?
+  paidAt                DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationReport {
+  id                    String              @id @default(cuid())
+  verificationRequestId String              @unique
+  verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id])
+  summary               String?
+  findings              Json?
+  reportUrl             String?
+  generatedAt           DateTime?
+  viewedAt              DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([viewedAt])
 }

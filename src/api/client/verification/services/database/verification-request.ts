@@ -1,0 +1,166 @@
+import {
+  Prisma,
+  VerificationRequest,
+  VerificationStatus,
+} from "@prisma/client";
+import { prismaClient } from "../../../../../utils/prisma";
+import { logger } from "../../../../../utils/logger";
+
+export interface CreateVerificationRequestData {
+  userId: string;
+  verificationTypeId: string;
+  verificationPlanId?: string | null;
+  status?: VerificationStatus;
+  details: Prisma.InputJsonValue;
+  additionalNote?: string | null;
+}
+
+export interface UpdateVerificationRequestData {
+  userId?: string;
+  verificationTypeId?: string;
+  verificationPlanId?: string | null;
+  status?: VerificationStatus;
+  details?: Prisma.InputJsonValue;
+  additionalNote?: string | null;
+}
+
+export interface FindVerificationRequestUnique {
+  id: string;
+}
+
+export type VerificationRequestSummary = Prisma.VerificationRequestGetPayload<{
+  select: {
+    id: true;
+    details: true;
+    status: true;
+    updatedAt: true;
+    verificationType: {
+      select: {
+        name: true;
+        icon: true;
+      };
+    };
+  };
+}>;
+
+export const getVerificationRequestsForUser = async (
+  userId: string,
+  limit = 5,
+): Promise<VerificationRequestSummary[]> => {
+  try {
+    const verificationRequests =
+      await prismaClient.verificationRequest.findMany({
+        where: { userId },
+        orderBy: { updatedAt: "desc" },
+        take: limit,
+        select: {
+          id: true,
+          details: true,
+          status: true,
+          updatedAt: true,
+          verificationType: {
+            select: {
+              name: true,
+              icon: true,
+            },
+          },
+        },
+      });
+    logger.info(
+      `Fetched verification requests for user userId=${userId} count=${verificationRequests.length}`,
+    );
+    return verificationRequests;
+  } catch (error) {
+    logger.error(`Error fetching verification requests for user ${error}`);
+    throw error;
+  }
+};
+
+export const createVerificationRequest = async (
+  data: CreateVerificationRequestData,
+): Promise<VerificationRequest> => {
+  try {
+    const verificationRequest = await prismaClient.verificationRequest.create({
+      data,
+    });
+    logger.info(
+      `Verification request created successfully requestId=${verificationRequest.id}`,
+    );
+    return verificationRequest;
+  } catch (error) {
+    logger.error(`Error creating verification request ${error}`);
+    throw error;
+  }
+};
+
+export const getAllVerificationRequests = async (): Promise<
+  VerificationRequest[]
+> => {
+  try {
+    const verificationRequests =
+      await prismaClient.verificationRequest.findMany({
+        orderBy: { createdAt: "desc" },
+      });
+    logger.info(
+      `Fetched all verification requests count=${verificationRequests.length}`,
+    );
+    return verificationRequests;
+  } catch (error) {
+    logger.error(`Error fetching verification requests ${error}`);
+    throw error;
+  }
+};
+
+export const findVerificationRequest = async (
+  unique: FindVerificationRequestUnique,
+): Promise<VerificationRequest | null> => {
+  try {
+    const verificationRequest =
+      await prismaClient.verificationRequest.findUnique({
+        where: unique,
+      });
+    logger.info(
+      `Verification request lookup requestId=${unique.id} found=${!!verificationRequest}`,
+    );
+    return verificationRequest;
+  } catch (error) {
+    logger.error(
+      `Error finding verification request ${error} requestId=${unique.id}`,
+    );
+    throw error;
+  }
+};
+
+export const updateVerificationRequest = async (
+  where: Prisma.VerificationRequestWhereUniqueInput,
+  data: UpdateVerificationRequestData,
+): Promise<VerificationRequest> => {
+  try {
+    const updated = await prismaClient.verificationRequest.update({
+      where,
+      data,
+    });
+    logger.info(
+      `Verification request updated successfully requestId=${updated.id}`,
+    );
+    return updated;
+  } catch (error) {
+    logger.error(`Error updating verification request ${error}`);
+    throw new Error("Failed to update verification request");
+  }
+};
+
+export const deleteVerificationRequest = async (
+  where: Prisma.VerificationRequestWhereUniqueInput,
+): Promise<VerificationRequest> => {
+  try {
+    const deleted = await prismaClient.verificationRequest.delete({ where });
+    logger.info(
+      `Verification request deleted successfully requestId=${deleted.id}`,
+    );
+    return deleted;
+  } catch (error) {
+    logger.error(`Error deleting verification request ${error}`);
+    throw new Error("Failed to delete verification request");
+  }
+};
