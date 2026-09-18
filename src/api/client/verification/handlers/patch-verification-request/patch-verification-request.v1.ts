@@ -98,7 +98,9 @@ export const patchVerificationRequest = async (
       details = validatedDetails.details;
     }
 
-    const existingDetails = isVerificationDetailsRecord(verificationRequest.details)
+    const existingDetails = isVerificationDetailsRecord(
+      verificationRequest.details,
+    )
       ? verificationRequest.details
       : {};
     const updated = await updateVerificationRequest(

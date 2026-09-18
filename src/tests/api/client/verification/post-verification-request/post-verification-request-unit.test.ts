@@ -34,7 +34,9 @@ function buildMockReqRes(body: Record<string, unknown> = {}, userId?: string) {
 describe("postVerificationRequest handler (unit)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedFindVerificationType.mockResolvedValue({ slug: "property-verification" });
+    mockedFindVerificationType.mockResolvedValue({
+      slug: "property-verification",
+    });
   });
 
   it("returns 401 when no authenticated user is present", async () => {

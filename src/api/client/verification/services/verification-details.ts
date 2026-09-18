@@ -47,7 +47,9 @@ export const validateVerificationDetails = (
     if (requireAllFields || details[field] !== undefined) {
       const value = requiredString(details, field);
       if (!value) {
-        return { error: `${field} is required and must be a non-empty string.` };
+        return {
+          error: `${field} is required and must be a non-empty string.`,
+        };
       }
       normalized[field] = value;
     }
