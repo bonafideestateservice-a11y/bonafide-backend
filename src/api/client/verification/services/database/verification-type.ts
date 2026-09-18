@@ -57,6 +57,44 @@ export const getAllVerificationTypes = async (): Promise<
   }
 };
 
+export type VerificationTypeCard = Pick<
+  VerificationType,
+  "id" | "name" | "slug" | "description" | "icon"
+>;
+
+export const getVerificationTypesForService = async (
+  serviceSlug: string,
+): Promise<VerificationTypeCard[]> => {
+  try {
+    const service = await prismaClient.service.findUnique({
+      where: { slug: serviceSlug },
+      select: {
+        verificationTypes: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            description: true,
+            icon: true,
+          },
+        },
+      },
+    });
+
+    const verificationTypes = service?.verificationTypes ?? [];
+    logger.info(
+      `Fetched verification types service=${serviceSlug} count=${verificationTypes.length}`,
+    );
+    return verificationTypes;
+  } catch (error) {
+    logger.error(
+      `Error fetching verification types for service ${serviceSlug} ${error}`,
+    );
+    throw error;
+  }
+};
+
 export const findVerificationType = async (
   unique: FindVerificationTypeUnique,
 ): Promise<VerificationType | null> => {

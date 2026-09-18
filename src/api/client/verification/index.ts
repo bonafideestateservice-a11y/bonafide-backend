@@ -2,8 +2,42 @@ import { Router } from "express";
 import { checkJwt } from "../../../middlewares/check-jwt";
 import { getVerificationReportSummary } from "./handlers/get-verification-report-summary";
 import { getVerificationRequests } from "./handlers/get-verification-requests";
+import { getVerificationTypes } from "./handlers/get-verification-types";
 
 const router = Router();
+
+/**
+ * @swagger
+ * /api/{version}/client/services/verification/verification-types:
+ *   get:
+ *     tags: [Verification]
+ *     summary: Get the available verification categories
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Available verification categories
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 required: [id, name, slug, description, icon]
+ *                 properties:
+ *                   id: { type: string }
+ *                   name: { type: string }
+ *                   slug: { type: string }
+ *                   description: { type: string }
+ *                   icon: { type: string }
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/services/verification/verification-types", getVerificationTypes);
 
 /**
  * @swagger
