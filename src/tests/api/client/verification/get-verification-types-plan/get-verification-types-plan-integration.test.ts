@@ -46,7 +46,7 @@ describe("GET /api/v1/client/verification-types/:slug/plans (integration, real D
       name: "One time verification",
       description: "A single inspection with a full report",
       priceInCents: 4500,
-      currency: "NGN",
+      currency: "USD",
     });
     await createVerificationPlan({
       verificationTypeId,
@@ -54,7 +54,7 @@ describe("GET /api/v1/client/verification-types/:slug/plans (integration, real D
       name: "Monthly Update",
       description: "Detailed report every month",
       priceInCents: 3500,
-      currency: "NGN",
+      currency: "USD",
     });
     await createVerificationPlan({
       verificationTypeId,
@@ -62,7 +62,7 @@ describe("GET /api/v1/client/verification-types/:slug/plans (integration, real D
       name: "Quarterly Update",
       description: null,
       priceInCents: 3500,
-      currency: "NGN",
+      currency: "USD",
     });
   });
 
@@ -96,7 +96,7 @@ describe("GET /api/v1/client/verification-types/:slug/plans (integration, real D
         name: "One time verification",
         description: "A single inspection with a full report",
         priceInCents: 4500,
-        currency: "NGN",
+        currency: "USD",
       },
       {
         id: expect.any(String),
@@ -104,7 +104,7 @@ describe("GET /api/v1/client/verification-types/:slug/plans (integration, real D
         name: "Monthly Update",
         description: "Detailed report every month",
         priceInCents: 3500,
-        currency: "NGN",
+        currency: "USD",
       },
       {
         id: expect.any(String),
@@ -112,7 +112,7 @@ describe("GET /api/v1/client/verification-types/:slug/plans (integration, real D
         name: "Quarterly Update",
         description: "",
         priceInCents: 3500,
-        currency: "NGN",
+        currency: "USD",
       },
     ]);
   });

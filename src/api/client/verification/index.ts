@@ -7,6 +7,7 @@ import { getVerificationTypes } from "./handlers/get-verification-types";
 import { postVerificationRequest } from "./handlers/post-verification-request";
 import { postVerificationDocuments } from "./handlers/post-verification-documents";
 import { patchVerificationRequest } from "./handlers/patch-verification-request";
+import { patchVerificationRequestPlan } from "./handlers/patch-verification-request-plan";
 import { getVerificationTypesPlan } from "./handlers/get-verification-types-plan";
 
 const router = Router();
@@ -172,6 +173,69 @@ router.post("/verification-requests", checkJwt, postVerificationRequest);
  *         description: Internal server error
  */
 router.patch("/verification-requests/:id", checkJwt, patchVerificationRequest);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/plan:
+ *   patch:
+ *     tags: [Verification]
+ *     summary: Select a plan for a verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [verificationPlanId]
+ *             properties:
+ *               verificationPlanId: { type: string }
+ *     responses:
+ *       200:
+ *         description: Selected verification plan
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [id, status, verificationPlanId, plan]
+ *               properties:
+ *                 id: { type: string }
+ *                 status: { type: string, example: DRAFT }
+ *                 verificationPlanId: { type: string }
+ *                 plan:
+ *                   type: object
+ *                   required: [frequency, name, priceInCents, currency]
+ *                   properties:
+ *                     frequency: { type: string }
+ *                     name: { type: string }
+ *                     priceInCents: { type: integer }
+ *                     currency: { type: string }
+ *       400:
+ *         description: Invalid or incompatible verification plan
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       403:
+ *         description: Verification request belongs to another user
+ *       404:
+ *         description: Verification request or plan not found
+ *       500:
+ *         description: Internal server error
+ */
+router.patch(
+  "/verification-requests/:id/plan",
+  checkJwt,
+  patchVerificationRequestPlan,
+);
 
 /**
  * @swagger
