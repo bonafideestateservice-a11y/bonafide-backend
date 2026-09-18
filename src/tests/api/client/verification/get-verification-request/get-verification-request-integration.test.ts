@@ -83,7 +83,9 @@ describe("GET /api/v1/client/verification-requests/:id (integration, real DB)", 
         where: { id: verificationPlanId },
       });
     }
-    await prismaClient.verificationType.delete({ where: { id: verificationTypeId } });
+    await prismaClient.verificationType.delete({
+      where: { id: verificationTypeId },
+    });
     await prismaClient.service.delete({ where: { id: serviceId } });
     await deleteClient({ id: testUserId });
     await prismaClient.$disconnect();
