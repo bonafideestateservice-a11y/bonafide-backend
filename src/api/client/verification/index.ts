@@ -9,6 +9,7 @@ import { postVerificationDocuments } from "./handlers/post-verification-document
 import { patchVerificationRequest } from "./handlers/patch-verification-request";
 import { patchVerificationRequestPlan } from "./handlers/patch-verification-request-plan";
 import { getVerificationTypesPlan } from "./handlers/get-verification-types-plan";
+import { getVerificationRequest } from "./handlers/get-verification-request";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -125,6 +126,35 @@ router.get("/verification-types/:slug/plans", getVerificationTypesPlan);
  *         description: Internal server error
  */
 router.post("/verification-requests", checkJwt, postVerificationRequest);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}:
+ *   get:
+ *     tags: [Verification]
+ *     summary: Get a verification request payment summary
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Verification request summary before payment method selection
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       404:
+ *         description: Verification request or plan not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/verification-requests/:id", checkJwt, getVerificationRequest);
 
 /**
  * @swagger

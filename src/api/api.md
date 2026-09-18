@@ -113,3 +113,8 @@ When creating or changing an endpoint:
 7. Run the TypeScript build and review the generated API behavior before considering the change complete.
 
 Do not create nested guide files for individual API modules unless a future module has rules that cannot be represented here.
+
+POST /payments/webhook   (gateway → your server, not client-facing)
+→ 200
+  // on success: Payment.status=SUCCESS, Payment.paidAt=now, VerificationRequest.status=SUBMITTED
+  // on failure: Payment.status=FAILED, VerificationRequest.status=PAYMENT_FAILED

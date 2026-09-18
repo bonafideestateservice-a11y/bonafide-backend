@@ -43,6 +43,58 @@ export type VerificationRequestSummary = Prisma.VerificationRequestGetPayload<{
   };
 }>;
 
+export type VerificationRequestDetails = Prisma.VerificationRequestGetPayload<{
+  select: {
+    id: true;
+    status: true;
+    details: true;
+    createdAt: true;
+    verificationType: { select: { name: true } };
+    verificationPlan: {
+      select: {
+        frequency: true;
+        name: true;
+        priceInCents: true;
+        currency: true;
+      };
+    };
+  };
+}>;
+
+export const getVerificationRequestDetailsForUser = async (
+  id: string,
+  userId: string,
+): Promise<VerificationRequestDetails | null> => {
+  try {
+    const verificationRequest =
+      await prismaClient.verificationRequest.findFirst({
+        where: { id, userId },
+        select: {
+          id: true,
+          status: true,
+          details: true,
+          createdAt: true,
+          verificationType: { select: { name: true } },
+          verificationPlan: {
+            select: {
+              frequency: true,
+              name: true,
+              priceInCents: true,
+              currency: true,
+            },
+          },
+        },
+      });
+    logger.info(
+      `Verification request details lookup requestId=${id} userId=${userId} found=${!!verificationRequest}`,
+    );
+    return verificationRequest;
+  } catch (error) {
+    logger.error(`Error finding verification request details ${error}`);
+    throw error;
+  }
+};
+
 export const getVerificationRequestsForUser = async (
   userId: string,
   limit = 5,
