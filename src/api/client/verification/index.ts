@@ -1,11 +1,14 @@
 import { Router } from "express";
+import multer from "multer";
 import { checkJwt } from "../../../middlewares/check-jwt";
 import { getVerificationReportSummary } from "./handlers/get-verification-report-summary";
 import { getVerificationRequests } from "./handlers/get-verification-requests";
 import { getVerificationTypes } from "./handlers/get-verification-types";
 import { postVerificationRequest } from "./handlers/post-verification-request";
+import { postVerificationDocuments } from "./handlers/post-verification-documents";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 /**
  * @swagger
@@ -81,6 +84,55 @@ router.get("/services/verification/verification-types", getVerificationTypes);
  *         description: Internal server error
  */
 router.post("/verification-requests", checkJwt, postVerificationRequest);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/documents:
+ *   post:
+ *     tags: [Verification]
+ *     summary: Upload a document for a verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file]
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       201:
+ *         description: Uploaded verification document
+ *       400:
+ *         description: A file is missing or invalid
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       403:
+ *         description: Verification request belongs to another user
+ *       404:
+ *         description: Verification request not found
+ *       500:
+ *         description: Internal server error
+ */
+router.post(
+  "/verification-requests/:id/documents",
+  checkJwt,
+  upload.single("file"),
+  postVerificationDocuments,
+);
 
 /**
  * @swagger
