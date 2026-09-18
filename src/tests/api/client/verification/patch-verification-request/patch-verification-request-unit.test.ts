@@ -234,4 +234,62 @@ describe("patchVerificationRequest handler (unit)", () => {
     );
     expect(mockedUpdateVerificationRequest).not.toHaveBeenCalled();
   });
+
+  it("updates business details using the business schema", async () => {
+    mockedFindVerificationRequest.mockResolvedValue({
+      id: "request-1",
+      userId: "user-1",
+      verificationTypeId: "business-type",
+      details: {
+        businessName: "Old Business",
+        businessType: "Retail Store",
+        businessAddress: "Old Address",
+      },
+    });
+    mockedFindVerificationType.mockResolvedValue({
+      slug: "business-verification",
+    });
+    mockedUpdateVerificationRequest.mockResolvedValue({ id: "request-1" });
+    const { req, res, next } = buildMockReqRes(
+      { details: { businessAddress: " 20 Marina Road " } },
+      "user-1",
+    );
+
+    await patchVerificationRequest(req, res, next);
+
+    expect(mockedUpdateVerificationRequest).toHaveBeenCalledWith(
+      { id: "request-1" },
+      {
+        details: {
+          businessName: "Old Business",
+          businessType: "Retail Store",
+          businessAddress: "20 Marina Road",
+        },
+      },
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects incomplete business details", async () => {
+    mockedFindVerificationRequest.mockResolvedValue({
+      id: "request-1",
+      userId: "user-1",
+      verificationTypeId: "business-type",
+      details: {},
+    });
+    mockedFindVerificationType.mockResolvedValue({
+      slug: "business-verification",
+    });
+    const { req, res, next } = buildMockReqRes(
+      { details: { businessAddress: "" } },
+      "user-1",
+    );
+
+    await patchVerificationRequest(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
+    );
+    expect(mockedUpdateVerificationRequest).not.toHaveBeenCalled();
+  });
 });

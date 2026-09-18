@@ -209,4 +209,73 @@ describe("postVerificationRequest handler (unit)", () => {
     );
     expect(mockedCreateVerificationRequest).not.toHaveBeenCalled();
   });
+
+  it("creates a business verification request with business details", async () => {
+    mockedFindVerificationType.mockResolvedValue({
+      id: "business-type",
+      slug: "business-verification",
+    });
+    mockedCreateVerificationRequest.mockResolvedValue({
+      id: "request-3",
+      status: "DRAFT",
+      verificationTypeId: "business-type",
+      details: {
+        businessName: "Bonafide Retail",
+        businessType: "Retail Store",
+        businessAddress: "20 Marina Road",
+      },
+      additionalNote: null,
+      createdAt: new Date("2026-09-18T10:00:00.000Z"),
+    });
+    const { req, res, next } = buildMockReqRes(
+      {
+        verificationTypeId: "business-type",
+        details: {
+          businessName: " Bonafide Retail ",
+          businessType: " Retail Store ",
+          businessAddress: " 20 Marina Road ",
+        },
+      },
+      "user-1",
+    );
+
+    await postVerificationRequest(req, res, next);
+
+    expect(mockedCreateVerificationRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        verificationTypeId: "business-type",
+        details: {
+          businessName: "Bonafide Retail",
+          businessType: "Retail Store",
+          businessAddress: "20 Marina Road",
+        },
+      }),
+    );
+    expect(res.status).toHaveBeenCalledWith(HttpStatusCode.CREATED);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects incomplete business details", async () => {
+    mockedFindVerificationType.mockResolvedValue({
+      id: "business-type",
+      slug: "business-verification",
+    });
+    const { req, res, next } = buildMockReqRes(
+      {
+        verificationTypeId: "business-type",
+        details: {
+          businessName: "Bonafide Retail",
+          businessType: "Retail Store",
+        },
+      },
+      "user-1",
+    );
+
+    await postVerificationRequest(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
+    );
+    expect(mockedCreateVerificationRequest).not.toHaveBeenCalled();
+  });
 });

@@ -15,7 +15,10 @@ let testUserId: string;
 let authToken: string;
 let verificationTypeId: string;
 let verificationRequestId: string;
+let businessTypeId: string;
+let businessRequestId: string;
 let serviceId: string;
+let createdBusinessType = false;
 
 const endpoint = () =>
   `/api/v1/client/verification-requests/${verificationRequestId}`;
@@ -45,6 +48,20 @@ describe("PATCH /api/v1/client/verification-requests/:id (integration, real DB)"
     });
     verificationTypeId = verificationType.id;
 
+    let businessType = await prismaClient.verificationType.findUnique({
+      where: { slug: "business-verification" },
+    });
+    if (!businessType) {
+      businessType = await createVerificationType({
+        serviceId,
+        name: "Business Verification",
+        slug: "business-verification",
+        icon: "business",
+      });
+      createdBusinessType = true;
+    }
+    businessTypeId = businessType.id;
+
     const verificationRequest = await createVerificationRequest({
       userId: testUserId,
       verificationTypeId,
@@ -57,6 +74,18 @@ describe("PATCH /api/v1/client/verification-requests/:id (integration, real DB)"
       additionalNote: "Initial note",
     });
     verificationRequestId = verificationRequest.id;
+
+    const businessRequest = await createVerificationRequest({
+      userId: testUserId,
+      verificationTypeId: businessTypeId,
+      status: "DRAFT",
+      details: {
+        businessName: "Old Business",
+        businessType: "Retail Store",
+        businessAddress: "Old Address",
+      },
+    });
+    businessRequestId = businessRequest.id;
   });
 
   afterAll(async () => {
@@ -73,7 +102,17 @@ describe("PATCH /api/v1/client/verification-requests/:id (integration, real DB)"
     await prismaClient.$disconnect();
   });
 
+  if (businessRequestId) {
+    await prismaClient.verificationRequest.delete({
+      where: { id: businessRequestId },
+    });
+  }
   it("returns 401 when no auth token is provided", async () => {
+    if (createdBusinessType) {
+      await prismaClient.verificationType.delete({
+        where: { id: businessTypeId },
+      });
+    }
     const res = await request(app)
       .patch(endpoint())
       .send({ additionalNote: "Updated note" });
@@ -133,5 +172,19 @@ describe("PATCH /api/v1/client/verification-requests/:id (integration, real DB)"
         additionalNote: "Inspect the foundation.",
       }),
     );
+  });
+
+  it("updates business-specific details", async () => {
+    const res = await request(app)
+      .patch(`/api/v1/client/verification-requests/${businessRequestId}`)
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({ details: { businessAddress: "20 Marina Road" } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.details).toEqual({
+      businessName: "Old Business",
+      businessType: "Retail Store",
+      businessAddress: "20 Marina Road",
+    });
   });
 });

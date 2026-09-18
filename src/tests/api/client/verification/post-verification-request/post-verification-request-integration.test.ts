@@ -18,6 +18,9 @@ let verificationRequestId: string;
 let constructionTypeId: string;
 let constructionRequestId: string;
 let createdConstructionType = false;
+let businessTypeId: string;
+let businessRequestId: string;
+let createdBusinessType = false;
 let serviceId: string;
 
 const endpoint = "/api/v1/client/verification-requests";
@@ -60,6 +63,20 @@ describe("POST /api/v1/client/verification-requests (integration, real DB)", () 
       createdConstructionType = true;
     }
     constructionTypeId = constructionType.id;
+
+    let businessType = await prismaClient.verificationType.findUnique({
+      where: { slug: "business-verification" },
+    });
+    if (!businessType) {
+      businessType = await createVerificationType({
+        serviceId,
+        name: "Business Verification",
+        slug: "business-verification",
+        icon: "business",
+      });
+      createdBusinessType = true;
+    }
+    businessTypeId = businessType.id;
   });
 
   afterAll(async () => {
@@ -73,12 +90,22 @@ describe("POST /api/v1/client/verification-requests (integration, real DB)", () 
         where: { id: constructionRequestId },
       });
     }
+    if (businessRequestId) {
+      await prismaClient.verificationRequest.delete({
+        where: { id: businessRequestId },
+      });
+    }
     await prismaClient.verificationType.delete({
       where: { id: verificationTypeId },
     });
     if (createdConstructionType) {
       await prismaClient.verificationType.delete({
         where: { id: constructionTypeId },
+      });
+    }
+    if (createdBusinessType) {
+      await prismaClient.verificationType.delete({
+        where: { id: businessTypeId },
       });
     }
     await prismaClient.service.delete({ where: { id: serviceId } });
@@ -187,6 +214,43 @@ describe("POST /api/v1/client/verification-requests (integration, real DB)", () 
           constructionAddress: "14 Admiralty Way",
           projectType: "3 Storey Building",
           currentConstructionStage: "Foundation Completed",
+        },
+      }),
+    );
+  });
+
+  it("creates a business request with business-specific details", async () => {
+    const res = await request(app)
+      .post(endpoint)
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        verificationTypeId: businessTypeId,
+        details: {
+          businessName: "Bonafide Retail",
+          businessType: "Retail Store",
+          businessAddress: "20 Marina Road",
+        },
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.details).toEqual({
+      businessName: "Bonafide Retail",
+      businessType: "Retail Store",
+      businessAddress: "20 Marina Road",
+    });
+    businessRequestId = res.body.id;
+
+    const storedRequest = await prismaClient.verificationRequest.findUnique({
+      where: { id: businessRequestId },
+    });
+    expect(storedRequest).toEqual(
+      expect.objectContaining({
+        userId: testUserId,
+        verificationTypeId: businessTypeId,
+        details: {
+          businessName: "Bonafide Retail",
+          businessType: "Retail Store",
+          businessAddress: "20 Marina Road",
         },
       }),
     );

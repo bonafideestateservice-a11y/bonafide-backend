@@ -7,6 +7,9 @@ export interface VerificationRequestDetails {
   constructionAddress?: unknown;
   projectType?: unknown;
   currentConstructionStage?: unknown;
+  businessName?: unknown;
+  businessType?: unknown;
+  businessAddress?: unknown;
 }
 
 export interface ValidatedVerificationDetails {
@@ -40,7 +43,9 @@ export const validateVerificationDetails = (
   const fields =
     verificationTypeSlug === "construction-progress"
       ? ["constructionAddress", "projectType", "currentConstructionStage"]
-      : ["propertyType", "propertyAddress"];
+      : verificationTypeSlug === "business-verification"
+        ? ["businessName", "businessType", "businessAddress"]
+        : ["propertyType", "propertyAddress"];
 
   const normalized: Record<string, string> = {};
   for (const field of fields) {
@@ -55,7 +60,10 @@ export const validateVerificationDetails = (
     }
   }
 
-  if (verificationTypeSlug !== "construction-progress") {
+  if (
+    verificationTypeSlug !== "construction-progress" &&
+    verificationTypeSlug !== "business-verification"
+  ) {
     if (details.propertyName !== undefined) {
       const value = requiredString(details, "propertyName");
       if (!value) {
