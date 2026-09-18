@@ -6,13 +6,12 @@ import {
 } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { createVerificationRequest } from "../../services/database/verification-request";
+import { findVerificationType } from "../../services/database/verification-type";
+import {
+  validateVerificationDetails,
+  VerificationRequestDetails,
+} from "../../services/verification-details";
 import { logger } from "../../../../../utils/logger";
-
-export interface VerificationRequestDetails {
-  propertyName?: unknown;
-  propertyType?: unknown;
-  propertyAddress?: unknown;
-}
 
 export interface CreateVerificationRequestBody {
   verificationTypeId?: unknown;
@@ -36,8 +35,6 @@ export const postVerificationRequest = async (
     }
 
     const body = req.body as CreateVerificationRequestBody;
-    const details = body?.details;
-
     if (
       typeof body?.verificationTypeId !== "string" ||
       !body.verificationTypeId.trim()
@@ -45,25 +42,20 @@ export const postVerificationRequest = async (
       return next(new BadRequestError("Verification type is required."));
     }
 
-    if (
-      !details ||
-      typeof details.propertyType !== "string" ||
-      !details.propertyType.trim() ||
-      typeof details.propertyAddress !== "string" ||
-      !details.propertyAddress.trim()
-    ) {
-      return next(
-        new BadRequestError("Property type and property address are required."),
-      );
+    const verificationType = await findVerificationType({
+      id: body.verificationTypeId.trim(),
+    });
+    if (!verificationType) {
+      return next(new BadRequestError("Verification type not found."));
     }
 
-    if (
-      details.propertyName !== undefined &&
-      (typeof details.propertyName !== "string" || !details.propertyName.trim())
-    ) {
-      return next(
-        new BadRequestError("Property name must be a non-empty string."),
-      );
+    const validatedDetails = validateVerificationDetails(
+      body.details,
+      verificationType.slug,
+      true,
+    );
+    if (validatedDetails.error) {
+      return next(new BadRequestError(validatedDetails.error));
     }
 
     if (
@@ -77,13 +69,7 @@ export const postVerificationRequest = async (
       userId,
       verificationTypeId: body.verificationTypeId.trim(),
       status: "DRAFT",
-      details: {
-        ...(details.propertyName !== undefined
-          ? { propertyName: details.propertyName.trim() }
-          : {}),
-        propertyType: details.propertyType.trim(),
-        propertyAddress: details.propertyAddress.trim(),
-      },
+      details: validatedDetails.details!,
       additionalNote:
         typeof body.additionalNote === "string"
           ? body.additionalNote.trim() || null

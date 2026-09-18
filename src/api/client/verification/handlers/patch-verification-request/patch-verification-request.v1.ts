@@ -1,5 +1,4 @@
 import { NextFunction, Request, Response } from "express";
-import { Prisma } from "@prisma/client";
 import {
   ApiError,
   BadRequestError,
@@ -13,29 +12,17 @@ import {
   findVerificationRequest,
   updateVerificationRequest,
 } from "../../services/database/verification-request";
+import { findVerificationType } from "../../services/database/verification-type";
+import {
+  isVerificationDetailsRecord,
+  validateVerificationDetails,
+} from "../../services/verification-details";
 import { logger } from "../../../../../utils/logger";
 
 type PatchVerificationRequestBody = Omit<
   CreateVerificationRequestBody,
   "verificationTypeId"
 >;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const validateDetails = (
-  details: Record<string, unknown>,
-): string | undefined => {
-  for (const field of ["propertyName", "propertyType", "propertyAddress"]) {
-    if (details[field] !== undefined) {
-      if (typeof details[field] !== "string" || !details[field].trim()) {
-        return `${field} must be a non-empty string.`;
-      }
-    }
-  }
-
-  return undefined;
-};
 
 export const patchVerificationRequest = async (
   req: Request,
@@ -69,33 +56,11 @@ export const patchVerificationRequest = async (
       );
     }
 
-    let details: Record<string, unknown> | undefined;
+    let details;
     if (hasDetails) {
-      const suppliedDetails = body.details;
-      if (!isRecord(suppliedDetails)) {
+      if (!isVerificationDetailsRecord(body.details)) {
         return next(new BadRequestError("Details must be an object."));
       }
-
-      const detailsError = validateDetails(suppliedDetails);
-      if (detailsError) {
-        return next(new BadRequestError(detailsError));
-      }
-
-      const detailFields = [
-        "propertyName",
-        "propertyType",
-        "propertyAddress",
-      ] as const;
-      details = Object.fromEntries(
-        detailFields
-          .filter((field) => suppliedDetails[field] !== undefined)
-          .map((field) => [
-            field,
-            typeof suppliedDetails[field] === "string"
-              ? suppliedDetails[field].trim()
-              : suppliedDetails[field],
-          ]),
-      );
     }
 
     if (hasAdditionalNote && typeof body.additionalNote !== "string") {
@@ -114,7 +79,26 @@ export const patchVerificationRequest = async (
       return next(new ForbiddenError("You cannot update this request."));
     }
 
-    const existingDetails = isRecord(verificationRequest.details)
+    if (hasDetails) {
+      const verificationType = await findVerificationType({
+        id: verificationRequest.verificationTypeId,
+      });
+      if (!verificationType) {
+        return next(new NotFoundError("Verification type not found."));
+      }
+
+      const validatedDetails = validateVerificationDetails(
+        body.details,
+        verificationType.slug,
+        false,
+      );
+      if (validatedDetails.error) {
+        return next(new BadRequestError(validatedDetails.error));
+      }
+      details = validatedDetails.details;
+    }
+
+    const existingDetails = isVerificationDetailsRecord(verificationRequest.details)
       ? verificationRequest.details
       : {};
     const updated = await updateVerificationRequest(
@@ -125,7 +109,7 @@ export const patchVerificationRequest = async (
               details: {
                 ...existingDetails,
                 ...details,
-              } as Prisma.InputJsonObject,
+              },
             }
           : {}),
         ...(hasAdditionalNote

@@ -4,11 +4,15 @@ import {
   findVerificationRequest,
   updateVerificationRequest,
 } from "../../../../../api/client/verification/services/database/verification-request";
+import { findVerificationType } from "../../../../../api/client/verification/services/database/verification-type";
 import { HttpStatusCode } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 
 jest.mock(
   "../../../../../api/client/verification/services/database/verification-request",
+);
+jest.mock(
+  "../../../../../api/client/verification/services/database/verification-type",
 );
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
@@ -16,6 +20,7 @@ jest.mock("../../../../../utils/logger", () => ({
 
 const mockedFindVerificationRequest = findVerificationRequest as jest.Mock;
 const mockedUpdateVerificationRequest = updateVerificationRequest as jest.Mock;
+const mockedFindVerificationType = findVerificationType as jest.Mock;
 
 function buildMockReqRes(body: Record<string, unknown> = {}, userId?: string) {
   const req = {
@@ -34,6 +39,7 @@ function buildMockReqRes(body: Record<string, unknown> = {}, userId?: string) {
 describe("patchVerificationRequest handler (unit)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedFindVerificationType.mockResolvedValue({ slug: "property-verification" });
   });
 
   it("returns 401 when no authenticated user is present", async () => {
@@ -130,6 +136,12 @@ describe("patchVerificationRequest handler (unit)", () => {
   });
 
   it("returns 400 for invalid detail fields", async () => {
+    mockedFindVerificationRequest.mockResolvedValue({
+      id: "request-1",
+      userId: "user-1",
+      verificationTypeId: "type-1",
+      details: {},
+    });
     const { req, res, next } = buildMockReqRes(
       { details: { propertyAddress: "" } },
       "user-1",
@@ -140,7 +152,7 @@ describe("patchVerificationRequest handler (unit)", () => {
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
     );
-    expect(mockedFindVerificationRequest).not.toHaveBeenCalled();
+    expect(mockedUpdateVerificationRequest).not.toHaveBeenCalled();
   });
 
   it("passes database failures to the error handler", async () => {
@@ -156,5 +168,68 @@ describe("patchVerificationRequest handler (unit)", () => {
       expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER }),
     );
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("updates construction details using the construction schema", async () => {
+    mockedFindVerificationRequest.mockResolvedValue({
+      id: "request-1",
+      userId: "user-1",
+      verificationTypeId: "construction-type",
+      details: {
+        constructionAddress: "Old Address",
+        projectType: "2 Storey Building",
+        currentConstructionStage: "Foundation",
+      },
+    });
+    mockedFindVerificationType.mockResolvedValue({
+      id: "construction-type",
+      slug: "construction-progress",
+    });
+    mockedUpdateVerificationRequest.mockResolvedValue({ id: "request-1" });
+    const { req, res, next } = buildMockReqRes(
+      {
+        details: {
+          currentConstructionStage: " Foundation Completed ",
+        },
+      },
+      "user-1",
+    );
+
+    await patchVerificationRequest(req, res, next);
+
+    expect(mockedUpdateVerificationRequest).toHaveBeenCalledWith(
+      { id: "request-1" },
+      {
+        details: {
+          constructionAddress: "Old Address",
+          projectType: "2 Storey Building",
+          currentConstructionStage: "Foundation Completed",
+        },
+      },
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid construction detail fields", async () => {
+    mockedFindVerificationRequest.mockResolvedValue({
+      id: "request-1",
+      userId: "user-1",
+      verificationTypeId: "construction-type",
+      details: {},
+    });
+    mockedFindVerificationType.mockResolvedValue({
+      slug: "construction-progress",
+    });
+    const { req, res, next } = buildMockReqRes(
+      { details: { projectType: "" } },
+      "user-1",
+    );
+
+    await patchVerificationRequest(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
+    );
+    expect(mockedUpdateVerificationRequest).not.toHaveBeenCalled();
   });
 });

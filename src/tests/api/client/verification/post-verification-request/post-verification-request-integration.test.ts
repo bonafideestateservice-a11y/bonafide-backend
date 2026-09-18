@@ -15,6 +15,9 @@ let testUserId: string;
 let authToken: string;
 let verificationTypeId: string;
 let verificationRequestId: string;
+let constructionTypeId: string;
+let constructionRequestId: string;
+let createdConstructionType = false;
 let serviceId: string;
 
 const endpoint = "/api/v1/client/verification-requests";
@@ -43,6 +46,20 @@ describe("POST /api/v1/client/verification-requests (integration, real DB)", () 
       icon: "property",
     });
     verificationTypeId = verificationType.id;
+
+    let constructionType = await prismaClient.verificationType.findUnique({
+      where: { slug: "construction-progress" },
+    });
+    if (!constructionType) {
+      constructionType = await createVerificationType({
+        serviceId,
+        name: "Construction Progress",
+        slug: "construction-progress",
+        icon: "construction",
+      });
+      createdConstructionType = true;
+    }
+    constructionTypeId = constructionType.id;
   });
 
   afterAll(async () => {
@@ -51,9 +68,19 @@ describe("POST /api/v1/client/verification-requests (integration, real DB)", () 
         where: { id: verificationRequestId },
       });
     }
+    if (constructionRequestId) {
+      await prismaClient.verificationRequest.delete({
+        where: { id: constructionRequestId },
+      });
+    }
     await prismaClient.verificationType.delete({
       where: { id: verificationTypeId },
     });
+    if (createdConstructionType) {
+      await prismaClient.verificationType.delete({
+        where: { id: constructionTypeId },
+      });
+    }
     await prismaClient.service.delete({ where: { id: serviceId } });
     await deleteClient({ id: testUserId });
     await prismaClient.$disconnect();
@@ -124,6 +151,43 @@ describe("POST /api/v1/client/verification-requests (integration, real DB)", () 
         verificationTypeId,
         status: "DRAFT",
         additionalNote: "Inspect the foundation.",
+      }),
+    );
+  });
+
+  it("creates a construction request with construction-specific details", async () => {
+    const res = await request(app)
+      .post(endpoint)
+      .set("Authorization", `Bearer ${authToken}`)
+      .send({
+        verificationTypeId: constructionTypeId,
+        details: {
+          constructionAddress: "14 Admiralty Way",
+          projectType: "3 Storey Building",
+          currentConstructionStage: "Foundation Completed",
+        },
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.details).toEqual({
+      constructionAddress: "14 Admiralty Way",
+      projectType: "3 Storey Building",
+      currentConstructionStage: "Foundation Completed",
+    });
+    constructionRequestId = res.body.id;
+
+    const storedRequest = await prismaClient.verificationRequest.findUnique({
+      where: { id: constructionRequestId },
+    });
+    expect(storedRequest).toEqual(
+      expect.objectContaining({
+        userId: testUserId,
+        verificationTypeId: constructionTypeId,
+        details: {
+          constructionAddress: "14 Admiralty Way",
+          projectType: "3 Storey Building",
+          currentConstructionStage: "Foundation Completed",
+        },
       }),
     );
   });

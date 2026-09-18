@@ -1,17 +1,22 @@
 import { NextFunction, Request, Response } from "express";
 import { postVerificationRequest } from "../../../../../api/client/verification/handlers/post-verification-request";
 import { createVerificationRequest } from "../../../../../api/client/verification/services/database/verification-request";
+import { findVerificationType } from "../../../../../api/client/verification/services/database/verification-type";
 import { HttpStatusCode } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 
 jest.mock(
   "../../../../../api/client/verification/services/database/verification-request",
 );
+jest.mock(
+  "../../../../../api/client/verification/services/database/verification-type",
+);
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
 const mockedCreateVerificationRequest = createVerificationRequest as jest.Mock;
+const mockedFindVerificationType = findVerificationType as jest.Mock;
 
 function buildMockReqRes(body: Record<string, unknown> = {}, userId?: string) {
   const req = {
@@ -29,6 +34,7 @@ function buildMockReqRes(body: Record<string, unknown> = {}, userId?: string) {
 describe("postVerificationRequest handler (unit)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedFindVerificationType.mockResolvedValue({ slug: "property-verification" });
   });
 
   it("returns 401 when no authenticated user is present", async () => {
@@ -130,5 +136,75 @@ describe("postVerificationRequest handler (unit)", () => {
       expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER }),
     );
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("creates a construction verification request with construction details", async () => {
+    mockedFindVerificationType.mockResolvedValue({
+      id: "construction-type",
+      slug: "construction-progress",
+    });
+    mockedCreateVerificationRequest.mockResolvedValue({
+      id: "request-2",
+      status: "DRAFT",
+      verificationTypeId: "construction-type",
+      details: {
+        constructionAddress: "14 Admiralty Way",
+        projectType: "3 Storey Building",
+        currentConstructionStage: "Foundation Completed",
+      },
+      additionalNote: null,
+      createdAt: new Date("2026-09-18T10:00:00.000Z"),
+    });
+    const { req, res, next } = buildMockReqRes(
+      {
+        verificationTypeId: "construction-type",
+        details: {
+          constructionAddress: " 14 Admiralty Way ",
+          projectType: " 3 Storey Building ",
+          currentConstructionStage: " Foundation Completed ",
+        },
+      },
+      "user-1",
+    );
+
+    await postVerificationRequest(req, res, next);
+
+    expect(mockedCreateVerificationRequest).toHaveBeenCalledWith({
+      userId: "user-1",
+      verificationTypeId: "construction-type",
+      status: "DRAFT",
+      details: {
+        constructionAddress: "14 Admiralty Way",
+        projectType: "3 Storey Building",
+        currentConstructionStage: "Foundation Completed",
+      },
+      additionalNote: null,
+    });
+    expect(res.status).toHaveBeenCalledWith(HttpStatusCode.CREATED);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects incomplete construction details", async () => {
+    mockedFindVerificationType.mockResolvedValue({
+      id: "construction-type",
+      slug: "construction-progress",
+    });
+    const { req, res, next } = buildMockReqRes(
+      {
+        verificationTypeId: "construction-type",
+        details: {
+          constructionAddress: "14 Admiralty Way",
+          projectType: "3 Storey Building",
+        },
+      },
+      "user-1",
+    );
+
+    await postVerificationRequest(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
+    );
+    expect(mockedCreateVerificationRequest).not.toHaveBeenCalled();
   });
 });
