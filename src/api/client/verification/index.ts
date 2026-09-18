@@ -3,6 +3,7 @@ import { checkJwt } from "../../../middlewares/check-jwt";
 import { getVerificationReportSummary } from "./handlers/get-verification-report-summary";
 import { getVerificationRequests } from "./handlers/get-verification-requests";
 import { getVerificationTypes } from "./handlers/get-verification-types";
+import { postVerificationRequest } from "./handlers/post-verification-request";
 
 const router = Router();
 
@@ -38,6 +39,48 @@ const router = Router();
  *         description: Internal server error
  */
 router.get("/services/verification/verification-types", getVerificationTypes);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests:
+ *   post:
+ *     tags: [Verification]
+ *     summary: Create a draft property verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [verificationTypeId, details]
+ *             properties:
+ *               verificationTypeId: { type: string }
+ *               details:
+ *                 type: object
+ *                 required: [propertyType, propertyAddress]
+ *                 properties:
+ *                   propertyName: { type: string }
+ *                   propertyType: { type: string, example: COMPLETED_BUILDING }
+ *                   propertyAddress: { type: string }
+ *               additionalNote: { type: string }
+ *     responses:
+ *       201:
+ *         description: Draft verification request created
+ *       400:
+ *         description: Invalid or missing request fields
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       500:
+ *         description: Internal server error
+ */
+router.post("/verification-requests", checkJwt, postVerificationRequest);
 
 /**
  * @swagger
