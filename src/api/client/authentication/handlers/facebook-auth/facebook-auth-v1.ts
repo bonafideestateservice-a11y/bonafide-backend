@@ -11,70 +11,76 @@ import {
 import { logger } from "../../../../../utils/logger";
 import { HttpStatusCode } from "../../../../../exceptions";
 
-passport.use(
-  new FacebookStrategy(
-    {
-      clientID: process.env.FACEBOOK_CLIENT_ID!,
-      clientSecret: process.env.FACEBOOK_SECRET_KEY!,
-      callbackURL: process.env.FACEBOOK_CALLBACK_URL!,
-      profileFields: ["id", "displayName", "emails", "name"],
-    },
-    async (
-      _accessToken: string,
-      _refreshToken: string,
-      profile: Profile,
-      done: (err: unknown, user?: any) => void,
-    ) => {
-      try {
-        const email = profile.emails?.[0]?.value?.toLowerCase().trim();
-        const facebookId = profile.id;
+if (
+  process.env.FACEBOOK_CLIENT_ID &&
+  process.env.FACEBOOK_SECRET_KEY &&
+  process.env.FACEBOOK_CALLBACK_URL
+) {
+  passport.use(
+    new FacebookStrategy(
+      {
+        clientID: process.env.FACEBOOK_CLIENT_ID,
+        clientSecret: process.env.FACEBOOK_SECRET_KEY,
+        callbackURL: process.env.FACEBOOK_CALLBACK_URL,
+        profileFields: ["id", "displayName", "emails", "name"],
+      },
+      async (
+        _accessToken: string,
+        _refreshToken: string,
+        profile: Profile,
+        done: (err: unknown, user?: any) => void,
+      ) => {
+        try {
+          const email = profile.emails?.[0]?.value?.toLowerCase().trim();
+          const facebookId = profile.id;
 
-        if (!email) {
-          logger.error(
-            `No email found in Facebook profile: ${JSON.stringify(profile)}`,
-          );
-          return done(new Error("No email found in Facebook profile"));
-        }
+          if (!email) {
+            logger.error(
+              `No email found in Facebook profile: ${JSON.stringify(profile)}`,
+            );
+            return done(new Error("No email found in Facebook profile"));
+          }
 
-        let user = await findClient({ email });
+          let user = await findClient({ email });
 
-        if (!user) {
-          const firstName = (profile as any).name?.givenName || "";
-          const lastName = (profile as any).name?.familyName || "";
-          const fullName =
-            [firstName, lastName].filter(Boolean).join(" ").trim() ||
-            email.split("@")[0];
+          if (!user) {
+            const firstName = (profile as any).name?.givenName || "";
+            const lastName = (profile as any).name?.familyName || "";
+            const fullName =
+              [firstName, lastName].filter(Boolean).join(" ").trim() ||
+              email.split("@")[0];
 
-          user = await createClient({
-            fullName,
-            email,
-            password: null,
-            provider: "facebook",
-            providerId: facebookId,
-            role: ROLE.CLIENT,
-          });
-          logger.info(`New Facebook user created: ${email}`);
-        } else if (!user.providerId || user.providerId !== facebookId) {
-          user = await updateClient(
-            { id: user.id },
-            {
+            user = await createClient({
+              fullName,
+              email,
+              password: null,
               provider: "facebook",
               providerId: facebookId,
-            },
-          );
-          logger.info(`Linked existing user with Facebook: ${email}`);
-        }
+              role: ROLE.CLIENT,
+            });
+            logger.info(`New Facebook user created: ${email}`);
+          } else if (!user.providerId || user.providerId !== facebookId) {
+            user = await updateClient(
+              { id: user.id },
+              {
+                provider: "facebook",
+                providerId: facebookId,
+              },
+            );
+            logger.info(`Linked existing user with Facebook: ${email}`);
+          }
 
-        return done(null, user);
-      } catch (err) {
-        logger.error(
-          `Facebook OAuth error: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        return done(err);
-      }
-    },
-  ),
-);
+          return done(null, user);
+        } catch (err) {
+          logger.error(
+            `Facebook OAuth error: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return done(err);
+        }
+      },
+    ),
+  );
+}
 
 passport.serializeUser((user: any, done) => {
   logger.info(
