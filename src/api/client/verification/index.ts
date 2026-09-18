@@ -6,6 +6,8 @@ import { getVerificationRequests } from "./handlers/get-verification-requests";
 import { getVerificationTypes } from "./handlers/get-verification-types";
 import { postVerificationRequest } from "./handlers/post-verification-request";
 import { postVerificationDocuments } from "./handlers/post-verification-documents";
+import { patchVerificationRequest } from "./handlers/patch-verification-request";
+import { getVerificationTypesPlan } from "./handlers/get-verification-types-plan";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -42,6 +44,44 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         description: Internal server error
  */
 router.get("/services/verification/verification-types", getVerificationTypes);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-types/{slug}/plans:
+ *   get:
+ *     tags: [Verification]
+ *     summary: Get the plans for a verification type
+ *     security: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Available verification plans
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 required: [id, frequency, name, description, priceInCents, currency]
+ *                 properties:
+ *                   id: { type: string }
+ *                   frequency: { type: string, enum: [ONE_TIME, MONTHLY, QUARTERLY] }
+ *                   name: { type: string }
+ *                   description: { type: string }
+ *                   priceInCents: { type: integer }
+ *                   currency: { type: string }
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/verification-types/:slug/plans", getVerificationTypesPlan);
 
 /**
  * @swagger
@@ -84,6 +124,54 @@ router.get("/services/verification/verification-types", getVerificationTypes);
  *         description: Internal server error
  */
 router.post("/verification-requests", checkJwt, postVerificationRequest);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}:
+ *   patch:
+ *     tags: [Verification]
+ *     summary: Update a verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             minProperties: 1
+ *             properties:
+ *               details:
+ *                 type: object
+ *                 properties:
+ *                   propertyName: { type: string }
+ *                   propertyType: { type: string, example: COMPLETED_BUILDING }
+ *                   propertyAddress: { type: string }
+ *               additionalNote: { type: string }
+ *     responses:
+ *       200:
+ *         description: Updated verification request
+ *       400:
+ *         description: Invalid update fields
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       403:
+ *         description: Verification request belongs to another user
+ *       404:
+ *         description: Verification request not found
+ *       500:
+ *         description: Internal server error
+ */
+router.patch("/verification-requests/:id", checkJwt, patchVerificationRequest);
 
 /**
  * @swagger

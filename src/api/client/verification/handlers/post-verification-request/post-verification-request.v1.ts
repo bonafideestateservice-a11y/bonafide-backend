@@ -8,13 +8,15 @@ import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { createVerificationRequest } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
 
-interface CreateVerificationRequestBody {
+export interface VerificationRequestDetails {
+  propertyName?: unknown;
+  propertyType?: unknown;
+  propertyAddress?: unknown;
+}
+
+export interface CreateVerificationRequestBody {
   verificationTypeId?: unknown;
-  details?: {
-    propertyName?: unknown;
-    propertyType?: unknown;
-    propertyAddress?: unknown;
-  };
+  details?: VerificationRequestDetails;
   additionalNote?: unknown;
 }
 

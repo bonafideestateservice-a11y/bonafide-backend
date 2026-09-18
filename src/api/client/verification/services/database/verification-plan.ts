@@ -28,6 +28,46 @@ export interface FindVerificationPlanUnique {
   id: string;
 }
 
+export type VerificationPlanCard = Pick<
+  VerificationPlan,
+  | "id"
+  | "frequency"
+  | "name"
+  | "description"
+  | "priceInCents"
+  | "currency"
+>;
+
+export const getVerificationPlansForTypeSlug = async (
+  verificationTypeSlug: string,
+): Promise<VerificationPlanCard[]> => {
+  try {
+    const verificationPlans = await prismaClient.verificationPlan.findMany({
+      where: {
+        verificationType: { slug: verificationTypeSlug },
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        frequency: true,
+        name: true,
+        description: true,
+        priceInCents: true,
+        currency: true,
+      },
+    });
+    logger.info(
+      `Fetched verification plans slug=${verificationTypeSlug} count=${verificationPlans.length}`,
+    );
+    return verificationPlans;
+  } catch (error) {
+    logger.error(
+      `Error fetching verification plans slug=${verificationTypeSlug} ${error}`,
+    );
+    throw error;
+  }
+};
+
 export const createVerificationPlan = async (
   data: CreateVerificationPlanData,
 ): Promise<VerificationPlan> => {
