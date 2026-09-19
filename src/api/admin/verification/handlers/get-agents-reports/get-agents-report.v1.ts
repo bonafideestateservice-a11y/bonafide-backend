@@ -1,9 +1,14 @@
 import { NextFunction, Request, Response } from "express";
-import { ApiError, BadRequestError, HttpStatusCode, NotFoundError } from "../../../../exceptions";
-import { CustomRequest } from "../../../../middlewares/check-jwt";
-import { getVerificationAgentByUserId } from "../../authentication/services/database/agent";
-import { getAgentReports } from "../services/database/verification-report";
-import { logger } from "../../../../utils/logger";
+import {
+  ApiError,
+  BadRequestError,
+  HttpStatusCode,
+  NotFoundError,
+} from "../../../../../exceptions";
+import { CustomRequest } from "../../../../../middlewares/check-jwt";
+import { getVerificationAgentByUserId } from "../../../authentication/services/database/agent";
+import { getAgentReports } from "../../services/database/verification-report";
+import { logger } from "../../../../../utils/logger";
 
 const getNames = (fullName: string) => {
   const names = fullName.trim().split(/\s+/);

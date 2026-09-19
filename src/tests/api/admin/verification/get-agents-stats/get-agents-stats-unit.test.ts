@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { getAgentsStats } from "../../../../../api/admin/verification/get-agents-stats";
+import { getAgentsStats } from "../../../../../api/admin/verification/handlers/get-agents-stats";
 import { getAgentStatsById } from "../../../../../api/admin/verification/services/database/agent-assignment";
 import { getVerificationAgentByUserId } from "../../../../../api/admin/authentication/services/database/agent";
 import { HttpStatusCode } from "../../../../../exceptions";

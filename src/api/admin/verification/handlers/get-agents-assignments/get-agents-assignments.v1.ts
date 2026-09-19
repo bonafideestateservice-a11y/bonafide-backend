@@ -1,10 +1,10 @@
 import { NextFunction, Request, Response } from "express";
-import { ApiError, HttpStatusCode } from "../../../../exceptions";
-import { getAgentAssignmentsById } from "../services/database/agent-assignment";
-import { getVerificationAgentByUserId } from "../../authentication/services/database/agent";
-import { CustomRequest } from "../../../../middlewares/check-jwt";
-import { BadRequestError, NotFoundError } from "../../../../exceptions";
-import { logger } from "../../../../utils/logger";
+import { ApiError, HttpStatusCode } from "../../../../../exceptions";
+import { getAgentAssignmentsById } from "../../services/database/agent-assignment";
+import { getVerificationAgentByUserId } from "../../../authentication/services/database/agent";
+import { CustomRequest } from "../../../../../middlewares/check-jwt";
+import { BadRequestError, NotFoundError } from "../../../../../exceptions";
+import { logger } from "../../../../../utils/logger";
 
 export const getAgentsAssignments = async (
   req: Request,

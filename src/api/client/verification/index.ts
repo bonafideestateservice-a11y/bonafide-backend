@@ -154,6 +154,33 @@ router.post("/verification-requests", checkJwt, postVerificationRequest);
  *       500:
  *         description: Internal server error
  */
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/reports-summary:
+ *   get:
+ *     tags: [Verification]
+ *     summary: Get the authenticated user's unviewed verification report count
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Number of reports that have not been viewed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/VerificationReportSummary'
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/verification-requests/reports-summary", checkJwt, getVerificationReportSummary);
+
 router.get("/verification-requests/:id", checkJwt, getVerificationRequest);
 
 /**
@@ -373,6 +400,4 @@ router.get("/verification-requests", checkJwt, getVerificationRequests);
  *       500:
  *         description: Internal server error
  */
-router.get("/verification-requests/reports-summary", checkJwt, getVerificationReportSummary);
-
 export default router;

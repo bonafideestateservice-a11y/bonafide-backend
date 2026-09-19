@@ -2,11 +2,11 @@ import { Router } from "express";
 import { ROLE } from "@prisma/client";
 import { checkJwt } from "../../../middlewares/check-jwt";
 import { checkRoles } from "../../../middlewares/check-roles";
-import { getAgentsAssignments } from "./get-agents-assignments";
-import { getAgentsStats } from "./get-agents-stats";
-import { getAgentsReports } from "./get-agents-reports";
-import { getAgentsVerificationRequestReport } from "./get-agents-verification-request-report";
-import { getAgentAssignment } from "./get-agent-assignment";
+import { getAgentsAssignments } from "./handlers/get-agents-assignments";
+import { getAgentsStats } from "./handlers/get-agents-stats";
+import { getAgentsReports } from "./handlers/get-agents-reports";
+import { getAgentsVerificationRequestReport } from "./handlers/get-agents-verification-request-report";
+import { getAgentAssignment } from "./handlers/get-agent-assignment";
 
 const router = Router();
 const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
