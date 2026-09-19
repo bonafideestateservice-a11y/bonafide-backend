@@ -114,6 +114,100 @@ export const getAgentAssignmentById = async (
   }
 };
 
+export type StartedAgentAssignment = {
+  id: string;
+  status: AgentAssignmentStatus;
+  checklist: {
+    id: string;
+    label: string;
+    status: "PENDING";
+    requiresMedia: boolean;
+  }[];
+};
+
+export const startAgentAssignment = async (
+  agentId: string,
+  assignmentId: string,
+): Promise<StartedAgentAssignment | null> => {
+  try {
+    return await prismaClient.$transaction(async (transaction) => {
+      const assignment = await transaction.agentAssignment.findFirst({
+        where: { id: assignmentId, agentId },
+        select: {
+          id: true,
+          status: true,
+          verificationRequest: {
+            select: {
+              verificationType: {
+                select: {
+                  checklistTemplateItems: {
+                    select: { label: true, requiresMedia: true, sortOrder: true },
+                    orderBy: { sortOrder: "asc" },
+                  },
+                },
+              },
+            },
+          },
+          checklistItems: {
+            select: { id: true, label: true, status: true, sortOrder: true },
+            orderBy: { sortOrder: "asc" },
+          },
+        },
+      });
+
+      if (!assignment) return null;
+
+      if (assignment.checklistItems.length === 0) {
+        await transaction.verificationChecklistItem.createMany({
+          data: assignment.verificationRequest.verificationType.checklistTemplateItems.map(
+            (item) => ({
+              agentAssignmentId: assignment.id,
+              label: item.label,
+              sortOrder: item.sortOrder,
+            }),
+          ),
+        });
+      }
+
+      const status =
+        assignment.status === AgentAssignmentStatus.ASSIGNED
+          ? AgentAssignmentStatus.ACCEPTED
+          : assignment.status;
+
+      await transaction.agentAssignment.update({
+        where: { id: assignment.id },
+        data: {
+          status,
+          progressPercent: assignment.checklistItems.length === 0 ? 0 : undefined,
+        },
+      });
+
+      const checklistItems = await transaction.verificationChecklistItem.findMany({
+        where: { agentAssignmentId: assignment.id },
+        select: { id: true, label: true, status: true, sortOrder: true },
+        orderBy: { sortOrder: "asc" },
+      });
+
+      return {
+        id: assignment.id,
+        status,
+        checklist: checklistItems.map((item) => ({
+          id: item.id,
+          label: item.label,
+          status: "PENDING" as const,
+          requiresMedia:
+            assignment.verificationRequest.verificationType.checklistTemplateItems.find(
+              (templateItem) => templateItem.sortOrder === item.sortOrder,
+            )?.requiresMedia ?? false,
+        })),
+      };
+    });
+  } catch (error) {
+    logger.error(`Error starting agent assignment assignmentId=${assignmentId} ${error}`);
+    throw error;
+  }
+};
+
 const activeAssignmentStatuses: AgentAssignmentStatus[] = [
   AgentAssignmentStatus.ASSIGNED,
   AgentAssignmentStatus.ACCEPTED,
