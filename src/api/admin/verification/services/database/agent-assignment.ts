@@ -373,7 +373,9 @@ export const updateAgentChecklistItem = async (
       return checklistItems.find((checklistItem) => checklistItem.id === item.id) ?? null;
     });
   } catch (error) {
-    logger.error(`Error updating checklist item itemId=${itemId} assignmentId=${assignmentId} ${error}`);
+    logger.error(
+      `Error updating checklist item itemId=${itemId} assignmentId=${assignmentId} ${error}`,
+    );
     throw error;
   }
 };
