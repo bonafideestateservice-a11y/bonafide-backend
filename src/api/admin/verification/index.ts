@@ -11,6 +11,8 @@ import { startVerification } from "./handlers/start-verification";
 import { getAgentAssignmentChecklist } from "./handlers/get-agent-assignment-checklist";
 import { updateAgentAssignmentChecklistItem } from "./handlers/update-agent-checklist-item";
 import { updateAgentAssignmentNotes } from "./handlers/update-agent-assignment-notes";
+import { submitAgentReport } from "./handlers/submit-agent-report";
+import { getAgentAssignmentReportHandler } from "./handlers/get-agent-assignment-report";
 import multer from "multer";
 
 const router = Router();
@@ -40,6 +42,65 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *       404: { description: Assignment not found }
  */
 router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent, startVerification);
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification/agent-assignments/{id}/report:
+ *   post:
+ *     tags: [Admin Verification]
+ *     summary: Submit an agent verification report
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       201: { description: Verification report submitted }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Assignment not found }
+ *       409: { description: Checklist is incomplete }
+ */
+router.post(
+  "/verification/agent-assignments/:id/report",
+  checkJwt,
+  adminOrAgent,
+  submitAgentReport,
+);
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification/agent-assignments/{id}/report:
+ *   get:
+ *     tags: [Admin Verification]
+ *     summary: Get an agent assignment verification report
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Verification report details and checklist photos }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Assignment report not found }
+ */
+router.get(
+  "/verification/agent-assignments/:id/report",
+  checkJwt,
+  adminOrAgent,
+  getAgentAssignmentReportHandler,
+);
 
 /**
  * @swagger
