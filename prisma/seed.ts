@@ -18,6 +18,11 @@ const verificationTypes = [
     name: "Property Verification",
     description: "Verify ownership, condition and legal standing",
     icon: "property",
+    checklist: [
+      { label: "Property structure verified", requiresMedia: true },
+      { label: "Property Deed", requiresMedia: true },
+      { label: "Survey Plan", requiresMedia: true },
+    ],
     plans: [
       {
         frequency: VERIFICATION_FREQUENCY.ONE_TIME,
@@ -47,6 +52,11 @@ const verificationTypes = [
     name: "Construction Progress",
     description: "Track milestones with photo, videos, & agent report",
     icon: "construction",
+    checklist: [
+      { label: "Land documentation verified", requiresMedia: true },
+      { label: "Foundation inspected", requiresMedia: true },
+      { label: "Construction stage confirmed", requiresMedia: true },
+    ],
     plans: [
       {
         frequency: VERIFICATION_FREQUENCY.ONE_TIME,
@@ -76,6 +86,11 @@ const verificationTypes = [
     name: "Business Verification",
     description: "Confirm business legitimacy, operations & ownership",
     icon: "business",
+    checklist: [
+      { label: "Business registration verified", requiresMedia: true },
+      { label: "Business premises inspected", requiresMedia: true },
+      { label: "Business operations confirmed", requiresMedia: true },
+    ],
     plans: [
       {
         frequency: VERIFICATION_FREQUENCY.ONE_TIME,
@@ -179,6 +194,18 @@ async function seed() {
         },
       });
     }
+
+    await prismaClient.checklistTemplateItem.deleteMany({
+      where: { verificationTypeId: verificationType.id },
+    });
+    await prismaClient.checklistTemplateItem.createMany({
+      data: type.checklist.map((item, index) => ({
+        verificationTypeId: verificationType.id,
+        label: item.label,
+        requiresMedia: item.requiresMedia,
+        sortOrder: index,
+      })),
+    });
   }
 
   logger.info("Verification services, types, and plans seeded successfully");

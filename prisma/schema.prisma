@@ -8,18 +8,19 @@ datasource db {
 }
 
 model User {
-  id                  String               @id @default(uuid())
-  fullName            String
-  email               String               @unique
-  termsAndCondition   Boolean              @default(false)
-  password            String?
-  provider            String?              @default("local")
-  providerId          String?              @unique
-  role                ROLE                 @default(CLIENT)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  passwordResetTokens PasswordResetToken[]
+  id                   String                @id @default(uuid())
+  fullName             String
+  email                String                @unique
+  termsAndCondition    Boolean               @default(false)
+  password             String?
+  provider             String?               @default("local")
+  providerId           String?               @unique
+  role                 ROLE                  @default(CLIENT)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  passwordResetTokens  PasswordResetToken[]
   verificationRequests VerificationRequest[]
+  verificationAgent    VerificationAgent?
 
   @@index([role, createdAt])
   @@index([createdAt])
@@ -51,6 +52,20 @@ enum VERIFICATION_FREQUENCY {
   QUARTERLY
 }
 
+enum AgentAssignmentStatus {
+  ASSIGNED
+  ACCEPTED
+  INSPECTION_SCHEDULED
+  INSPECTION_COMPLETE
+  REPORT_SUBMITTED
+}
+
+enum ReportReviewStatus {
+  PENDING
+  APPROVED
+  REVISION_REQUESTED
+}
+
 model Service {
   id          String  @id @default(cuid())
   name        String
@@ -72,8 +87,9 @@ model VerificationType {
   description String?
   icon        String?
 
-  verificationPlans VerificationPlan[]
-  verificationRequests VerificationRequest[]
+  verificationPlans      VerificationPlan[]
+  verificationRequests   VerificationRequest[]
+  checklistTemplateItems ChecklistTemplateItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -121,21 +137,27 @@ enum PaymentStatus {
   FAILED
 }
 
-model VerificationRequest {
-  id                  String              @id @default(cuid())
-  userId              String
-  user                User                @relation(fields: [userId], references: [id])
-  verificationTypeId  String
-  verificationType    VerificationType    @relation(fields: [verificationTypeId], references: [id])
-  verificationPlanId  String?
-  verificationPlan    VerificationPlan?   @relation(fields: [verificationPlanId], references: [id])
-  status              VerificationStatus  @default(DRAFT)
-  details             Json
-  additionalNote      String?
+enum ChecklistItemStatus {
+  PENDING
+  COMPLETE
+}
 
-  documents           Document[]
-  transaction         Transaction?
-  report              VerificationReport?
+model VerificationRequest {
+  id                 String             @id @default(cuid())
+  userId             String
+  user               User               @relation(fields: [userId], references: [id])
+  verificationTypeId String
+  verificationType   VerificationType   @relation(fields: [verificationTypeId], references: [id])
+  verificationPlanId String?
+  verificationPlan   VerificationPlan?  @relation(fields: [verificationPlanId], references: [id])
+  status             VerificationStatus @default(DRAFT)
+  details            Json
+  additionalNote     String?
+
+  documents       Document[]
+  transaction     Transaction?
+  report          VerificationReport?
+  agentAssignment AgentAssignment?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -145,9 +167,13 @@ model VerificationRequest {
 }
 
 model Document {
-  id                    String              @id @default(cuid())
+  id                    String                     @id @default(cuid())
   verificationRequestId String
-  verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id], onDelete: Cascade)
+  verificationRequest   VerificationRequest        @relation(fields: [verificationRequestId], references: [id], onDelete: Cascade)
+  verificationReportId  String?
+  verificationReport    VerificationReport?        @relation(fields: [verificationReportId], references: [id], onDelete: SetNull)
+  checklistItemId       String?
+  checklistItem         VerificationChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
   url                   String
   fileName              String
   fileType              String
@@ -156,6 +182,70 @@ model Document {
   createdAt DateTime @default(now())
 
   @@index([verificationRequestId])
+  @@index([verificationReportId])
+  @@index([checklistItemId])
+}
+
+model ChecklistTemplateItem {
+  id                 String           @id @default(cuid())
+  verificationTypeId String
+  verificationType   VerificationType @relation(fields: [verificationTypeId], references: [id], onDelete: Cascade)
+  label              String
+  requiresMedia      Boolean          @default(true)
+  sortOrder          Int
+
+  @@unique([verificationTypeId, sortOrder])
+  @@index([verificationTypeId])
+}
+
+model VerificationAgent {
+  id     String  @id @default(cuid())
+  userId String  @unique
+  user   User    @relation(fields: [userId], references: [id])
+  name   String
+  phone  String?
+  region String?
+
+  assignments AgentAssignment[]
+  reports     VerificationReport[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AgentAssignment {
+  id                    String                @id @default(cuid())
+  verificationRequestId String                @unique
+  verificationRequest   VerificationRequest   @relation(fields: [verificationRequestId], references: [id])
+  agentId               String
+  agent                 VerificationAgent     @relation(fields: [agentId], references: [id])
+  status                AgentAssignmentStatus @default(ASSIGNED)
+  progressPercent       Int?
+  additionalNotes       String?
+  scheduledAt           DateTime?
+  completedAt           DateTime?
+
+  checklistItems VerificationChecklistItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agentId])
+}
+
+model VerificationChecklistItem {
+  id                String              @id @default(cuid())
+  agentAssignmentId String
+  agentAssignment   AgentAssignment     @relation(fields: [agentAssignmentId], references: [id], onDelete: Cascade)
+  label             String
+  status            ChecklistItemStatus @default(PENDING)
+  sortOrder         Int
+  media             Document[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agentAssignmentId])
 }
 
 model Transaction {
@@ -177,11 +267,17 @@ model VerificationReport {
   id                    String              @id @default(cuid())
   verificationRequestId String              @unique
   verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id])
+  submittedByAgentId    String
+  agent                 VerificationAgent   @relation(fields: [submittedByAgentId], references: [id])
   summary               String?
   findings              Json?
+  media                 Document[]
   reportUrl             String?
-  generatedAt           DateTime?
   viewedAt              DateTime?
+  generatedAt           DateTime?
+  reviewStatus          ReportReviewStatus  @default(PENDING)
+  rating                Float?
+  revisionNote          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

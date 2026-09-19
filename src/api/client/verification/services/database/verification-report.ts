@@ -4,6 +4,7 @@ import { logger } from "../../../../../utils/logger";
 
 export interface CreateVerificationReportData {
   verificationRequestId: string;
+  submittedByAgentId: string;
   summary?: string | null;
   findings?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
   reportUrl?: string | null;

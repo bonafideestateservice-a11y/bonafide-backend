@@ -94,25 +94,25 @@ describe("PATCH /api/v1/client/verification-requests/:id (integration, real DB)"
         where: { id: verificationRequestId },
       });
     }
+    if (businessRequestId) {
+      await prismaClient.verificationRequest.delete({
+        where: { id: businessRequestId },
+      });
+    }
     await prismaClient.verificationType.delete({
       where: { id: verificationTypeId },
     });
-    await prismaClient.service.delete({ where: { id: serviceId } });
-    await deleteClient({ id: testUserId });
-    await prismaClient.$disconnect();
-  });
-
-  if (businessRequestId) {
-    await prismaClient.verificationRequest.delete({
-      where: { id: businessRequestId },
-    });
-  }
-  it("returns 401 when no auth token is provided", async () => {
     if (createdBusinessType) {
       await prismaClient.verificationType.delete({
         where: { id: businessTypeId },
       });
     }
+    await prismaClient.service.delete({ where: { id: serviceId } });
+    await deleteClient({ id: testUserId });
+    await prismaClient.$disconnect();
+  });
+
+  it("returns 401 when no auth token is provided", async () => {
     const res = await request(app)
       .patch(endpoint())
       .send({ additionalNote: "Updated note" });

@@ -67,7 +67,12 @@ router.post("/login", AuthenticationController.login);
  *       200:
  *         description: Password changed successfully
  */
-router.post("/change-password", checkJwt, adminOrAgent, AuthenticationController.changePassword);
+router.post(
+  "/change-password",
+  checkJwt,
+  adminOrAgent,
+  AuthenticationController.changePassword,
+);
 
 /**
  * @swagger
@@ -159,5 +164,35 @@ router.post("/verify-otp", AuthenticationController.verifyOtp);
  *         description: Invalid/expired OTP or missing fields
  */
 router.post("/reset-password", AuthenticationController.resetPassword);
+
+/**
+ * @swagger
+ * /api/{version}/admin/agents:
+ *   get:
+ *     tags: [Admin Authentication]
+ *     summary: List verification agents
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Verification agents and assignment counts
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       403:
+ *         description: Insufficient permissions
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  "/agents/me",
+  checkJwt,
+  adminOrAgent,
+  AuthenticationController.getAgentsInformation,
+);
 
 export default router;
