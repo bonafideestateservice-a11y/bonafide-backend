@@ -57,6 +57,12 @@ export type AgentSelfAssignment = Prisma.AgentAssignmentGetPayload<{
   };
 }>;
 
+export interface AgentAssignmentsFilter {
+  limit?: number;
+  status?: "ALL" | "IN_PROGRESS";
+  search?: string;
+}
+
 const activeAssignmentStatuses: AgentAssignmentStatus[] = [
   AgentAssignmentStatus.ASSIGNED,
   AgentAssignmentStatus.ACCEPTED,
@@ -98,11 +104,75 @@ export const getAgentStatsById = async (
 
 export const getAgentAssignmentsById = async (
   agentId: string,
-  limit = 5,
+  { limit = 5, status = "ALL", search = "" }: AgentAssignmentsFilter = {},
 ): Promise<AgentSelfAssignment[]> => {
   try {
+    const statuses =
+      status === "IN_PROGRESS"
+        ? [
+            AgentAssignmentStatus.ACCEPTED,
+            AgentAssignmentStatus.INSPECTION_SCHEDULED,
+          ]
+        : [
+            AgentAssignmentStatus.ASSIGNED,
+            AgentAssignmentStatus.ACCEPTED,
+            AgentAssignmentStatus.INSPECTION_SCHEDULED,
+            AgentAssignmentStatus.INSPECTION_COMPLETE,
+          ];
+    const normalizedSearch = search.trim();
+
     return await prismaClient.agentAssignment.findMany({
-      where: { agentId },
+      where: {
+        agentId,
+        status: { in: statuses },
+        ...(normalizedSearch
+          ? {
+              OR: [
+                {
+                  verificationRequest: {
+                    user: {
+                      fullName: {
+                        contains: normalizedSearch,
+                        mode: "insensitive",
+                      },
+                    },
+                  },
+                },
+                {
+                  verificationRequest: {
+                    verificationType: {
+                      name: { contains: normalizedSearch, mode: "insensitive" },
+                    },
+                  },
+                },
+                {
+                  verificationRequest: {
+                    details: {
+                      path: ["propertyAddress"],
+                      string_contains: normalizedSearch,
+                    },
+                  },
+                },
+                {
+                  verificationRequest: {
+                    details: {
+                      path: ["constructionAddress"],
+                      string_contains: normalizedSearch,
+                    },
+                  },
+                },
+                {
+                  verificationRequest: {
+                    details: {
+                      path: ["businessAddress"],
+                      string_contains: normalizedSearch,
+                    },
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: limit,
       select: {
@@ -120,7 +190,9 @@ export const getAgentAssignmentsById = async (
       },
     });
   } catch (error) {
-    logger.error(`Error fetching agent assignments agentId=${agentId} ${error}`);
+    logger.error(
+      `Error fetching agent assignments agentId=${agentId} ${error}`,
+    );
     throw error;
   }
 };

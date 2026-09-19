@@ -19,7 +19,7 @@ const mockedGetVerificationAgentByUserId =
 function buildMockReqRes() {
   const req = {
     user: { id: "user-1" },
-    query: { limit: "5" },
+    query: { limit: "5", status: "ALL", search: "" },
   } as unknown as Request;
   const res = {
     status: jest.fn().mockReturnThis(),
@@ -69,6 +69,28 @@ describe("getAgentsAssignments handler (unit)", () => {
         scheduledAt: "2026-09-20T10:00:00.000Z",
       },
     ]);
+    expect(mockedGetAgentAssignmentsById).toHaveBeenCalledWith("agent-1", {
+      limit: 5,
+      status: "ALL",
+      search: "",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("passes status and search filters to the database service", async () => {
+    mockedGetVerificationAgentByUserId.mockResolvedValue({ id: "agent-1" });
+    mockedGetAgentAssignmentsById.mockResolvedValue([]);
+    const { req, res, next } = buildMockReqRes();
+    req.query = { limit: "10", status: "IN_PROGRESS", search: "David" };
+
+    await getAgentsAssignments(req, res, next);
+
+    expect(mockedGetAgentAssignmentsById).toHaveBeenCalledWith("agent-1", {
+      limit: 10,
+      status: "IN_PROGRESS",
+      search: "David",
+    });
+    expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(next).not.toHaveBeenCalled();
   });
 
