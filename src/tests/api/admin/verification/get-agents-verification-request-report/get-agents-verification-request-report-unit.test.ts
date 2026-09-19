@@ -4,9 +4,7 @@ import { getAgentVerificationRequestReport } from "../../../../../api/admin/veri
 import { getVerificationAgentByUserId } from "../../../../../api/admin/authentication/services/database/agent";
 import { HttpStatusCode } from "../../../../../exceptions";
 
-jest.mock(
-  "../../../../../api/admin/verification/services/database/verification-report",
-);
+jest.mock("../../../../../api/admin/verification/services/database/verification-report");
 jest.mock("../../../../../api/admin/authentication/services/database/agent");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },

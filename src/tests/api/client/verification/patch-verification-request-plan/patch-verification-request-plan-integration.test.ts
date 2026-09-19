@@ -19,8 +19,7 @@ let verificationPlanId: string;
 let verificationRequestId: string;
 let serviceId: string;
 
-const endpoint = () =>
-  `/api/v1/client/verification-requests/${verificationRequestId}/plan`;
+const endpoint = () => `/api/v1/client/verification-requests/${verificationRequestId}/plan`;
 
 describe("PATCH /api/v1/client/verification-requests/:id/plan (integration, real DB)", () => {
   beforeAll(async () => {
@@ -89,9 +88,7 @@ describe("PATCH /api/v1/client/verification-requests/:id/plan (integration, real
   });
 
   it("returns 401 without authentication", async () => {
-    const res = await request(app)
-      .patch(endpoint())
-      .send({ verificationPlanId });
+    const res = await request(app).patch(endpoint()).send({ verificationPlanId });
 
     expect(res.status).toBe(401);
   });

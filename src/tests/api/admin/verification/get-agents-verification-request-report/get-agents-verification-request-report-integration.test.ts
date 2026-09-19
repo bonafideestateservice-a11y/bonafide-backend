@@ -87,9 +87,7 @@ afterAll(async () => {
 describe("GET /api/v1/admin/verification/agents/verification-requests/:id/report", () => {
   it("returns the full report for the authenticated agent", async () => {
     const res = await request(app)
-      .get(
-        `/api/v1/admin/verification/agents/verification-requests/${requestId}/report`,
-      )
+      .get(`/api/v1/admin/verification/agents/verification-requests/${requestId}/report`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);

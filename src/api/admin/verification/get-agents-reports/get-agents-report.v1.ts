@@ -1,10 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import {
-  ApiError,
-  BadRequestError,
-  HttpStatusCode,
-  NotFoundError,
-} from "../../../../exceptions";
+import { ApiError, BadRequestError, HttpStatusCode, NotFoundError } from "../../../../exceptions";
 import { CustomRequest } from "../../../../middlewares/check-jwt";
 import { getVerificationAgentByUserId } from "../../authentication/services/database/agent";
 import { getAgentReports } from "../services/database/verification-report";
@@ -16,13 +11,9 @@ const getNames = (fullName: string) => {
 };
 
 const getDistrict = (details: unknown): string => {
-  if (typeof details !== "object" || details === null || Array.isArray(details))
-    return "";
+  if (typeof details !== "object" || details === null || Array.isArray(details)) return "";
   const record = details as Record<string, unknown>;
-  const address =
-    record.propertyAddress ??
-    record.constructionAddress ??
-    record.businessAddress;
+  const address = record.propertyAddress ?? record.constructionAddress ?? record.businessAddress;
   return typeof address === "string" ? address : String(address ?? "");
 };
 
@@ -33,26 +24,15 @@ export const getAgentsReports = async (
 ): Promise<void> => {
   try {
     const userId = (req as CustomRequest).user?.id;
-    if (!userId)
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."),
-      );
+    if (!userId) return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
 
-    const reviewStatus =
-      req.query.reviewStatus === undefined ? "ALL" : req.query.reviewStatus;
-    if (
-      !["ALL", "APPROVED", "REVISION_REQUESTED"].includes(String(reviewStatus))
-    ) {
+    const reviewStatus = req.query.reviewStatus === undefined ? "ALL" : req.query.reviewStatus;
+    if (!["ALL", "APPROVED", "REVISION_REQUESTED"].includes(String(reviewStatus))) {
       return next(
-        new BadRequestError(
-          "Review status must be ALL, APPROVED, or REVISION_REQUESTED.",
-        ),
+        new BadRequestError("Review status must be ALL, APPROVED, or REVISION_REQUESTED."),
       );
     }
-    if (
-      req.query.search !== undefined &&
-      typeof req.query.search !== "string"
-    ) {
+    if (req.query.search !== undefined && typeof req.query.search !== "string") {
       return next(new BadRequestError("Search must be a string."));
     }
 
@@ -77,9 +57,7 @@ export const getAgentsReports = async (
     );
   } catch (error) {
     logger.error(`Error getting agent reports: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };
 

@@ -14,7 +14,7 @@ export type PasswordResetTokenWithUser = PasswordResetToken & {
 };
 
 export const createPasswordResetToken = async (
-  data: CreatePasswordResetTokenData
+  data: CreatePasswordResetTokenData,
 ): Promise<PasswordResetToken> => {
   try {
     const token = await prismaClient.passwordResetToken.create({
@@ -34,7 +34,7 @@ export const createPasswordResetToken = async (
 };
 
 export const findValidResetToken = async (
-  tokenHash: string
+  tokenHash: string,
 ): Promise<PasswordResetTokenWithUser | null> => {
   try {
     const token = await prismaClient.passwordResetToken.findFirst({
@@ -67,7 +67,7 @@ export const getAllPasswordResetTokens = async (): Promise<PasswordResetToken[]>
 };
 
 export const getPasswordResetTokensByUser = async (
-  userId: string
+  userId: string,
 ): Promise<PasswordResetToken[]> => {
   try {
     const tokens = await prismaClient.passwordResetToken.findMany({
@@ -83,7 +83,7 @@ export const getPasswordResetTokensByUser = async (
 };
 
 export const findPasswordResetTokenById = async (
-  id: string
+  id: string,
 ): Promise<PasswordResetToken | null> => {
   try {
     const token = await prismaClient.passwordResetToken.findUnique({ where: { id } });
@@ -95,9 +95,7 @@ export const findPasswordResetTokenById = async (
   }
 };
 
-export const markTokenAsUsed = async (
-  id: string
-): Promise<PasswordResetToken> => {
+export const markTokenAsUsed = async (id: string): Promise<PasswordResetToken> => {
   try {
     const token = await prismaClient.passwordResetToken.update({
       where: { id },
@@ -112,7 +110,7 @@ export const markTokenAsUsed = async (
 };
 
 export const deletePasswordResetToken = async (
-  where: Prisma.PasswordResetTokenWhereUniqueInput
+  where: Prisma.PasswordResetTokenWhereUniqueInput,
 ): Promise<PasswordResetToken> => {
   try {
     const deleted = await prismaClient.passwordResetToken.delete({ where });

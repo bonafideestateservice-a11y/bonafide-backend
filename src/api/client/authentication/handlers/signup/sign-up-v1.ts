@@ -2,20 +2,12 @@ import { Request, Response, NextFunction } from "express";
 import { ROLE } from "@prisma/client";
 
 import { createClient, findClient } from "../../services/database/client";
-import {
-  HttpStatusCode,
-  ConflictError,
-  ApiError,
-} from "../../../../../exceptions";
+import { HttpStatusCode, ConflictError, ApiError } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
 import { generateToken } from "../../../../../utils/jwt";
 import { hashPassword } from "../../../../../utils/password";
 
-export const signUp = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const signUp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { fullName, email, password, role, termsAndCondition } = req.body;
 
@@ -38,7 +30,7 @@ export const signUp = async (
     if (password.length < 8) {
       logger.warn("Password too short in sign-up.");
       return next(
-        new ApiError(HttpStatusCode.BAD_REQUEST, "Password must be at least 8 characters.")
+        new ApiError(HttpStatusCode.BAD_REQUEST, "Password must be at least 8 characters."),
       );
     }
 
@@ -52,9 +44,7 @@ export const signUp = async (
 
     // --- Resolve role (default to CLIENT) ---
     const resolvedRole: ROLE =
-      role && Object.values(ROLE).includes(role as ROLE)
-        ? (role as ROLE)
-        : ROLE.CLIENT;
+      role && Object.values(ROLE).includes(role as ROLE) ? (role as ROLE) : ROLE.CLIENT;
 
     // --- Hash password ---
     const hashedPassword = await hashPassword(password);

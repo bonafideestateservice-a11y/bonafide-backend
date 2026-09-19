@@ -1,6 +1,9 @@
 import request from "supertest";
 import app from "../../../../../app";
-import { createClient, deleteClient } from "../../../../../api/client/authentication/services/database/client";
+import {
+  createClient,
+  deleteClient,
+} from "../../../../../api/client/authentication/services/database/client";
 import { createVerificationRequest } from "../../../../../api/client/verification/services/database/verification-request";
 import { createVerificationType } from "../../../../../api/client/verification/services/database/verification-type";
 import { generateToken } from "../../../../../utils/jwt";

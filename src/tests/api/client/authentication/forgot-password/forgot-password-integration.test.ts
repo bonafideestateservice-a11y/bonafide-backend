@@ -4,7 +4,10 @@
 import request from "supertest";
 import bcrypt from "bcryptjs";
 import app from "../../../../../app";
-import { createClient, deleteClient } from "../../../../../api/client/authentication/services/database/client";
+import {
+  createClient,
+  deleteClient,
+} from "../../../../../api/client/authentication/services/database/client";
 import { prismaClient } from "../../../../../utils/prisma";
 
 const TEST_EMAIL = "integration-forgotpw@example.com";
@@ -28,9 +31,7 @@ describe("POST /api/v1/client/forgot-password (integration, real DB)", () => {
   });
 
   it("returns 400 when email is missing", async () => {
-    const res = await request(app)
-      .post("/api/v1/client/forgot-password")
-      .send({});
+    const res = await request(app).post("/api/v1/client/forgot-password").send({});
 
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/email/i);

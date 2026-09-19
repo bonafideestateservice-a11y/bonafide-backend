@@ -4,7 +4,10 @@
 import request from "supertest";
 import bcrypt from "bcryptjs";
 import app from "../../../../../app";
-import { createClient, deleteClient } from "../../../../../api/client/authentication/services/database/client";
+import {
+  createClient,
+  deleteClient,
+} from "../../../../../api/client/authentication/services/database/client";
 import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";
 
@@ -31,13 +34,11 @@ describe("POST /api/v1/client/change-password (integration, real DB)", () => {
   });
 
   it("returns 401 when no auth token is provided", async () => {
-    const res = await request(app)
-      .post("/api/v1/client/change-password")
-      .send({
-        currentPassword: TEST_PASSWORD,
-        newPassword: "NewPass1234",
-        confirmPassword: "NewPass1234",
-      });
+    const res = await request(app).post("/api/v1/client/change-password").send({
+      currentPassword: TEST_PASSWORD,
+      newPassword: "NewPass1234",
+      confirmPassword: "NewPass1234",
+    });
 
     expect(res.status).toBe(401);
   });

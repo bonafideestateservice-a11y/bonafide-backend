@@ -49,7 +49,7 @@ describe("forgotPassword handler (unit)", () => {
       expect.objectContaining({
         statusCode: HttpStatusCode.BAD_REQUEST,
         message: "Email is required.",
-      })
+      }),
     );
   });
 
@@ -59,7 +59,7 @@ describe("forgotPassword handler (unit)", () => {
     await forgotPassword(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST })
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
     );
   });
 
@@ -86,14 +86,14 @@ describe("forgotPassword handler (unit)", () => {
       expect.objectContaining({
         userId: "u1",
         tokenHash: expect.any(String),
-      })
+      }),
     );
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "success",
         otp: "123456",
-      })
+      }),
     );
     expect(next).not.toHaveBeenCalled();
   });
@@ -105,7 +105,7 @@ describe("forgotPassword handler (unit)", () => {
     await forgotPassword(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER })
+      expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER }),
     );
   });
 });

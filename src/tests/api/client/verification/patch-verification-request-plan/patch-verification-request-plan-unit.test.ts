@@ -8,12 +8,8 @@ import {
 import { HttpStatusCode } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-plan",
-);
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-request",
-);
+jest.mock("../../../../../api/client/verification/services/database/verification-plan");
+jest.mock("../../../../../api/client/verification/services/database/verification-request");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
@@ -83,10 +79,7 @@ describe("patchVerificationRequestPlan handler (unit)", () => {
       status: "DRAFT",
       verificationPlanId: "plan-1",
     });
-    const { req, res, next } = buildMockReqRes(
-      { verificationPlanId: " plan-1 " },
-      "user-1",
-    );
+    const { req, res, next } = buildMockReqRes({ verificationPlanId: " plan-1 " }, "user-1");
 
     await patchVerificationRequestPlan(req, res, next);
 
@@ -120,10 +113,7 @@ describe("patchVerificationRequestPlan handler (unit)", () => {
       id: "plan-1",
       verificationTypeId: "type-2",
     });
-    const { req, res, next } = buildMockReqRes(
-      { verificationPlanId: "plan-1" },
-      "user-1",
-    );
+    const { req, res, next } = buildMockReqRes({ verificationPlanId: "plan-1" }, "user-1");
 
     await patchVerificationRequestPlan(req, res, next);
 
@@ -135,10 +125,7 @@ describe("patchVerificationRequestPlan handler (unit)", () => {
 
   it("returns internal error when a database service fails", async () => {
     mockedFindVerificationRequest.mockRejectedValue(new Error("DB exploded"));
-    const { req, res, next } = buildMockReqRes(
-      { verificationPlanId: "plan-1" },
-      "user-1",
-    );
+    const { req, res, next } = buildMockReqRes({ verificationPlanId: "plan-1" }, "user-1");
 
     await patchVerificationRequestPlan(req, res, next);
 

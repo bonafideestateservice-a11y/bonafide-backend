@@ -19,10 +19,7 @@ import {
 } from "../../services/verification-details";
 import { logger } from "../../../../../utils/logger";
 
-type PatchVerificationRequestBody = Omit<
-  CreateVerificationRequestBody,
-  "verificationTypeId"
->;
+type PatchVerificationRequestBody = Omit<CreateVerificationRequestBody, "verificationTypeId">;
 
 export const patchVerificationRequest = async (
   req: Request,
@@ -34,9 +31,7 @@ export const patchVerificationRequest = async (
     const userId = customReq.user?.id ?? customReq.token?.id;
 
     if (!userId) {
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
 
     const verificationRequestId = req.params.id;
@@ -49,11 +44,7 @@ export const patchVerificationRequest = async (
     const hasAdditionalNote = body?.additionalNote !== undefined;
 
     if (!hasDetails && !hasAdditionalNote) {
-      return next(
-        new BadRequestError(
-          "At least one of details or additionalNote is required.",
-        ),
-      );
+      return next(new BadRequestError("At least one of details or additionalNote is required."));
     }
 
     let details;
@@ -98,9 +89,7 @@ export const patchVerificationRequest = async (
       details = validatedDetails.details;
     }
 
-    const existingDetails = isVerificationDetailsRecord(
-      verificationRequest.details,
-    )
+    const existingDetails = isVerificationDetailsRecord(verificationRequest.details)
       ? verificationRequest.details
       : {};
     const updated = await updateVerificationRequest(
@@ -125,9 +114,7 @@ export const patchVerificationRequest = async (
     res.status(HttpStatusCode.OK).json(updated);
   } catch (error) {
     logger.error(`Error updating verification request: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };
 

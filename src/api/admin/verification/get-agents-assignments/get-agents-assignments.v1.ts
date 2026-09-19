@@ -14,25 +14,18 @@ export const getAgentsAssignments = async (
   try {
     const userId = (req as CustomRequest).user?.id;
     if (!userId) {
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
     const limit = req.query.limit === undefined ? 5 : Number(req.query.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
-      return next(
-        new BadRequestError("Limit must be an integer between 1 and 50."),
-      );
+      return next(new BadRequestError("Limit must be an integer between 1 and 50."));
     }
     const status = req.query.status === undefined ? "ALL" : req.query.status;
     if (status !== "ALL" && status !== "IN_PROGRESS") {
       return next(new BadRequestError("Status must be ALL or IN_PROGRESS."));
     }
     const search = typeof req.query.search === "string" ? req.query.search : "";
-    if (
-      req.query.search !== undefined &&
-      typeof req.query.search !== "string"
-    ) {
+    if (req.query.search !== undefined && typeof req.query.search !== "string") {
       return next(new BadRequestError("Search must be a string."));
     }
     const agent = await getVerificationAgentByUserId(userId);
@@ -46,17 +39,13 @@ export const getAgentsAssignments = async (
       assignments.map((assignment) => {
         const details = assignment.verificationRequest.details;
         const address =
-          typeof details === "object" &&
-          details !== null &&
-          !Array.isArray(details)
+          typeof details === "object" && details !== null && !Array.isArray(details)
             ? ((details as Record<string, unknown>).propertyAddress ??
               (details as Record<string, unknown>).constructionAddress ??
               (details as Record<string, unknown>).businessAddress ??
               "")
             : "";
-        const names = assignment.verificationRequest.user.fullName
-          .trim()
-          .split(/\s+/);
+        const names = assignment.verificationRequest.user.fullName.trim().split(/\s+/);
         return {
           id: assignment.id,
           verificationType: assignment.verificationRequest.verificationType,
@@ -73,9 +62,7 @@ export const getAgentsAssignments = async (
     );
   } catch (error) {
     logger.error(`Error getting agent assignments: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };
 

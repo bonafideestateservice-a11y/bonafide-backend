@@ -3,15 +3,12 @@ import { getVerificationTypesPlan } from "../../../../../api/client/verification
 import { getVerificationPlansForTypeSlug } from "../../../../../api/client/verification/services/database/verification-plan";
 import { HttpStatusCode } from "../../../../../exceptions";
 
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-plan",
-);
+jest.mock("../../../../../api/client/verification/services/database/verification-plan");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
-const mockedGetVerificationPlansForTypeSlug =
-  getVerificationPlansForTypeSlug as jest.Mock;
+const mockedGetVerificationPlansForTypeSlug = getVerificationPlansForTypeSlug as jest.Mock;
 
 function buildMockReqRes(slug = "property-verification") {
   const req = { params: { slug } } as unknown as Request;
@@ -51,9 +48,7 @@ describe("getVerificationTypesPlan handler (unit)", () => {
 
     await getVerificationTypesPlan(req, res, next);
 
-    expect(mockedGetVerificationPlansForTypeSlug).toHaveBeenCalledWith(
-      "property-verification",
-    );
+    expect(mockedGetVerificationPlansForTypeSlug).toHaveBeenCalledWith("property-verification");
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(res.json).toHaveBeenCalledWith([
       {
@@ -88,9 +83,7 @@ describe("getVerificationTypesPlan handler (unit)", () => {
   });
 
   it("passes database errors to the error handler", async () => {
-    mockedGetVerificationPlansForTypeSlug.mockRejectedValue(
-      new Error("DB exploded"),
-    );
+    mockedGetVerificationPlansForTypeSlug.mockRejectedValue(new Error("DB exploded"));
     const { req, res, next } = buildMockReqRes();
 
     await getVerificationTypesPlan(req, res, next);

@@ -25,8 +25,7 @@ const imageBuffer = Buffer.from(
   "base64",
 );
 
-const endpoint = () =>
-  `/api/v1/client/verification-requests/${verificationRequestId}/documents`;
+const endpoint = () => `/api/v1/client/verification-requests/${verificationRequestId}/documents`;
 
 describe("POST /api/v1/client/verification-requests/:id/documents (integration, real DB)", () => {
   beforeAll(async () => {
@@ -88,9 +87,7 @@ describe("POST /api/v1/client/verification-requests/:id/documents (integration, 
   });
 
   it("returns 401 when no auth token is provided", async () => {
-    const res = await request(app)
-      .post(endpoint())
-      .attach("file", imageBuffer, "property.png");
+    const res = await request(app).post(endpoint()).attach("file", imageBuffer, "property.png");
 
     expect(res.status).toBe(401);
   });

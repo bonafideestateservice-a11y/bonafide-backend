@@ -1,8 +1,4 @@
-import {
-  Prisma,
-  VerificationRequest,
-  VerificationStatus,
-} from "@prisma/client";
+import { Prisma, VerificationRequest, VerificationStatus } from "@prisma/client";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 
@@ -66,25 +62,24 @@ export const getVerificationRequestDetailsForUser = async (
   userId: string,
 ): Promise<VerificationRequestDetails | null> => {
   try {
-    const verificationRequest =
-      await prismaClient.verificationRequest.findFirst({
-        where: { id, userId },
-        select: {
-          id: true,
-          status: true,
-          details: true,
-          createdAt: true,
-          verificationType: { select: { name: true } },
-          verificationPlan: {
-            select: {
-              frequency: true,
-              name: true,
-              priceInCents: true,
-              currency: true,
-            },
+    const verificationRequest = await prismaClient.verificationRequest.findFirst({
+      where: { id, userId },
+      select: {
+        id: true,
+        status: true,
+        details: true,
+        createdAt: true,
+        verificationType: { select: { name: true } },
+        verificationPlan: {
+          select: {
+            frequency: true,
+            name: true,
+            priceInCents: true,
+            currency: true,
           },
         },
-      });
+      },
+    });
     logger.info(
       `Verification request details lookup requestId=${id} userId=${userId} found=${!!verificationRequest}`,
     );
@@ -100,24 +95,23 @@ export const getVerificationRequestsForUser = async (
   limit = 5,
 ): Promise<VerificationRequestSummary[]> => {
   try {
-    const verificationRequests =
-      await prismaClient.verificationRequest.findMany({
-        where: { userId },
-        orderBy: { updatedAt: "desc" },
-        take: limit,
-        select: {
-          id: true,
-          details: true,
-          status: true,
-          updatedAt: true,
-          verificationType: {
-            select: {
-              name: true,
-              icon: true,
-            },
+    const verificationRequests = await prismaClient.verificationRequest.findMany({
+      where: { userId },
+      orderBy: { updatedAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        details: true,
+        status: true,
+        updatedAt: true,
+        verificationType: {
+          select: {
+            name: true,
+            icon: true,
           },
         },
-      });
+      },
+    });
     logger.info(
       `Fetched verification requests for user userId=${userId} count=${verificationRequests.length}`,
     );
@@ -135,9 +129,7 @@ export const createVerificationRequest = async (
     const verificationRequest = await prismaClient.verificationRequest.create({
       data,
     });
-    logger.info(
-      `Verification request created successfully requestId=${verificationRequest.id}`,
-    );
+    logger.info(`Verification request created successfully requestId=${verificationRequest.id}`);
     return verificationRequest;
   } catch (error) {
     logger.error(`Error creating verification request ${error}`);
@@ -145,17 +137,12 @@ export const createVerificationRequest = async (
   }
 };
 
-export const getAllVerificationRequests = async (): Promise<
-  VerificationRequest[]
-> => {
+export const getAllVerificationRequests = async (): Promise<VerificationRequest[]> => {
   try {
-    const verificationRequests =
-      await prismaClient.verificationRequest.findMany({
-        orderBy: { createdAt: "desc" },
-      });
-    logger.info(
-      `Fetched all verification requests count=${verificationRequests.length}`,
-    );
+    const verificationRequests = await prismaClient.verificationRequest.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    logger.info(`Fetched all verification requests count=${verificationRequests.length}`);
     return verificationRequests;
   } catch (error) {
     logger.error(`Error fetching verification requests ${error}`);
@@ -167,18 +154,15 @@ export const findVerificationRequest = async (
   unique: FindVerificationRequestUnique,
 ): Promise<VerificationRequest | null> => {
   try {
-    const verificationRequest =
-      await prismaClient.verificationRequest.findUnique({
-        where: unique,
-      });
+    const verificationRequest = await prismaClient.verificationRequest.findUnique({
+      where: unique,
+    });
     logger.info(
       `Verification request lookup requestId=${unique.id} found=${!!verificationRequest}`,
     );
     return verificationRequest;
   } catch (error) {
-    logger.error(
-      `Error finding verification request ${error} requestId=${unique.id}`,
-    );
+    logger.error(`Error finding verification request ${error} requestId=${unique.id}`);
     throw error;
   }
 };
@@ -192,9 +176,7 @@ export const updateVerificationRequest = async (
       where,
       data,
     });
-    logger.info(
-      `Verification request updated successfully requestId=${updated.id}`,
-    );
+    logger.info(`Verification request updated successfully requestId=${updated.id}`);
     return updated;
   } catch (error) {
     logger.error(`Error updating verification request ${error}`);
@@ -207,9 +189,7 @@ export const deleteVerificationRequest = async (
 ): Promise<VerificationRequest> => {
   try {
     const deleted = await prismaClient.verificationRequest.delete({ where });
-    logger.info(
-      `Verification request deleted successfully requestId=${deleted.id}`,
-    );
+    logger.info(`Verification request deleted successfully requestId=${deleted.id}`);
     return deleted;
   } catch (error) {
     logger.error(`Error deleting verification request ${error}`);

@@ -4,11 +4,7 @@ import { HttpStatusCode, BadRequestError, InternalServerError } from "../../../.
 import { logger } from "../../../../../utils/logger";
 import { findValidResetToken } from "../../../../services/database/password-reset-token";
 
-export const verifyOtp = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const verifyOtp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { otp } = req.body;
 
@@ -17,10 +13,7 @@ export const verifyOtp = async (
       return next(new BadRequestError("OTP is required."));
     }
 
-    const tokenHash = crypto
-      .createHash("sha256")
-      .update(otp.trim())
-      .digest("hex");
+    const tokenHash = crypto.createHash("sha256").update(otp.trim()).digest("hex");
 
     const resetRecord = await findValidResetToken(tokenHash);
 

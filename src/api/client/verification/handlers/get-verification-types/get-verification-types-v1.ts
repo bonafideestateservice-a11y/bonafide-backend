@@ -12,21 +12,17 @@ export const getVerificationTypes = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const verificationTypes =
-      await getVerificationTypesForService("verification");
+    const verificationTypes = await getVerificationTypesForService("verification");
 
-    const response: Array<
-      Omit<VerificationTypeCard, "description"> & { description: string }
-    > = verificationTypes.map((verificationType) => ({
-      ...verificationType,
-      description: verificationType.description ?? "",
-    }));
+    const response: Array<Omit<VerificationTypeCard, "description"> & { description: string }> =
+      verificationTypes.map((verificationType) => ({
+        ...verificationType,
+        description: verificationType.description ?? "",
+      }));
 
     res.status(HttpStatusCode.OK).json(response);
   } catch (error) {
     logger.error(`Error getting verification types: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };

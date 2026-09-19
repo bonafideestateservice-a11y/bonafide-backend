@@ -86,9 +86,7 @@ afterAll(async () => {
 describe("GET /api/v1/admin/verification/agents/reports", () => {
   it("returns filtered report cards for the authenticated agent", async () => {
     const res = await request(app)
-      .get(
-        "/api/v1/admin/verification/agents/reports?reviewStatus=APPROVED&search=Garki",
-      )
+      .get("/api/v1/admin/verification/agents/reports?reviewStatus=APPROVED&search=Garki")
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);

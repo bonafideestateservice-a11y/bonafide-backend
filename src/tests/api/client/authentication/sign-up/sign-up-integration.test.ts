@@ -1,6 +1,9 @@
 import request from "supertest";
 import app from "../../../../../app";
-import { findClient, deleteClient } from "../../../../../api/client/authentication/services/database/client";
+import {
+  findClient,
+  deleteClient,
+} from "../../../../../api/client/authentication/services/database/client";
 import { prismaClient } from "../../../../../utils/prisma";
 
 const TEST_EMAIL = "integration-signup-user@example.com";
@@ -34,14 +37,12 @@ describe("POST /api/v1/auth/sign-up (integration, real DB)", () => {
   });
 
   it("returns 201 and creates a user successfully", async () => {
-    const res = await request(app)
-      .post("/api/v1/client/sign-up")
-      .send({ 
-        email: TEST_EMAIL, 
-        password: TEST_PASSWORD, 
-        fullName: "Integration Test User",
-        termsAndCondition: true 
-      });
+    const res = await request(app).post("/api/v1/client/sign-up").send({
+      email: TEST_EMAIL,
+      password: TEST_PASSWORD,
+      fullName: "Integration Test User",
+      termsAndCondition: true,
+    });
 
     expect(res.status).toBe(201);
     expect(res.body.token).toBeDefined();
@@ -51,13 +52,11 @@ describe("POST /api/v1/auth/sign-up (integration, real DB)", () => {
   });
 
   it("returns 409 when the email already exists", async () => {
-    const res = await request(app)
-      .post("/api/v1/client/sign-up")
-      .send({ 
-        email: TEST_EMAIL, 
-        password: TEST_PASSWORD, 
-        fullName: "Integration Test User 2" 
-      });
+    const res = await request(app).post("/api/v1/client/sign-up").send({
+      email: TEST_EMAIL,
+      password: TEST_PASSWORD,
+      fullName: "Integration Test User 2",
+    });
 
     expect(res.status).toBe(409);
     expect(res.body.message).toMatch(/exists/i);

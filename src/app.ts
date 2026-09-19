@@ -22,7 +22,7 @@ app.use(
       }
       return callback(new Error("Not allowed by CORS"));
     },
-  })
+  }),
 );
 
 app.use(morgan("combined", { stream: { write: (message) => logger.http(message.trim()) } }));
@@ -35,7 +35,7 @@ app.use(
     secret: config.jwt.secret,
     resave: false,
     saveUninitialized: false,
-  })
+  }),
 );
 app.use(passport.initialize());
 app.use(passport.session());

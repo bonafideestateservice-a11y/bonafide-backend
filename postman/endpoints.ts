@@ -33,11 +33,11 @@ export const ENDPOINTS: Endpoint[] = [
     url: "https://bonafide-backend-9mly.onrender.com/api/v1/client/sign-up",
     headers: { "Content-Type": "application/json" },
     body: {
-      "fullName": "John Doe",
-      "email": "john.doe@example.com",
-      "password": "StrongPass123!",
-      "role": "CLIENT",
-      "termsAndCondition": true,
+      fullName: "John Doe",
+      email: "john.doe@example.com",
+      password: "StrongPass123!",
+      role: "CLIENT",
+      termsAndCondition: true,
     },
   },
   {
@@ -46,8 +46,8 @@ export const ENDPOINTS: Endpoint[] = [
     url: "https://bonafide-backend-9mly.onrender.com/api/v1/client/login",
     headers: { "Content-Type": "application/json" },
     body: {
-      "email": "john.doe@example.com",
-      "password": "StrongPass123!",
+      email: "john.doe@example.com",
+      password: "StrongPass123!",
     },
   },
   {
@@ -59,9 +59,9 @@ export const ENDPOINTS: Endpoint[] = [
       Authorization: "Bearer <TOKEN_FROM_LOGIN>",
     },
     body: {
-      "currentPassword": "StrongPass123!",
-      "newPassword": "NewStrongPass456!",
-      "confirmPassword": "NewStrongPass456!",
+      currentPassword: "StrongPass123!",
+      newPassword: "NewStrongPass456!",
+      confirmPassword: "NewStrongPass456!",
     },
   },
   {
@@ -70,7 +70,7 @@ export const ENDPOINTS: Endpoint[] = [
     url: "https://bonafide-backend-9mly.onrender.com/api/v1/client/forgot-password",
     headers: { "Content-Type": "application/json" },
     body: {
-      "email": "john.doe@example.com",
+      email: "john.doe@example.com",
     },
   },
   {
@@ -79,7 +79,7 @@ export const ENDPOINTS: Endpoint[] = [
     url: "https://bonafide-backend-9mly.onrender.com/api/v1/client/reset-password/<RESET_TOKEN>",
     headers: { "Content-Type": "application/json" },
     body: {
-      "password": "ResetPass789!",
+      password: "ResetPass789!",
     },
   },
 
@@ -90,8 +90,8 @@ export const ENDPOINTS: Endpoint[] = [
     url: "https://bonafide-backend-9mly.onrender.com/api/v1/admin/login",
     headers: { "Content-Type": "application/json" },
     body: {
-      "email": "admin@example.com",
-      "password": "AdminPass123!",
+      email: "admin@example.com",
+      password: "AdminPass123!",
     },
   },
   {
@@ -103,9 +103,9 @@ export const ENDPOINTS: Endpoint[] = [
       Authorization: "Bearer <TOKEN_FROM_LOGIN>",
     },
     body: {
-      "currentPassword": "AdminPass123!",
-      "newPassword": "NewAdminPass456!",
-      "confirmPassword": "NewAdminPass456!",
+      currentPassword: "AdminPass123!",
+      newPassword: "NewAdminPass456!",
+      confirmPassword: "NewAdminPass456!",
     },
   },
   {
@@ -114,7 +114,7 @@ export const ENDPOINTS: Endpoint[] = [
     url: "https://bonafide-backend-9mly.onrender.com/api/v1/admin/forgot-password",
     headers: { "Content-Type": "application/json" },
     body: {
-      "email": "admin@example.com",
+      email: "admin@example.com",
     },
   },
   {
@@ -123,7 +123,7 @@ export const ENDPOINTS: Endpoint[] = [
     url: "https://bonafide-backend-9mly.onrender.com/api/v1/admin/reset-password/<RESET_TOKEN>",
     headers: { "Content-Type": "application/json" },
     body: {
-      "password": "ResetPass789!",
+      password: "ResetPass789!",
     },
   },
 
@@ -134,11 +134,11 @@ export const ENDPOINTS: Endpoint[] = [
     url: "https://bonafide-backend-9mly.onrender.com/api/v1/webhook/payments",
     headers: { "Content-Type": "application/json" },
     body: {
-      "event": "payment.success",
-      "data": {
-        "reference": "PAY-123",
-        "amount": 5000,
-        "currency": "NGN",
+      event: "payment.success",
+      data: {
+        reference: "PAY-123",
+        amount: 5000,
+        currency: "NGN",
       },
     },
   },

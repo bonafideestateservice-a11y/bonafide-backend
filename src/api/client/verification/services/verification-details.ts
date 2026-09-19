@@ -20,10 +20,7 @@ export interface ValidatedVerificationDetails {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const requiredString = (
-  details: Record<string, unknown>,
-  field: string,
-): string | undefined => {
+const requiredString = (details: Record<string, unknown>, field: string): string | undefined => {
   const value = details[field];
   if (typeof value !== "string" || !value.trim()) {
     return undefined;

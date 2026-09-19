@@ -3,15 +3,12 @@ import { getVerificationTypes } from "../../../../../api/client/verification/han
 import { getVerificationTypesForService } from "../../../../../api/client/verification/services/database/verification-type";
 import { HttpStatusCode } from "../../../../../exceptions";
 
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-type",
-);
+jest.mock("../../../../../api/client/verification/services/database/verification-type");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
-const mockedGetVerificationTypesForService =
-  getVerificationTypesForService as jest.Mock;
+const mockedGetVerificationTypesForService = getVerificationTypesForService as jest.Mock;
 
 function buildMockRes() {
   const res = {
@@ -41,9 +38,7 @@ describe("getVerificationTypes handler (unit)", () => {
 
     await getVerificationTypes({} as Request, res, next);
 
-    expect(mockedGetVerificationTypesForService).toHaveBeenCalledWith(
-      "verification",
-    );
+    expect(mockedGetVerificationTypesForService).toHaveBeenCalledWith("verification");
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(res.json).toHaveBeenCalledWith([
       {
@@ -77,9 +72,7 @@ describe("getVerificationTypes handler (unit)", () => {
   });
 
   it("passes database errors to the error handler", async () => {
-    mockedGetVerificationTypesForService.mockRejectedValue(
-      new Error("DB exploded"),
-    );
+    mockedGetVerificationTypesForService.mockRejectedValue(new Error("DB exploded"));
     const { res, next } = buildMockRes();
 
     await getVerificationTypes({} as Request, res, next);

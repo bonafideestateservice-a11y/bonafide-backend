@@ -5,7 +5,10 @@
 import request from "supertest";
 import bcrypt from "bcryptjs";
 import app from "../../../../../app";
-import { createClient, deleteClient } from "../../../../../api/client/authentication/services/database/client";
+import {
+  createClient,
+  deleteClient,
+} from "../../../../../api/client/authentication/services/database/client";
 import { prismaClient } from "../../../../../utils/prisma";
 
 const TEST_EMAIL = "integration-resetpw@example.com";
@@ -31,9 +34,7 @@ describe("POST /api/v1/client/reset-password (integration, real DB)", () => {
 
   it("returns 400 when missing fields", async () => {
     // Empty request body
-    const res = await request(app)
-      .post("/api/v1/client/reset-password")
-      .send({});
+    const res = await request(app).post("/api/v1/client/reset-password").send({});
 
     expect(res.status).toBe(400);
   });
@@ -58,9 +59,7 @@ describe("POST /api/v1/client/reset-password (integration, real DB)", () => {
     expect(otp).toBeDefined();
 
     // Step 2: Verify the OTP
-    const verifyRes = await request(app)
-      .post(`/api/v1/client/verify-otp`)
-      .send({ otp });
+    const verifyRes = await request(app).post(`/api/v1/client/verify-otp`).send({ otp });
     expect(verifyRes.status).toBe(200);
     expect(verifyRes.body.message).toMatch(/verified/i);
 

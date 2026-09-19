@@ -14,9 +14,7 @@ export const getAgentsStats = async (
   try {
     const userId = (req as CustomRequest).user?.id;
     if (!userId) {
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
     const agent = await getVerificationAgentByUserId(userId);
     if (!agent) return next(new NotFoundError("Verification agent not found."));
@@ -24,9 +22,7 @@ export const getAgentsStats = async (
     res.status(HttpStatusCode.OK).json(stats);
   } catch (error) {
     logger.error(`Error getting agent stats: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };
 

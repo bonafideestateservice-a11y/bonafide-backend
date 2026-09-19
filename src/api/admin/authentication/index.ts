@@ -67,12 +67,7 @@ router.post("/login", AuthenticationController.login);
  *       200:
  *         description: Password changed successfully
  */
-router.post(
-  "/change-password",
-  checkJwt,
-  adminOrAgent,
-  AuthenticationController.changePassword,
-);
+router.post("/change-password", checkJwt, adminOrAgent, AuthenticationController.changePassword);
 
 /**
  * @swagger
@@ -188,11 +183,6 @@ router.post("/reset-password", AuthenticationController.resetPassword);
  *       500:
  *         description: Internal server error
  */
-router.get(
-  "/agents/me",
-  checkJwt,
-  adminOrAgent,
-  AuthenticationController.getAgentsInformation,
-);
+router.get("/agents/me", checkJwt, adminOrAgent, AuthenticationController.getAgentsInformation);
 
 export default router;

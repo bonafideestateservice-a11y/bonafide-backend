@@ -20,8 +20,7 @@ let businessRequestId: string;
 let serviceId: string;
 let createdBusinessType = false;
 
-const endpoint = () =>
-  `/api/v1/client/verification-requests/${verificationRequestId}`;
+const endpoint = () => `/api/v1/client/verification-requests/${verificationRequestId}`;
 
 describe("PATCH /api/v1/client/verification-requests/:id (integration, real DB)", () => {
   beforeAll(async () => {
@@ -113,9 +112,7 @@ describe("PATCH /api/v1/client/verification-requests/:id (integration, real DB)"
   });
 
   it("returns 401 when no auth token is provided", async () => {
-    const res = await request(app)
-      .patch(endpoint())
-      .send({ additionalNote: "Updated note" });
+    const res = await request(app).patch(endpoint()).send({ additionalNote: "Updated note" });
 
     expect(res.status).toBe(401);
   });

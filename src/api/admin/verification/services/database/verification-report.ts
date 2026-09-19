@@ -30,8 +30,7 @@ export const getAgentReports = async (
 ): Promise<AgentReportSummary[]> => {
   try {
     const normalizedSearch = search.trim();
-    const statusFilter =
-      reviewStatus === "ALL" ? undefined : (reviewStatus as ReportReviewStatus);
+    const statusFilter = reviewStatus === "ALL" ? undefined : (reviewStatus as ReportReviewStatus);
 
     return await prismaClient.verificationReport.findMany({
       where: {

@@ -3,11 +3,7 @@ import passport from "passport";
 import { Strategy as FacebookStrategy, Profile } from "passport-facebook";
 import { ROLE } from "@prisma/client";
 
-import {
-  createClient,
-  findClient,
-  updateClient,
-} from "../../services/database/client";
+import { createClient, findClient, updateClient } from "../../services/database/client";
 import { logger } from "../../../../../utils/logger";
 import { HttpStatusCode } from "../../../../../exceptions";
 
@@ -35,9 +31,7 @@ if (
           const facebookId = profile.id;
 
           if (!email) {
-            logger.error(
-              `No email found in Facebook profile: ${JSON.stringify(profile)}`,
-            );
+            logger.error(`No email found in Facebook profile: ${JSON.stringify(profile)}`);
             return done(new Error("No email found in Facebook profile"));
           }
 
@@ -47,8 +41,7 @@ if (
             const firstName = (profile as any).name?.givenName || "";
             const lastName = (profile as any).name?.familyName || "";
             const fullName =
-              [firstName, lastName].filter(Boolean).join(" ").trim() ||
-              email.split("@")[0];
+              [firstName, lastName].filter(Boolean).join(" ").trim() || email.split("@")[0];
 
             user = await createClient({
               fullName,
@@ -72,9 +65,7 @@ if (
 
           return done(null, user);
         } catch (err) {
-          logger.error(
-            `Facebook OAuth error: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          logger.error(`Facebook OAuth error: ${err instanceof Error ? err.message : String(err)}`);
           return done(err);
         }
       },
@@ -83,16 +74,12 @@ if (
 }
 
 passport.serializeUser((user: any, done) => {
-  logger.info(
-    `Serializing user for session (Facebook): ${user?.id ?? "unknown"}`,
-  );
+  logger.info(`Serializing user for session (Facebook): ${user?.id ?? "unknown"}`);
   done(null, user);
 });
 
 passport.deserializeUser((user: any, done) => {
-  logger.info(
-    `Deserializing user from session (Facebook): ${user?.id ?? "unknown"}`,
-  );
+  logger.info(`Deserializing user from session (Facebook): ${user?.id ?? "unknown"}`);
   done(null, user);
 });
 
@@ -114,26 +101,18 @@ export const handleFacebookCallback = [
 
 export const facebookLoginSuccess = (req: Request, res: Response) => {
   if (!req.user) {
-    logger.warn(
-      "Facebook login success endpoint hit but no user found in session",
-    );
-    return res
-      .status(HttpStatusCode.UNAUTHORIZED)
-      .json({ message: "Not authenticated" });
+    logger.warn("Facebook login success endpoint hit but no user found in session");
+    return res.status(HttpStatusCode.UNAUTHORIZED).json({ message: "Not authenticated" });
   }
 
   const { password, ...userWithoutPassword } = req.user as any;
-  logger.info(
-    `Facebook login successful for userId=${userWithoutPassword?.id ?? "unknown"}`,
-  );
+  logger.info(`Facebook login successful for userId=${userWithoutPassword?.id ?? "unknown"}`);
   return res.status(HttpStatusCode.OK).json({ user: userWithoutPassword });
 };
 
 export const facebookLoginError = (_req: Request, res: Response) => {
   logger.error("Error logging in via Facebook");
-  return res
-    .status(HttpStatusCode.UNAUTHORIZED)
-    .json({ message: "Error logging in via Facebook" });
+  return res.status(HttpStatusCode.UNAUTHORIZED).json({ message: "Error logging in via Facebook" });
 };
 
 export const facebookLogout = (req: Request, res: Response) => {
@@ -154,9 +133,7 @@ export const facebookLogout = (req: Request, res: Response) => {
     logger.error(
       `Failed to sign out user via Facebook: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return res
-      .status(HttpStatusCode.BAD_REQUEST)
-      .json({ message: "Failed to sign out user" });
+    return res.status(HttpStatusCode.BAD_REQUEST).json({ message: "Failed to sign out user" });
   }
 };
 

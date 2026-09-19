@@ -3,4 +3,4 @@ export * from "./forgot-password";
 export * from "./login";
 export * from "./reset-password";
 export * from "./signup";
-export * from "./verify-otp"
+export * from "./verify-otp";

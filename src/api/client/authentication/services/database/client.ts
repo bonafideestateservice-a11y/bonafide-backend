@@ -41,9 +41,7 @@ export const createClient = async (data: CreateClientData): Promise<User> => {
         providerId: data.providerId ?? null,
       },
     });
-    logger.info(
-      `User created successfully userId=${user.id} email=${user.email}`,
-    );
+    logger.info(`User created successfully userId=${user.id} email=${user.email}`);
     return user;
   } catch (error) {
     logger.error(`Error creating user ${error}`);
@@ -64,23 +62,17 @@ export const getAllClients = async (): Promise<User[]> => {
   }
 };
 
-export const findClient = async (
-  unique: FindClientUnique,
-): Promise<User | null> => {
+export const findClient = async (unique: FindClientUnique): Promise<User | null> => {
   try {
     const where: Prisma.UserWhereUniqueInput = unique.id
       ? { id: unique.id }
       : { email: unique.email! };
 
     const user = await prismaClient.user.findUnique({ where });
-    logger.info(
-      `User lookup criteria=${JSON.stringify(unique)} found=${!!user}`,
-    );
+    logger.info(`User lookup criteria=${JSON.stringify(unique)} found=${!!user}`);
     return user;
   } catch (error) {
-    logger.error(
-      `Error finding user ${error} criteria=${JSON.stringify(unique)}`,
-    );
+    logger.error(`Error finding user ${error} criteria=${JSON.stringify(unique)}`);
     throw error;
   }
 };
@@ -99,9 +91,7 @@ export const updateClient = async (
   }
 };
 
-export const deleteClient = async (
-  where: Prisma.UserWhereUniqueInput,
-): Promise<User> => {
+export const deleteClient = async (where: Prisma.UserWhereUniqueInput): Promise<User> => {
   try {
     const deleted = await prismaClient.user.delete({ where });
     logger.info(`User deleted successfully userId=${deleted.id}`);

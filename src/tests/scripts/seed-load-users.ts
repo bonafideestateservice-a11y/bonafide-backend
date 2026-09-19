@@ -1,12 +1,12 @@
-import { PrismaClient, ROLE } from '@prisma/client';
-import { hashPassword } from '../../utils/password';
+import { PrismaClient, ROLE } from "@prisma/client";
+import { hashPassword } from "../../utils/password";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding load test users...');
-  const passwordHash = await hashPassword('LoadTest@123');
-  
+  console.log("Seeding load test users...");
+  const passwordHash = await hashPassword("LoadTest@123");
+
   const usersToCreate = [];
   for (let i = 1; i <= 100; i++) {
     usersToCreate.push({
@@ -14,7 +14,7 @@ async function main() {
       fullName: `Load Test User ${i}`,
       password: passwordHash,
       termsAndCondition: true,
-      role: ROLE.CLIENT
+      role: ROLE.CLIENT,
     });
   }
   for (let i = 1; i <= 100; i++) {
@@ -23,7 +23,7 @@ async function main() {
       fullName: `Admin Load Test User ${i}`,
       password: passwordHash,
       termsAndCondition: true,
-      role: ROLE.AGENT
+      role: ROLE.AGENT,
     });
   }
 
@@ -35,7 +35,7 @@ async function main() {
     });
     console.log(`Seeded ${result.count} load test users successfully.`);
   } catch (error) {
-    console.error('Error seeding users:', error);
+    console.error("Error seeding users:", error);
   }
 }
 

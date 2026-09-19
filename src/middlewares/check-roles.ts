@@ -4,11 +4,7 @@ import { CustomRequest } from "./check-jwt";
 import { ForbiddenError, UnauthorizedError } from "../exceptions";
 import { ROLE } from "@prisma/client";
 
-export const checkIsAdmin = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const checkIsAdmin = (req: Request, res: Response, next: NextFunction) => {
   const user = (req as CustomRequest).user;
 
   if (!user) {

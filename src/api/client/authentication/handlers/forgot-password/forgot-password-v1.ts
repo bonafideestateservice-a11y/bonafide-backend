@@ -17,7 +17,7 @@ import { createPasswordResetToken as persistPasswordResetToken } from "../../../
 export const forgotPassword = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const { email } = req.body;

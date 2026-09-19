@@ -19,7 +19,10 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 import { ROLE } from "@prisma/client";
 import app from "../../../../../app"; // your Express app, NOT app.listen()
-import { createAdmin, deleteAdmin } from "../../../../../api/admin/authentication/services/database/admin";
+import {
+  createAdmin,
+  deleteAdmin,
+} from "../../../../../api/admin/authentication/services/database/admin";
 import { prismaClient } from "../../../../../utils/prisma";
 
 const TEST_EMAIL = "integration-test-user@example.com";
@@ -31,7 +34,8 @@ describe("POST /api/v1/admin/login (integration, real DB)", () => {
     // Seed one real row directly through your DB layer, hashing the
     // password the same way your app does at signup time.
     const hashed = await bcrypt.hash(TEST_PASSWORD, 10);
-    const user = await createAdmin({ role: ROLE.ADMIN,
+    const user = await createAdmin({
+      role: ROLE.ADMIN,
       email: TEST_EMAIL,
       password: hashed,
       fullName: "Integration Test User",
@@ -46,9 +50,7 @@ describe("POST /api/v1/admin/login (integration, real DB)", () => {
   });
 
   it("returns 400 when email is missing", async () => {
-    const res = await request(app)
-      .post("/api/v1/admin/login")
-      .send({ password: TEST_PASSWORD });
+    const res = await request(app).post("/api/v1/admin/login").send({ password: TEST_PASSWORD });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/email/i);

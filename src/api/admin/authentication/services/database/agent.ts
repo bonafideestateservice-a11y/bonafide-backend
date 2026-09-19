@@ -16,9 +16,7 @@ export type VerificationAgentInformation = Prisma.VerificationAgentGetPayload<{
   };
 }>;
 
-export const getAllVerificationAgents = async (): Promise<
-  VerificationAgentInformation[]
-> => {
+export const getAllVerificationAgents = async (): Promise<VerificationAgentInformation[]> => {
   try {
     const agents = await prismaClient.verificationAgent.findMany({
       orderBy: { createdAt: "desc" },

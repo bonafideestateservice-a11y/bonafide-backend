@@ -261,11 +261,7 @@ router.patch("/verification-requests/:id", checkJwt, patchVerificationRequest);
  *       500:
  *         description: Internal server error
  */
-router.patch(
-  "/verification-requests/:id/plan",
-  checkJwt,
-  patchVerificationRequestPlan,
-);
+router.patch("/verification-requests/:id/plan", checkJwt, patchVerificationRequestPlan);
 
 /**
  * @swagger
@@ -377,10 +373,6 @@ router.get("/verification-requests", checkJwt, getVerificationRequests);
  *       500:
  *         description: Internal server error
  */
-router.get(
-  "/verification-requests/reports-summary",
-  checkJwt,
-  getVerificationReportSummary,
-);
+router.get("/verification-requests/reports-summary", checkJwt, getVerificationReportSummary);
 
 export default router;

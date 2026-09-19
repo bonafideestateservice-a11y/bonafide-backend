@@ -8,8 +8,7 @@ jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
-const mockedGetVerificationAgentByUserId =
-  getVerificationAgentByUserId as jest.Mock;
+const mockedGetVerificationAgentByUserId = getVerificationAgentByUserId as jest.Mock;
 
 function buildMockReqRes() {
   const req = { user: { id: "user-1" } } as unknown as Request;
@@ -43,9 +42,7 @@ describe("getAgentsInformation handler (unit)", () => {
   });
 
   it("forwards database errors", async () => {
-    mockedGetVerificationAgentByUserId.mockRejectedValue(
-      new Error("DB exploded"),
-    );
+    mockedGetVerificationAgentByUserId.mockRejectedValue(new Error("DB exploded"));
     const { req, res, next } = buildMockReqRes();
 
     await getAgentsInformation(req, res, next);

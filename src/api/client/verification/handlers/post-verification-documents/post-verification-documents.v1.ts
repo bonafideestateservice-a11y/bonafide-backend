@@ -32,9 +32,7 @@ export const postVerificationDocuments = async (
     const userId = customReq.user?.id ?? customReq.token?.id;
 
     if (!userId) {
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
 
     const verificationRequestId = req.params.id;
@@ -63,9 +61,7 @@ export const postVerificationDocuments = async (
     const uploadResult = await cloudinary.uploader.upload(
       `data:${fileType};base64,${req.file.buffer.toString("base64")}`,
       {
-        folder:
-          process.env.CLOUDINARY_FOLDER ||
-          "bonafide-services/verification-documents",
+        folder: process.env.CLOUDINARY_FOLDER || "bonafide-services/verification-documents",
         resource_type: isPdf ? "raw" : "image",
       },
     );
@@ -87,9 +83,7 @@ export const postVerificationDocuments = async (
     });
   } catch (error) {
     logger.error(`Error uploading verification document: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };
 

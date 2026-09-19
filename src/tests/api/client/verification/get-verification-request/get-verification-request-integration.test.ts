@@ -19,8 +19,7 @@ let verificationPlanId: string;
 let verificationRequestId: string;
 let serviceId: string;
 
-const endpoint = () =>
-  `/api/v1/client/verification-requests/${verificationRequestId}`;
+const endpoint = () => `/api/v1/client/verification-requests/${verificationRequestId}`;
 
 describe("GET /api/v1/client/verification-requests/:id (integration, real DB)", () => {
   beforeAll(async () => {
@@ -98,9 +97,7 @@ describe("GET /api/v1/client/verification-requests/:id (integration, real DB)", 
   });
 
   it("returns the summary with location details and selected plan", async () => {
-    const res = await request(app)
-      .get(endpoint())
-      .set("Authorization", `Bearer ${authToken}`);
+    const res = await request(app).get(endpoint()).set("Authorization", `Bearer ${authToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
@@ -129,9 +126,7 @@ describe("GET /api/v1/client/verification-requests/:id (integration, real DB)", 
     });
     const otherToken = generateToken({ id: otherUser.id });
 
-    const res = await request(app)
-      .get(endpoint())
-      .set("Authorization", `Bearer ${otherToken}`);
+    const res = await request(app).get(endpoint()).set("Authorization", `Bearer ${otherToken}`);
 
     expect(res.status).toBe(404);
     await deleteClient({ id: otherUser.id });

@@ -4,7 +4,10 @@
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { changePassword } from "../../../../../api/admin/authentication/handlers/change-password";
-import { findAdmin, updateAdmin } from "../../../../../api/admin/authentication/services/database/admin";
+import {
+  findAdmin,
+  updateAdmin,
+} from "../../../../../api/admin/authentication/services/database/admin";
 import { HttpStatusCode, NotFoundError, UnauthorizedError } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 
@@ -44,27 +47,24 @@ describe("changePassword handler (unit)", () => {
     await changePassword(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.UNAUTHORIZED })
+      expect.objectContaining({ statusCode: HttpStatusCode.UNAUTHORIZED }),
     );
   });
 
   it("returns 400 when password fields are missing", async () => {
-    const { req, res, next } = buildMockReqRes(
-      { currentPassword: "old" },
-      { id: "u1" }
-    );
+    const { req, res, next } = buildMockReqRes({ currentPassword: "old" }, { id: "u1" });
 
     await changePassword(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST })
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
     );
   });
 
   it("returns 400 when new password is too short", async () => {
     const { req, res, next } = buildMockReqRes(
       { currentPassword: "old", newPassword: "short", confirmPassword: "short" },
-      { id: "u1" }
+      { id: "u1" },
     );
 
     await changePassword(req, res, next);
@@ -73,14 +73,14 @@ describe("changePassword handler (unit)", () => {
       expect.objectContaining({
         statusCode: HttpStatusCode.BAD_REQUEST,
         message: "New password must be at least 8 characters.",
-      })
+      }),
     );
   });
 
   it("returns 400 when newPassword and confirmPassword do not match", async () => {
     const { req, res, next } = buildMockReqRes(
       { currentPassword: "old", newPassword: "newpass123", confirmPassword: "different1" },
-      { id: "u1" }
+      { id: "u1" },
     );
 
     await changePassword(req, res, next);
@@ -89,7 +89,7 @@ describe("changePassword handler (unit)", () => {
       expect.objectContaining({
         statusCode: HttpStatusCode.BAD_REQUEST,
         message: "New password and confirmation do not match.",
-      })
+      }),
     );
   });
 
@@ -97,7 +97,7 @@ describe("changePassword handler (unit)", () => {
     mockedFindAdmin.mockResolvedValue(null);
     const { req, res, next } = buildMockReqRes(
       { currentPassword: "old", newPassword: "newpass123", confirmPassword: "newpass123" },
-      { id: "u1" }
+      { id: "u1" },
     );
 
     await changePassword(req, res, next);
@@ -112,7 +112,7 @@ describe("changePassword handler (unit)", () => {
 
     const { req, res, next } = buildMockReqRes(
       { currentPassword: "wrongpass", newPassword: "newpass123", confirmPassword: "newpass123" },
-      { id: "u1" }
+      { id: "u1" },
     );
 
     await changePassword(req, res, next);
@@ -128,7 +128,7 @@ describe("changePassword handler (unit)", () => {
 
     const { req, res, next } = buildMockReqRes(
       { currentPassword: "correct", newPassword: "newpass123", confirmPassword: "newpass123" },
-      { id: "u1" }
+      { id: "u1" },
     );
 
     await changePassword(req, res, next);
@@ -137,7 +137,7 @@ describe("changePassword handler (unit)", () => {
     expect(mockedUpdateAdmin).toHaveBeenCalledWith({ id: "u1" }, { password: "new_hashed" });
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "Password has been changed successfully." })
+      expect.objectContaining({ message: "Password has been changed successfully." }),
     );
     expect(next).not.toHaveBeenCalled();
   });
@@ -146,13 +146,13 @@ describe("changePassword handler (unit)", () => {
     mockedFindAdmin.mockRejectedValue(new Error("DB exploded"));
     const { req, res, next } = buildMockReqRes(
       { currentPassword: "old", newPassword: "newpass123", confirmPassword: "newpass123" },
-      { id: "u1" }
+      { id: "u1" },
     );
 
     await changePassword(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER })
+      expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER }),
     );
   });
 });

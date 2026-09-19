@@ -4,15 +4,12 @@ import { getVerificationRequestsForUser } from "../../../../../api/client/verifi
 import { HttpStatusCode } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-request",
-);
+jest.mock("../../../../../api/client/verification/services/database/verification-request");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
-const mockedGetVerificationRequestsForUser =
-  getVerificationRequestsForUser as jest.Mock;
+const mockedGetVerificationRequestsForUser = getVerificationRequestsForUser as jest.Mock;
 
 function buildMockReqRes(query: Record<string, unknown> = {}, userId?: string) {
   const req = {
@@ -67,10 +64,7 @@ describe("getVerificationRequests handler (unit)", () => {
 
     await getVerificationRequests(req, res, next);
 
-    expect(mockedGetVerificationRequestsForUser).toHaveBeenCalledWith(
-      "user-1",
-      2,
-    );
+    expect(mockedGetVerificationRequestsForUser).toHaveBeenCalledWith("user-1", 2);
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(res.json).toHaveBeenCalledWith([
       {
@@ -104,9 +98,7 @@ describe("getVerificationRequests handler (unit)", () => {
   });
 
   it("calls next with 500 when the database service fails", async () => {
-    mockedGetVerificationRequestsForUser.mockRejectedValue(
-      new Error("DB exploded"),
-    );
+    mockedGetVerificationRequestsForUser.mockRejectedValue(new Error("DB exploded"));
     const { req, res, next } = buildMockReqRes({}, "user-1");
 
     await getVerificationRequests(req, res, next);

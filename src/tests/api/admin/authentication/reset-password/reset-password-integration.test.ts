@@ -6,7 +6,10 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 import { ROLE } from "@prisma/client";
 import app from "../../../../../app";
-import { createAdmin, deleteAdmin } from "../../../../../api/admin/authentication/services/database/admin";
+import {
+  createAdmin,
+  deleteAdmin,
+} from "../../../../../api/admin/authentication/services/database/admin";
 import { prismaClient } from "../../../../../utils/prisma";
 
 const TEST_EMAIL = "integration-resetpw@example.com";
@@ -17,7 +20,8 @@ let testUserId: string;
 describe("POST /api/v1/admin/reset-password (integration, real DB)", () => {
   beforeAll(async () => {
     const hashed = await bcrypt.hash(ORIGINAL_PASSWORD, 10);
-    const user = await createAdmin({ role: ROLE.ADMIN,
+    const user = await createAdmin({
+      role: ROLE.ADMIN,
       email: TEST_EMAIL,
       password: hashed,
       fullName: "Reset PW Test User",
@@ -32,9 +36,7 @@ describe("POST /api/v1/admin/reset-password (integration, real DB)", () => {
 
   it("returns 400 when missing fields", async () => {
     // Empty request body
-    const res = await request(app)
-      .post("/api/v1/admin/reset-password")
-      .send({});
+    const res = await request(app).post("/api/v1/admin/reset-password").send({});
 
     expect(res.status).toBe(400);
   });
@@ -59,9 +61,7 @@ describe("POST /api/v1/admin/reset-password (integration, real DB)", () => {
     expect(otp).toBeDefined();
 
     // Step 2: Verify the OTP
-    const verifyRes = await request(app)
-      .post(`/api/v1/admin/verify-otp`)
-      .send({ otp });
+    const verifyRes = await request(app).post(`/api/v1/admin/verify-otp`).send({ otp });
     expect(verifyRes.status).toBe(200);
     expect(verifyRes.body.message).toMatch(/verified/i);
 

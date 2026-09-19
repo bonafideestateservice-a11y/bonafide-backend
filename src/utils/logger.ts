@@ -16,7 +16,9 @@ const log = (level: LogLevel, message: string) => {
   if (LEVELS[level] < threshold) return;
   const timestamp = new Date().toISOString();
   // eslint-disable-next-line no-console
-  console[level === "http" || level === "debug" ? "log" : level](`[${timestamp}] [${level.toUpperCase()}] ${message}`);
+  console[level === "http" || level === "debug" ? "log" : level](
+    `[${timestamp}] [${level.toUpperCase()}] ${message}`,
+  );
 };
 
 export const logger = {

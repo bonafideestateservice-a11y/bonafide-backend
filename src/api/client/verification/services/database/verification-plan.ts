@@ -1,8 +1,4 @@
-import {
-  Prisma,
-  VERIFICATION_FREQUENCY,
-  VerificationPlan,
-} from "@prisma/client";
+import { Prisma, VERIFICATION_FREQUENCY, VerificationPlan } from "@prisma/client";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 
@@ -30,12 +26,7 @@ export interface FindVerificationPlanUnique {
 
 export type VerificationPlanCard = Pick<
   VerificationPlan,
-  | "id"
-  | "frequency"
-  | "name"
-  | "description"
-  | "priceInCents"
-  | "currency"
+  "id" | "frequency" | "name" | "description" | "priceInCents" | "currency"
 >;
 
 export const getVerificationPlansForTypeSlug = async (
@@ -61,9 +52,7 @@ export const getVerificationPlansForTypeSlug = async (
     );
     return verificationPlans;
   } catch (error) {
-    logger.error(
-      `Error fetching verification plans slug=${verificationTypeSlug} ${error}`,
-    );
+    logger.error(`Error fetching verification plans slug=${verificationTypeSlug} ${error}`);
     throw error;
   }
 };
@@ -75,9 +64,7 @@ export const createVerificationPlan = async (
     const verificationPlan = await prismaClient.verificationPlan.create({
       data,
     });
-    logger.info(
-      `Verification plan created successfully verificationPlanId=${verificationPlan.id}`,
-    );
+    logger.info(`Verification plan created successfully verificationPlanId=${verificationPlan.id}`);
     return verificationPlan;
   } catch (error) {
     logger.error(`Error creating verification plan ${error}`);
@@ -85,16 +72,12 @@ export const createVerificationPlan = async (
   }
 };
 
-export const getAllVerificationPlans = async (): Promise<
-  VerificationPlan[]
-> => {
+export const getAllVerificationPlans = async (): Promise<VerificationPlan[]> => {
   try {
     const verificationPlans = await prismaClient.verificationPlan.findMany({
       orderBy: { createdAt: "desc" },
     });
-    logger.info(
-      `Fetched all verification plans count=${verificationPlans.length}`,
-    );
+    logger.info(`Fetched all verification plans count=${verificationPlans.length}`);
     return verificationPlans;
   } catch (error) {
     logger.error(`Error fetching verification plans ${error}`);
@@ -114,9 +97,7 @@ export const findVerificationPlan = async (
     );
     return verificationPlan;
   } catch (error) {
-    logger.error(
-      `Error finding verification plan ${error} verificationPlanId=${unique.id}`,
-    );
+    logger.error(`Error finding verification plan ${error} verificationPlanId=${unique.id}`);
     throw error;
   }
 };
@@ -127,9 +108,7 @@ export const updateVerificationPlan = async (
 ): Promise<VerificationPlan> => {
   try {
     const updated = await prismaClient.verificationPlan.update({ where, data });
-    logger.info(
-      `Verification plan updated successfully verificationPlanId=${updated.id}`,
-    );
+    logger.info(`Verification plan updated successfully verificationPlanId=${updated.id}`);
     return updated;
   } catch (error) {
     logger.error(`Error updating verification plan ${error}`);
@@ -142,9 +121,7 @@ export const deleteVerificationPlan = async (
 ): Promise<VerificationPlan> => {
   try {
     const deleted = await prismaClient.verificationPlan.delete({ where });
-    logger.info(
-      `Verification plan deleted successfully verificationPlanId=${deleted.id}`,
-    );
+    logger.info(`Verification plan deleted successfully verificationPlanId=${deleted.id}`);
     return deleted;
   } catch (error) {
     logger.error(`Error deleting verification plan ${error}`);

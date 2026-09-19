@@ -30,9 +30,7 @@ export const createVerificationType = async (
     const verificationType = await prismaClient.verificationType.create({
       data,
     });
-    logger.info(
-      `Verification type created successfully verificationTypeId=${verificationType.id}`,
-    );
+    logger.info(`Verification type created successfully verificationTypeId=${verificationType.id}`);
     return verificationType;
   } catch (error) {
     logger.error(`Error creating verification type ${error}`);
@@ -40,16 +38,12 @@ export const createVerificationType = async (
   }
 };
 
-export const getAllVerificationTypes = async (): Promise<
-  VerificationType[]
-> => {
+export const getAllVerificationTypes = async (): Promise<VerificationType[]> => {
   try {
     const verificationTypes = await prismaClient.verificationType.findMany({
       orderBy: { createdAt: "desc" },
     });
-    logger.info(
-      `Fetched all verification types count=${verificationTypes.length}`,
-    );
+    logger.info(`Fetched all verification types count=${verificationTypes.length}`);
     return verificationTypes;
   } catch (error) {
     logger.error(`Error fetching verification types ${error}`);
@@ -88,9 +82,7 @@ export const getVerificationTypesForService = async (
     );
     return verificationTypes;
   } catch (error) {
-    logger.error(
-      `Error fetching verification types for service ${serviceSlug} ${error}`,
-    );
+    logger.error(`Error fetching verification types for service ${serviceSlug} ${error}`);
     throw error;
   }
 };
@@ -110,9 +102,7 @@ export const findVerificationType = async (
     );
     return verificationType;
   } catch (error) {
-    logger.error(
-      `Error finding verification type ${error} criteria=${JSON.stringify(unique)}`,
-    );
+    logger.error(`Error finding verification type ${error} criteria=${JSON.stringify(unique)}`);
     throw error;
   }
 };
@@ -123,9 +113,7 @@ export const updateVerificationType = async (
 ): Promise<VerificationType> => {
   try {
     const updated = await prismaClient.verificationType.update({ where, data });
-    logger.info(
-      `Verification type updated successfully verificationTypeId=${updated.id}`,
-    );
+    logger.info(`Verification type updated successfully verificationTypeId=${updated.id}`);
     return updated;
   } catch (error) {
     logger.error(`Error updating verification type ${error}`);
@@ -138,9 +126,7 @@ export const deleteVerificationType = async (
 ): Promise<VerificationType> => {
   try {
     const deleted = await prismaClient.verificationType.delete({ where });
-    logger.info(
-      `Verification type deleted successfully verificationTypeId=${deleted.id}`,
-    );
+    logger.info(`Verification type deleted successfully verificationTypeId=${deleted.id}`);
     return deleted;
   } catch (error) {
     logger.error(`Error deleting verification type ${error}`);

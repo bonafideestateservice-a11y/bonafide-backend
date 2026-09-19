@@ -2,11 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { TokenExpiredError } from "jsonwebtoken";
 import { UnauthorizedError, ForbiddenError } from "../exceptions";
 import { prismaClient } from "../utils/prisma";
-import {
-  extractTokenFromHeaders,
-  verifyToken,
-  AuthTokenPayload,
-} from "../utils/jwt";
+import { extractTokenFromHeaders, verifyToken, AuthTokenPayload } from "../utils/jwt";
 import type { User, ROLE } from "@prisma/client";
 
 // CustomRequest interface to provide JWTs to controllers
@@ -15,11 +11,7 @@ export interface CustomRequest extends Request {
   user?: User;
 }
 
-export const checkJwt = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const checkJwt = async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Get the JWT from the request header.
     const token = extractTokenFromHeaders(req);
@@ -67,7 +59,7 @@ export const checkJwt = async (
 export const requireRole = (roles: ROLE[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = (req as CustomRequest).user;
-    
+
     if (!user) {
       return next(new UnauthorizedError("User not authenticated"));
     }

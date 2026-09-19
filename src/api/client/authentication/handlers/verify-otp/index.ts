@@ -1,1 +1,1 @@
-export * from "./verify-otp-v1"
+export * from "./verify-otp-v1";

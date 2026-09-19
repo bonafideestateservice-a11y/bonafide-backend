@@ -6,6 +6,7 @@ import { getAgentsAssignments } from "./get-agents-assignments";
 import { getAgentsStats } from "./get-agents-stats";
 import { getAgentsReports } from "./get-agents-reports";
 import { getAgentsVerificationRequestReport } from "./get-agents-verification-request-report";
+import { getAgentAssignment } from "./get-agent-assignment";
 
 const router = Router();
 const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
@@ -36,12 +37,27 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *       403:
  *         description: Insufficient permissions
  */
-router.get(
-  "/verification/agents/assignments",
-  checkJwt,
-  adminOrAgent,
-  getAgentsAssignments,
-);
+router.get("/verification/agents/assignments", checkJwt, adminOrAgent, getAgentsAssignments);
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification/agents/assignments/{id}:
+ *   get:
+ *     tags: [Admin Verification]
+ *     summary: View an assigned verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Assignment details with client and payment information }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Assignment not found }
+ */
+router.get("/verification/agents/assignments/:id", checkJwt, adminOrAgent, getAgentAssignment);
 
 /**
  * @swagger
@@ -59,12 +75,7 @@ router.get(
  *       403:
  *         description: Insufficient permissions
  */
-router.get(
-  "/verification/agents/stats",
-  checkJwt,
-  adminOrAgent,
-  getAgentsStats,
-);
+router.get("/verification/agents/stats", checkJwt, adminOrAgent, getAgentsStats);
 
 /**
  * @swagger
@@ -86,12 +97,7 @@ router.get(
  *       401: { description: Missing or invalid authentication token }
  *       403: { description: Insufficient permissions }
  */
-router.get(
-  "/verification/agents/reports",
-  checkJwt,
-  adminOrAgent,
-  getAgentsReports,
-);
+router.get("/verification/agents/reports", checkJwt, adminOrAgent, getAgentsReports);
 
 /**
  * @swagger

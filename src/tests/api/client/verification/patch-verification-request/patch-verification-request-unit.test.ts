@@ -8,12 +8,8 @@ import { findVerificationType } from "../../../../../api/client/verification/ser
 import { HttpStatusCode } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-request",
-);
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-type",
-);
+jest.mock("../../../../../api/client/verification/services/database/verification-request");
+jest.mock("../../../../../api/client/verification/services/database/verification-type");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
@@ -112,9 +108,7 @@ describe("patchVerificationRequest handler (unit)", () => {
       },
     );
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "request-1" }),
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ id: "request-1" }));
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -124,10 +118,7 @@ describe("patchVerificationRequest handler (unit)", () => {
       userId: "other-user",
       details: {},
     });
-    const { req, res, next } = buildMockReqRes(
-      { additionalNote: "Updated" },
-      "user-1",
-    );
+    const { req, res, next } = buildMockReqRes({ additionalNote: "Updated" }, "user-1");
 
     await patchVerificationRequest(req, res, next);
 
@@ -144,10 +135,7 @@ describe("patchVerificationRequest handler (unit)", () => {
       verificationTypeId: "type-1",
       details: {},
     });
-    const { req, res, next } = buildMockReqRes(
-      { details: { propertyAddress: "" } },
-      "user-1",
-    );
+    const { req, res, next } = buildMockReqRes({ details: { propertyAddress: "" } }, "user-1");
 
     await patchVerificationRequest(req, res, next);
 
@@ -159,10 +147,7 @@ describe("patchVerificationRequest handler (unit)", () => {
 
   it("passes database failures to the error handler", async () => {
     mockedFindVerificationRequest.mockRejectedValue(new Error("DB exploded"));
-    const { req, res, next } = buildMockReqRes(
-      { additionalNote: "Updated" },
-      "user-1",
-    );
+    const { req, res, next } = buildMockReqRes({ additionalNote: "Updated" }, "user-1");
 
     await patchVerificationRequest(req, res, next);
 
@@ -222,10 +207,7 @@ describe("patchVerificationRequest handler (unit)", () => {
     mockedFindVerificationType.mockResolvedValue({
       slug: "construction-progress",
     });
-    const { req, res, next } = buildMockReqRes(
-      { details: { projectType: "" } },
-      "user-1",
-    );
+    const { req, res, next } = buildMockReqRes({ details: { projectType: "" } }, "user-1");
 
     await patchVerificationRequest(req, res, next);
 
@@ -280,10 +262,7 @@ describe("patchVerificationRequest handler (unit)", () => {
     mockedFindVerificationType.mockResolvedValue({
       slug: "business-verification",
     });
-    const { req, res, next } = buildMockReqRes(
-      { details: { businessAddress: "" } },
-      "user-1",
-    );
+    const { req, res, next } = buildMockReqRes({ details: { businessAddress: "" } }, "user-1");
 
     await patchVerificationRequest(req, res, next);
 

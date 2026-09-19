@@ -5,12 +5,8 @@ import { findVerificationType } from "../../../../../api/client/verification/ser
 import { HttpStatusCode } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-request",
-);
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-type",
-);
+jest.mock("../../../../../api/client/verification/services/database/verification-request");
+jest.mock("../../../../../api/client/verification/services/database/verification-type");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));

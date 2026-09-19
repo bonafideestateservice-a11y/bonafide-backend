@@ -28,9 +28,7 @@ export const patchVerificationRequestPlan = async (
     const userId = customReq.user?.id ?? customReq.token?.id;
 
     if (!userId) {
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
 
     const verificationRequestId = req.params.id;
@@ -39,10 +37,7 @@ export const patchVerificationRequestPlan = async (
     }
 
     const body = req.body as PatchVerificationRequestPlanBody;
-    if (
-      typeof body?.verificationPlanId !== "string" ||
-      !body.verificationPlanId.trim()
-    ) {
+    if (typeof body?.verificationPlanId !== "string" || !body.verificationPlanId.trim()) {
       return next(new BadRequestError("Verification plan is required."));
     }
 
@@ -66,14 +61,9 @@ export const patchVerificationRequestPlan = async (
       return next(new NotFoundError("Verification plan not found."));
     }
 
-    if (
-      verificationPlan.verificationTypeId !==
-      verificationRequest.verificationTypeId
-    ) {
+    if (verificationPlan.verificationTypeId !== verificationRequest.verificationTypeId) {
       return next(
-        new BadRequestError(
-          "Verification plan does not belong to this verification type.",
-        ),
+        new BadRequestError("Verification plan does not belong to this verification type."),
       );
     }
 
@@ -95,9 +85,7 @@ export const patchVerificationRequestPlan = async (
     });
   } catch (error) {
     logger.error(`Error updating verification request plan: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };
 

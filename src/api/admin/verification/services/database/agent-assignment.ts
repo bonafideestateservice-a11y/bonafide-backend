@@ -63,6 +63,57 @@ export interface AgentAssignmentsFilter {
   search?: string;
 }
 
+export type AgentAssignmentDetail = Prisma.AgentAssignmentGetPayload<{
+  select: {
+    id: true;
+    status: true;
+    scheduledAt: true;
+    agentId: true;
+    verificationRequest: {
+      select: {
+        details: true;
+        user: { select: { fullName: true; phone: true; email: true } };
+        verificationType: { select: { name: true } };
+        transaction: {
+          select: { status: true; amountInCents: true; currency: true };
+        };
+      };
+    };
+  };
+}>;
+
+export const getAgentAssignmentById = async (
+  agentId: string,
+  assignmentId: string,
+): Promise<AgentAssignmentDetail | null> => {
+  try {
+    return await prismaClient.agentAssignment.findFirst({
+      where: { id: assignmentId, agentId },
+      select: {
+        id: true,
+        status: true,
+        scheduledAt: true,
+        agentId: true,
+        verificationRequest: {
+          select: {
+            details: true,
+            user: { select: { fullName: true, phone: true, email: true } },
+            verificationType: { select: { name: true } },
+            transaction: {
+              select: { status: true, amountInCents: true, currency: true },
+            },
+          },
+        },
+      },
+    });
+  } catch (error) {
+    logger.error(
+      `Error fetching assignment detail assignmentId=${assignmentId} agentId=${agentId} ${error}`,
+    );
+    throw error;
+  }
+};
+
 const activeAssignmentStatuses: AgentAssignmentStatus[] = [
   AgentAssignmentStatus.ASSIGNED,
   AgentAssignmentStatus.ACCEPTED,
@@ -74,9 +125,7 @@ const completedAssignmentStatuses: AgentAssignmentStatus[] = [
   AgentAssignmentStatus.REPORT_SUBMITTED,
 ];
 
-export const getAgentStatsById = async (
-  agentId: string,
-): Promise<AgentSelfStats> => {
+export const getAgentStatsById = async (agentId: string): Promise<AgentSelfStats> => {
   try {
     const [activeCount, completedCount, rating] = await Promise.all([
       prismaClient.agentAssignment.count({
@@ -109,10 +158,7 @@ export const getAgentAssignmentsById = async (
   try {
     const statuses =
       status === "IN_PROGRESS"
-        ? [
-            AgentAssignmentStatus.ACCEPTED,
-            AgentAssignmentStatus.INSPECTION_SCHEDULED,
-          ]
+        ? [AgentAssignmentStatus.ACCEPTED, AgentAssignmentStatus.INSPECTION_SCHEDULED]
         : [
             AgentAssignmentStatus.ASSIGNED,
             AgentAssignmentStatus.ACCEPTED,
@@ -190,16 +236,12 @@ export const getAgentAssignmentsById = async (
       },
     });
   } catch (error) {
-    logger.error(
-      `Error fetching agent assignments agentId=${agentId} ${error}`,
-    );
+    logger.error(`Error fetching agent assignments agentId=${agentId} ${error}`);
     throw error;
   }
 };
 
-export const getAllAgentAssignments = async (): Promise<
-  AgentAssignmentInformation[]
-> => {
+export const getAllAgentAssignments = async (): Promise<AgentAssignmentInformation[]> => {
   try {
     const assignments = await prismaClient.agentAssignment.findMany({
       orderBy: { createdAt: "desc" },
@@ -234,51 +276,45 @@ export const getAllAgentAssignments = async (): Promise<
   }
 };
 
-export const getAgentAssignmentStats =
-  async (): Promise<AgentAssignmentStats> => {
-    try {
-      const [totalAgents, assignments, groupedStatuses] = await Promise.all([
-        prismaClient.verificationAgent.count(),
-        prismaClient.agentAssignment.findMany({
-          select: { agentId: true, progressPercent: true },
-        }),
-        prismaClient.agentAssignment.groupBy({
-          by: ["status"],
-          _count: { _all: true },
-        }),
-      ]);
+export const getAgentAssignmentStats = async (): Promise<AgentAssignmentStats> => {
+  try {
+    const [totalAgents, assignments, groupedStatuses] = await Promise.all([
+      prismaClient.verificationAgent.count(),
+      prismaClient.agentAssignment.findMany({
+        select: { agentId: true, progressPercent: true },
+      }),
+      prismaClient.agentAssignment.groupBy({
+        by: ["status"],
+        _count: { _all: true },
+      }),
+    ]);
 
-      const assignmentsByStatus = Object.values(AgentAssignmentStatus).reduce(
-        (result, status) => {
-          result[status] =
-            groupedStatuses.find((group) => group.status === status)?._count
-              ._all ?? 0;
-          return result;
-        },
-        {} as Record<AgentAssignmentStatus, number>,
-      );
-      const progressValues = assignments
-        .map((assignment) => assignment.progressPercent)
-        .filter((progress): progress is number => progress !== null);
+    const assignmentsByStatus = Object.values(AgentAssignmentStatus).reduce(
+      (result, status) => {
+        result[status] = groupedStatuses.find((group) => group.status === status)?._count._all ?? 0;
+        return result;
+      },
+      {} as Record<AgentAssignmentStatus, number>,
+    );
+    const progressValues = assignments
+      .map((assignment) => assignment.progressPercent)
+      .filter((progress): progress is number => progress !== null);
 
-      return {
-        totalAgents,
-        activeAgents: new Set(
-          assignments.map((assignment) => assignment.agentId),
-        ).size,
-        totalAssignments: assignments.length,
-        averageProgressPercent: progressValues.length
-          ? Number(
-              (
-                progressValues.reduce((sum, progress) => sum + progress, 0) /
-                progressValues.length
-              ).toFixed(2),
-            )
-          : 0,
-        assignmentsByStatus,
-      };
-    } catch (error) {
-      logger.error(`Error fetching agent assignment stats ${error}`);
-      throw error;
-    }
-  };
+    return {
+      totalAgents,
+      activeAgents: new Set(assignments.map((assignment) => assignment.agentId)).size,
+      totalAssignments: assignments.length,
+      averageProgressPercent: progressValues.length
+        ? Number(
+            (
+              progressValues.reduce((sum, progress) => sum + progress, 0) / progressValues.length
+            ).toFixed(2),
+          )
+        : 0,
+      assignmentsByStatus,
+    };
+  } catch (error) {
+    logger.error(`Error fetching agent assignment stats ${error}`);
+    throw error;
+  }
+};

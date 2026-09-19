@@ -30,9 +30,7 @@ export const changePassword = async (
     // --- Guard: token must be present (set by checkJwt middleware) ---
     if (!tokenPayload?.id) {
       logger.warn("changePassword called without a valid token payload.");
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
 
     const { currentPassword, newPassword, confirmPassword } = req.body;
@@ -40,31 +38,20 @@ export const changePassword = async (
     // --- Validate required fields ---
     if (!currentPassword || !newPassword || !confirmPassword) {
       logger.warn("Missing password fields in change password request.");
-      return next(
-        new ApiError(
-          HttpStatusCode.BAD_REQUEST,
-          "All password fields are required.",
-        ),
-      );
+      return next(new ApiError(HttpStatusCode.BAD_REQUEST, "All password fields are required."));
     }
 
     if (typeof newPassword !== "string" || newPassword.length < 8) {
       logger.warn("New password does not meet length requirements.");
       return next(
-        new ApiError(
-          HttpStatusCode.BAD_REQUEST,
-          "New password must be at least 8 characters.",
-        ),
+        new ApiError(HttpStatusCode.BAD_REQUEST, "New password must be at least 8 characters."),
       );
     }
 
     if (newPassword !== confirmPassword) {
       logger.warn("New password and confirmation do not match.");
       return next(
-        new ApiError(
-          HttpStatusCode.BAD_REQUEST,
-          "New password and confirmation do not match.",
-        ),
+        new ApiError(HttpStatusCode.BAD_REQUEST, "New password and confirmation do not match."),
       );
     }
 
@@ -107,8 +94,6 @@ export const changePassword = async (
     });
   } catch (error) {
     logger.error(`Error changing password: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };

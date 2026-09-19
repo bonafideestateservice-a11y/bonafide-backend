@@ -1,13 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
-import {
-  HttpStatusCode,
-  BadRequestError,
-  InternalServerError,
-} from "../../../../../exceptions";
+import { HttpStatusCode, BadRequestError, InternalServerError } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
 import { hashPassword } from "../../../../../utils/password";
-import { findValidResetToken, markTokenAsUsed } from "../../../../services/database/password-reset-token";
+import {
+  findValidResetToken,
+  markTokenAsUsed,
+} from "../../../../services/database/password-reset-token";
 import { findClient, updateClient } from "../../services/database/client";
 
 /**
@@ -17,11 +16,7 @@ import { findClient, updateClient } from "../../services/database/client";
  * - Updates the user's password
  * - Marks the OTP as used
  */
-export const resetPassword = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, otp, password } = req.body;
 
@@ -35,10 +30,7 @@ export const resetPassword = async (
       return next(new BadRequestError("Invalid email or OTP."));
     }
 
-    const tokenHash = crypto
-      .createHash("sha256")
-      .update(otp.trim())
-      .digest("hex");
+    const tokenHash = crypto.createHash("sha256").update(otp.trim()).digest("hex");
 
     const resetRecord = await findValidResetToken(tokenHash);
 

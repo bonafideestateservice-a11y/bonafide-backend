@@ -5,7 +5,10 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 import { ROLE } from "@prisma/client";
 import app from "../../../../../app";
-import { createAdmin, deleteAdmin } from "../../../../../api/admin/authentication/services/database/admin";
+import {
+  createAdmin,
+  deleteAdmin,
+} from "../../../../../api/admin/authentication/services/database/admin";
 import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";
 
@@ -17,7 +20,8 @@ let authToken: string;
 describe("POST /api/v1/admin/change-password (integration, real DB)", () => {
   beforeAll(async () => {
     const hashed = await bcrypt.hash(TEST_PASSWORD, 10);
-    const user = await createAdmin({ role: ROLE.ADMIN,
+    const user = await createAdmin({
+      role: ROLE.ADMIN,
       email: TEST_EMAIL,
       password: hashed,
       fullName: "Change PW Test User",
@@ -32,13 +36,11 @@ describe("POST /api/v1/admin/change-password (integration, real DB)", () => {
   });
 
   it("returns 401 when no auth token is provided", async () => {
-    const res = await request(app)
-      .post("/api/v1/admin/change-password")
-      .send({
-        currentPassword: TEST_PASSWORD,
-        newPassword: "NewPass1234",
-        confirmPassword: "NewPass1234",
-      });
+    const res = await request(app).post("/api/v1/admin/change-password").send({
+      currentPassword: TEST_PASSWORD,
+      newPassword: "NewPass1234",
+      confirmPassword: "NewPass1234",
+    });
 
     expect(res.status).toBe(401);
   });

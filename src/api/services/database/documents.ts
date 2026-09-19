@@ -22,9 +22,7 @@ export interface FindDocumentUnique {
   id: string;
 }
 
-export const createDocument = async (
-  data: CreateDocumentData,
-): Promise<Document> => {
+export const createDocument = async (data: CreateDocumentData): Promise<Document> => {
   try {
     const document = await prismaClient.document.create({ data });
     logger.info(
@@ -70,9 +68,7 @@ export const getDocumentsByVerificationRequest = async (
   }
 };
 
-export const findDocument = async (
-  unique: FindDocumentUnique,
-): Promise<Document | null> => {
+export const findDocument = async (unique: FindDocumentUnique): Promise<Document | null> => {
   try {
     const document = await prismaClient.document.findUnique({ where: unique });
     logger.info(`Document lookup documentId=${unique.id} found=${!!document}`);
@@ -97,9 +93,7 @@ export const updateDocument = async (
   }
 };
 
-export const deleteDocument = async (
-  where: Prisma.DocumentWhereUniqueInput,
-): Promise<Document> => {
+export const deleteDocument = async (where: Prisma.DocumentWhereUniqueInput): Promise<Document> => {
   try {
     const deleted = await prismaClient.document.delete({ where });
     logger.info(`Document deleted successfully documentId=${deleted.id}`);

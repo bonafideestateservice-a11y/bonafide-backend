@@ -6,8 +6,7 @@ declare global {
 }
 
 export const prismaClient =
-  globalThis.prismaClientSingleton ??
-  new PrismaClient({ log: ["warn", "error"] });
+  globalThis.prismaClientSingleton ?? new PrismaClient({ log: ["warn", "error"] });
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.prismaClientSingleton = prismaClient;

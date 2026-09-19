@@ -13,9 +13,7 @@ jest.mock("cloudinary", () => ({
   },
 }));
 jest.mock("../../../../../api/client/verification/services/database/documents");
-jest.mock(
-  "../../../../../api/client/verification/services/database/verification-request",
-);
+jest.mock("../../../../../api/client/verification/services/database/verification-request");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));

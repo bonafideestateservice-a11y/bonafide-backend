@@ -3,83 +3,73 @@ import passport from "passport";
 import { Strategy as GoogleStrategy, Profile } from "passport-google-oauth20";
 import { ROLE } from "@prisma/client";
 
-import {
-  createClient,
-  findClient,
-  updateClient,
-} from "../../services/database/client";
+import { createClient, findClient, updateClient } from "../../services/database/client";
 import { logger } from "../../../../../utils/logger";
 import { HttpStatusCode } from "../../../../../exceptions";
 import { generateToken } from "../../../../../utils/jwt";
 
 if (process.env.GOOGLE_CLIENT_ID) {
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL!,
-      passReqToCallback: false,
-    },
-    async (
-      _accessToken: string,
-      _refreshToken: string,
-      profile: Profile,
-      done: (err: unknown, user?: any) => void,
-    ) => {
-      try {
-        const email = profile.emails?.[0]?.value?.toLowerCase().trim();
-        const googleId = profile.id;
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        callbackURL: process.env.GOOGLE_CALLBACK_URL!,
+        passReqToCallback: false,
+      },
+      async (
+        _accessToken: string,
+        _refreshToken: string,
+        profile: Profile,
+        done: (err: unknown, user?: any) => void,
+      ) => {
+        try {
+          const email = profile.emails?.[0]?.value?.toLowerCase().trim();
+          const googleId = profile.id;
 
-        if (!email) {
-          logger.error(
-            `No email found in Google profile: ${JSON.stringify(profile)}`,
-          );
-          return done(new Error("No email found in Google profile"));
-        }
+          if (!email) {
+            logger.error(`No email found in Google profile: ${JSON.stringify(profile)}`);
+            return done(new Error("No email found in Google profile"));
+          }
 
-        let user = await findClient({ email });
+          let user = await findClient({ email });
 
-        if (!user) {
-          const firstName = profile.name?.givenName || "";
-          const lastName = profile.name?.familyName || "";
-          const middleName = (profile as any).name?.middleName || "";
-          const fullName =
-            [firstName, middleName, lastName]
-              .filter(Boolean)
-              .join(" ")
-              .trim() || email.split("@")[0];
+          if (!user) {
+            const firstName = profile.name?.givenName || "";
+            const lastName = profile.name?.familyName || "";
+            const middleName = (profile as any).name?.middleName || "";
+            const fullName =
+              [firstName, middleName, lastName].filter(Boolean).join(" ").trim() ||
+              email.split("@")[0];
 
-          user = await createClient({
-            fullName,
-            email,
-            password: null,
-            provider: "google",
-            providerId: googleId,
-            role: ROLE.CLIENT,
-          });
-          logger.info(`New Google user created: ${email}`);
-        } else if (!user.providerId || user.providerId !== googleId) {
-          user = await updateClient(
-            { id: user.id },
-            {
+            user = await createClient({
+              fullName,
+              email,
+              password: null,
               provider: "google",
               providerId: googleId,
-            },
-          );
-          logger.info(`Linked existing user with Google: ${email}`);
-        }
+              role: ROLE.CLIENT,
+            });
+            logger.info(`New Google user created: ${email}`);
+          } else if (!user.providerId || user.providerId !== googleId) {
+            user = await updateClient(
+              { id: user.id },
+              {
+                provider: "google",
+                providerId: googleId,
+              },
+            );
+            logger.info(`Linked existing user with Google: ${email}`);
+          }
 
-        return done(null, user);
-      } catch (err) {
-        logger.error(
-          `Google OAuth error: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        return done(err);
-      }
-    },
-  ),
-);
+          return done(null, user);
+        } catch (err) {
+          logger.error(`Google OAuth error: ${err instanceof Error ? err.message : String(err)}`);
+          return done(err);
+        }
+      },
+    ),
+  );
 }
 
 passport.serializeUser((user: any, done) => {
@@ -106,16 +96,12 @@ export const handleGoogleCallback = [
 
     if (!user) {
       logger.warn("Google callback: No user found in session");
-      return res
-        .status(HttpStatusCode.UNAUTHORIZED)
-        .json({ message: "Authentication failed" });
+      return res.status(HttpStatusCode.UNAUTHORIZED).json({ message: "Authentication failed" });
     }
 
     try {
       const token = generateToken({ id: user.id });
-      logger.info(
-        `Google OAuth callback successful, JWT generated for userId=${user.id}`,
-      );
+      logger.info(`Google OAuth callback successful, JWT generated for userId=${user.id}`);
 
       return res.status(HttpStatusCode.OK).json({
         status: "ok",
@@ -134,18 +120,12 @@ export const handleGoogleCallback = [
 
 export const googleLoginSuccess = (req: Request, res: Response) => {
   if (!req.user) {
-    logger.warn(
-      "Google login success endpoint hit but no user found in session",
-    );
-    return res
-      .status(HttpStatusCode.UNAUTHORIZED)
-      .json({ message: "Not authenticated" });
+    logger.warn("Google login success endpoint hit but no user found in session");
+    return res.status(HttpStatusCode.UNAUTHORIZED).json({ message: "Not authenticated" });
   }
 
   const { password, ...userWithoutPassword } = req.user as any;
-  logger.info(
-    `Google login successful for userId=${userWithoutPassword?.id ?? "unknown"}`,
-  );
+  logger.info(`Google login successful for userId=${userWithoutPassword?.id ?? "unknown"}`);
   return res.status(HttpStatusCode.OK).json({ user: userWithoutPassword });
 };
 
@@ -170,23 +150,17 @@ export const googleLogout = (req: Request, res: Response) => {
         }
 
         logger.info("Session destroyed during Google logout");
-        return res
-          .status(HttpStatusCode.OK)
-          .json({ message: "Logged out successfully" });
+        return res.status(HttpStatusCode.OK).json({ message: "Logged out successfully" });
       });
       return;
     }
 
     logger.warn("No session found during Google logout");
-    return res
-      .status(HttpStatusCode.OK)
-      .json({ message: "No session found, but logged out" });
+    return res.status(HttpStatusCode.OK).json({ message: "No session found, but logged out" });
   } catch (err: any) {
     logger.error(
       `Failed to sign out user via Google: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return res
-      .status(HttpStatusCode.BAD_REQUEST)
-      .json({ message: "Failed to sign out user" });
+    return res.status(HttpStatusCode.BAD_REQUEST).json({ message: "Failed to sign out user" });
   }
 };

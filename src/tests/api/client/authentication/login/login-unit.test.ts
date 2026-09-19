@@ -10,7 +10,7 @@ import bcrypt from "bcryptjs";
 import { login } from "../../../../../api/client/authentication/handlers/login/login-v1"; // adjust path to your handler
 import { findClient } from "../../../../../api/client/authentication/services/database/client";
 import { generateToken } from "../../../../../utils/jwt";
-import {  NotFoundError, HttpStatusCode } from "../../../../../exceptions";
+import { NotFoundError, HttpStatusCode } from "../../../../../exceptions";
 
 // --- Mock every external dependency the handler touches ---
 jest.mock("bcryptjs");
@@ -49,7 +49,7 @@ describe("login handler (unit)", () => {
       expect.objectContaining({
         statusCode: HttpStatusCode.BAD_REQUEST,
         message: "Email is required.",
-      })
+      }),
     );
     expect(res.status).not.toHaveBeenCalled();
   });
@@ -60,7 +60,7 @@ describe("login handler (unit)", () => {
     await login(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST })
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
     );
   });
 
@@ -93,7 +93,7 @@ describe("login handler (unit)", () => {
     await login(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.UNAUTHORIZED })
+      expect.objectContaining({ statusCode: HttpStatusCode.UNAUTHORIZED }),
     );
   });
 
@@ -120,7 +120,7 @@ describe("login handler (unit)", () => {
         message: "Login successful.",
         token: "fake.jwt.token",
         user: expect.not.objectContaining({ password: expect.anything() }),
-      })
+      }),
     );
     expect(next).not.toHaveBeenCalled();
   });
@@ -135,7 +135,7 @@ describe("login handler (unit)", () => {
     await login(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER })
+      expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER }),
     );
   });
 });

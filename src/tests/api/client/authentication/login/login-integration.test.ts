@@ -18,7 +18,10 @@
 import request from "supertest";
 import bcrypt from "bcryptjs";
 import app from "../../../../../app"; // your Express app, NOT app.listen()
-import { createClient, deleteClient } from "../../../../../api/client/authentication/services/database/client";
+import {
+  createClient,
+  deleteClient,
+} from "../../../../../api/client/authentication/services/database/client";
 import { prismaClient } from "../../../../../utils/prisma";
 
 const TEST_EMAIL = "integration-test-user@example.com";
@@ -45,9 +48,7 @@ describe("POST /api/v1/client/login (integration, real DB)", () => {
   });
 
   it("returns 400 when email is missing", async () => {
-    const res = await request(app)
-      .post("/api/v1/client/login")
-      .send({ password: TEST_PASSWORD });
+    const res = await request(app).post("/api/v1/client/login").send({ password: TEST_PASSWORD });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/email/i);

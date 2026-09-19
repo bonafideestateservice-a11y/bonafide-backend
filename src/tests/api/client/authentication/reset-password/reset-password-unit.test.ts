@@ -3,8 +3,14 @@
 
 import { Request, Response, NextFunction } from "express";
 import { resetPassword } from "../../../../../api/client/authentication/handlers/reset-password";
-import { findValidResetToken, markTokenAsUsed } from "../../../../../api/services/database/password-reset-token";
-import { findClient, updateClient } from "../../../../../api/client/authentication/services/database/client";
+import {
+  findValidResetToken,
+  markTokenAsUsed,
+} from "../../../../../api/services/database/password-reset-token";
+import {
+  findClient,
+  updateClient,
+} from "../../../../../api/client/authentication/services/database/client";
 import { hashPassword } from "../../../../../utils/password";
 import { HttpStatusCode, BadRequestError } from "../../../../../exceptions";
 
@@ -95,7 +101,7 @@ describe("resetPassword handler (unit)", () => {
     await resetPassword(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "OTP is invalid or has expired." })
+      expect.objectContaining({ message: "OTP is invalid or has expired." }),
     );
   });
 
@@ -120,7 +126,7 @@ describe("resetPassword handler (unit)", () => {
     expect(mockedMarkTokenAsUsed).toHaveBeenCalledWith("rt1");
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "Password has been reset successfully." })
+      expect.objectContaining({ message: "Password has been reset successfully." }),
     );
     expect(next).not.toHaveBeenCalled();
   });
@@ -137,7 +143,7 @@ describe("resetPassword handler (unit)", () => {
     await resetPassword(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER })
+      expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER }),
     );
   });
 });

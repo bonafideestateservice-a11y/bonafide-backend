@@ -1,9 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import {
-  ApiError,
-  BadRequestError,
-  HttpStatusCode,
-} from "../../../../../exceptions";
+import { ApiError, BadRequestError, HttpStatusCode } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { createVerificationRequest } from "../../services/database/verification-request";
 import { findVerificationType } from "../../services/database/verification-type";
@@ -29,16 +25,11 @@ export const postVerificationRequest = async (
     const userId = customReq.user?.id ?? customReq.token?.id;
 
     if (!userId) {
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
 
     const body = req.body as CreateVerificationRequestBody;
-    if (
-      typeof body?.verificationTypeId !== "string" ||
-      !body.verificationTypeId.trim()
-    ) {
+    if (typeof body?.verificationTypeId !== "string" || !body.verificationTypeId.trim()) {
       return next(new BadRequestError("Verification type is required."));
     }
 
@@ -49,19 +40,12 @@ export const postVerificationRequest = async (
       return next(new BadRequestError("Verification type not found."));
     }
 
-    const validatedDetails = validateVerificationDetails(
-      body.details,
-      verificationType.slug,
-      true,
-    );
+    const validatedDetails = validateVerificationDetails(body.details, verificationType.slug, true);
     if (validatedDetails.error) {
       return next(new BadRequestError(validatedDetails.error));
     }
 
-    if (
-      body.additionalNote !== undefined &&
-      typeof body.additionalNote !== "string"
-    ) {
+    if (body.additionalNote !== undefined && typeof body.additionalNote !== "string") {
       return next(new BadRequestError("Additional note must be a string."));
     }
 
@@ -71,9 +55,7 @@ export const postVerificationRequest = async (
       status: "DRAFT",
       details: validatedDetails.details!,
       additionalNote:
-        typeof body.additionalNote === "string"
-          ? body.additionalNote.trim() || null
-          : null,
+        typeof body.additionalNote === "string" ? body.additionalNote.trim() || null : null,
     });
 
     res.status(HttpStatusCode.CREATED).json({
@@ -86,8 +68,6 @@ export const postVerificationRequest = async (
     });
   } catch (error) {
     logger.error(`Error creating verification request: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };

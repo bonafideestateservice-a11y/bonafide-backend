@@ -24,9 +24,7 @@ export interface FindVerificationReportUnique {
   verificationRequestId?: string;
 }
 
-export const countUnviewedVerificationReports = async (
-  userId: string,
-): Promise<number> => {
+export const countUnviewedVerificationReports = async (userId: string): Promise<number> => {
   try {
     const count = await prismaClient.verificationReport.count({
       where: {
@@ -34,9 +32,7 @@ export const countUnviewedVerificationReports = async (
         verificationRequest: { userId },
       },
     });
-    logger.info(
-      `Counted unviewed verification reports userId=${userId} count=${count}`,
-    );
+    logger.info(`Counted unviewed verification reports userId=${userId} count=${count}`);
     return count;
   } catch (error) {
     logger.error(`Error counting unviewed verification reports ${error}`);
@@ -51,9 +47,7 @@ export const createVerificationReport = async (
     const verificationReport = await prismaClient.verificationReport.create({
       data,
     });
-    logger.info(
-      `Verification report created successfully reportId=${verificationReport.id}`,
-    );
+    logger.info(`Verification report created successfully reportId=${verificationReport.id}`);
     return verificationReport;
   } catch (error) {
     logger.error(`Error creating verification report ${error}`);
@@ -61,16 +55,12 @@ export const createVerificationReport = async (
   }
 };
 
-export const getAllVerificationReports = async (): Promise<
-  VerificationReport[]
-> => {
+export const getAllVerificationReports = async (): Promise<VerificationReport[]> => {
   try {
     const verificationReports = await prismaClient.verificationReport.findMany({
       orderBy: { createdAt: "desc" },
     });
-    logger.info(
-      `Fetched all verification reports count=${verificationReports.length}`,
-    );
+    logger.info(`Fetched all verification reports count=${verificationReports.length}`);
     return verificationReports;
   } catch (error) {
     logger.error(`Error fetching verification reports ${error}`);
@@ -85,19 +75,15 @@ export const findVerificationReport = async (
     const where: Prisma.VerificationReportWhereUniqueInput = unique.id
       ? { id: unique.id }
       : { verificationRequestId: unique.verificationRequestId! };
-    const verificationReport = await prismaClient.verificationReport.findUnique(
-      {
-        where,
-      },
-    );
+    const verificationReport = await prismaClient.verificationReport.findUnique({
+      where,
+    });
     logger.info(
       `Verification report lookup criteria=${JSON.stringify(unique)} found=${!!verificationReport}`,
     );
     return verificationReport;
   } catch (error) {
-    logger.error(
-      `Error finding verification report ${error} criteria=${JSON.stringify(unique)}`,
-    );
+    logger.error(`Error finding verification report ${error} criteria=${JSON.stringify(unique)}`);
     throw error;
   }
 };
@@ -117,9 +103,7 @@ export const updateVerificationReport = async (
           : {}),
       },
     });
-    logger.info(
-      `Verification report updated successfully reportId=${updated.id}`,
-    );
+    logger.info(`Verification report updated successfully reportId=${updated.id}`);
     return updated;
   } catch (error) {
     logger.error(`Error updating verification report ${error}`);
@@ -132,9 +116,7 @@ export const deleteVerificationReport = async (
 ): Promise<VerificationReport> => {
   try {
     const deleted = await prismaClient.verificationReport.delete({ where });
-    logger.info(
-      `Verification report deleted successfully reportId=${deleted.id}`,
-    );
+    logger.info(`Verification report deleted successfully reportId=${deleted.id}`);
     return deleted;
   } catch (error) {
     logger.error(`Error deleting verification report ${error}`);

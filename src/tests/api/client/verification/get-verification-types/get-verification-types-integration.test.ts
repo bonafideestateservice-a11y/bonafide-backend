@@ -52,9 +52,7 @@ describe("GET /api/v1/client/services/verification/verification-types (integrati
   });
 
   it("returns verification category cards without authentication", async () => {
-    const res = await request(app).get(
-      "/api/v1/client/services/verification/verification-types",
-    );
+    const res = await request(app).get("/api/v1/client/services/verification/verification-types");
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(
@@ -71,9 +69,7 @@ describe("GET /api/v1/client/services/verification/verification-types (integrati
   });
 
   it("returns only the documented category fields", async () => {
-    const res = await request(app).get(
-      "/api/v1/client/services/verification/verification-types",
-    );
+    const res = await request(app).get("/api/v1/client/services/verification/verification-types");
 
     expect(res.status).toBe(200);
     expect(res.body[0]).toEqual(
@@ -84,12 +80,6 @@ describe("GET /api/v1/client/services/verification/verification-types (integrati
         description: expect.any(String),
       }),
     );
-    expect(Object.keys(res.body[0]).sort()).toEqual([
-      "description",
-      "icon",
-      "id",
-      "name",
-      "slug",
-    ]);
+    expect(Object.keys(res.body[0]).sort()).toEqual(["description", "icon", "id", "name", "slug"]);
   });
 });

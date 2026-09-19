@@ -10,12 +10,7 @@ export const notFoundHandler = (_req: Request, res: Response) => {
   });
 };
 
-export const errorHandler = (
-  error: Error,
-  _req: Request,
-  res: Response,
-  _next: NextFunction
-) => {
+export const errorHandler = (error: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof ApiError) {
     logger.warn(error.message);
     res.status(error.statusCode).json({

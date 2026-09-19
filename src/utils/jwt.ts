@@ -17,10 +17,7 @@ export interface AuthTokenPayload {
 }
 
 // Generate a JWT token
-export const generateToken = (
-  payload: AuthTokenPayload,
-  expiresIn?: string
-): string => {
+export const generateToken = (payload: AuthTokenPayload, expiresIn?: string): string => {
   const options: SignOptions = {
     expiresIn: (expiresIn || config.JWT_EXPIRES_IN) as SignOptions["expiresIn"],
     notBefore: "0", // Cannot use before now, can be configured to be deferred.
@@ -31,7 +28,6 @@ export const generateToken = (
 
   return jwt.sign(payload, config.JWT_SECRET || "secret", options);
 };
-
 
 // Generate a refresh token (random string and expiry)
 export const generateRefreshToken = () => {
@@ -61,7 +57,7 @@ export const verifyToken = (token: string): Promise<AuthTokenPayload> => {
       (err, decoded) => {
         if (err) return reject(err);
         resolve(decoded as AuthTokenPayload);
-      }
+      },
     );
   });
 };

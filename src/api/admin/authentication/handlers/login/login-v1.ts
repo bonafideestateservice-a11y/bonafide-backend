@@ -1,37 +1,25 @@
 import { Request, Response, NextFunction } from "express";
 
 import { findAdmin } from "../../services/database/admin";
-import {
-  HttpStatusCode,
-  NotFoundError,
-  ApiError,
-} from "../../../../../exceptions";
+import { HttpStatusCode, NotFoundError, ApiError } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
 import { verifyPassword } from "../../../../../utils/password";
 import { generateToken } from "../../../../../utils/jwt";
 import { ROLE } from "@prisma/client";
 
-export const login = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
+export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password } = req.body;
 
     // --- Validate required fields ---
     if (!email || typeof email !== "string" || !email.trim()) {
       logger.warn("Missing email in admin login.");
-      return next(
-        new ApiError(HttpStatusCode.BAD_REQUEST, "Email is required."),
-      );
+      return next(new ApiError(HttpStatusCode.BAD_REQUEST, "Email is required."));
     }
 
     if (!password || typeof password !== "string") {
       logger.warn("Missing password in admin login.");
-      return next(
-        new ApiError(HttpStatusCode.BAD_REQUEST, "Password is required."),
-      );
+      return next(new ApiError(HttpStatusCode.BAD_REQUEST, "Password is required."));
     }
 
     // --- Find admin ---
@@ -45,9 +33,7 @@ export const login = async (
     // --- Verify role ---
     if (admin.role !== ROLE.ADMIN && admin.role !== ROLE.AGENT) {
       logger.warn(`Unauthorized role login attempt for email: ${email}`);
-      return next(
-        new ApiError(HttpStatusCode.FORBIDDEN, "Insufficient permissions."),
-      );
+      return next(new ApiError(HttpStatusCode.FORBIDDEN, "Insufficient permissions."));
     }
 
     // --- Verify password ---
@@ -65,9 +51,7 @@ export const login = async (
 
     if (!isPasswordValid) {
       logger.warn(`Invalid password attempt for admin: ${email}`);
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Invalid credentials."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Invalid credentials."));
     }
 
     // --- Generate access token ---
@@ -86,8 +70,6 @@ export const login = async (
     });
   } catch (error) {
     logger.error(`Error during admin login: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };

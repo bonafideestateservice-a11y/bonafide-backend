@@ -1,36 +1,24 @@
 import { Request, Response, NextFunction } from "express";
 
 import { findClient } from "../../services/database/client";
-import {
-  HttpStatusCode,
-  NotFoundError,
-  ApiError,
-} from "../../../../../exceptions";
+import { HttpStatusCode, NotFoundError, ApiError } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
 import { generateToken } from "../../../../../utils/jwt";
 import { verifyPassword } from "../../../../../utils/password";
 
-export const login = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
+export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { email, password } = req.body;
 
     // --- Validate required fields ---
     if (!email || typeof email !== "string" || !email.trim()) {
       logger.warn("Missing email in login.");
-      return next(
-        new ApiError(HttpStatusCode.BAD_REQUEST, "Email is required."),
-      );
+      return next(new ApiError(HttpStatusCode.BAD_REQUEST, "Email is required."));
     }
 
     if (!password || typeof password !== "string") {
       logger.warn("Missing password in login.");
-      return next(
-        new ApiError(HttpStatusCode.BAD_REQUEST, "Password is required."),
-      );
+      return next(new ApiError(HttpStatusCode.BAD_REQUEST, "Password is required."));
     }
 
     // --- Find user ---
@@ -43,9 +31,7 @@ export const login = async (
 
     // --- Verify password ---
     if (!user.password) {
-      logger.warn(
-        `Login attempt for social auth user without a local password: ${email}`,
-      );
+      logger.warn(`Login attempt for social auth user without a local password: ${email}`);
       return next(
         new ApiError(
           HttpStatusCode.UNAUTHORIZED,
@@ -58,9 +44,7 @@ export const login = async (
 
     if (!isPasswordValid) {
       logger.warn(`Invalid password attempt for user: ${email}`);
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Invalid credentials."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Invalid credentials."));
     }
 
     // --- Generate access token ---
@@ -79,8 +63,6 @@ export const login = async (
     });
   } catch (error) {
     logger.error(`Error during user login: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };

@@ -99,9 +99,7 @@ describe("GET /api/v1/client/verification-requests/reports-summary (integration,
   });
 
   it("returns 401 when no auth token is provided", async () => {
-    const res = await request(app).get(
-      "/api/v1/client/verification-requests/reports-summary",
-    );
+    const res = await request(app).get("/api/v1/client/verification-requests/reports-summary");
 
     expect(res.status).toBe(401);
   });

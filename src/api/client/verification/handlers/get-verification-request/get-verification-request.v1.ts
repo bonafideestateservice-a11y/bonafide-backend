@@ -1,9 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import {
-  ApiError,
-  HttpStatusCode,
-  NotFoundError,
-} from "../../../../../exceptions";
+import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationRequestDetailsForUser } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
@@ -18,9 +14,7 @@ export const getVerificationRequest = async (
     const userId = customReq.user?.id ?? customReq.token?.id;
 
     if (!userId) {
-      return next(
-        new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."),
-      );
+      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
 
     const verificationRequestId = req.params.id;
@@ -51,9 +45,7 @@ export const getVerificationRequest = async (
     });
   } catch (error) {
     logger.error(`Error getting verification request: ${error}`);
-    next(
-      new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."),
-    );
+    next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));
   }
 };
 

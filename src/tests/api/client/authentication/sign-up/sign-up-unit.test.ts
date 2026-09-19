@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { signUp } from "../../../../../api/client/authentication/handlers/signup";
-import { createClient, findClient } from "../../../../../api/client/authentication/services/database/client";
+import {
+  createClient,
+  findClient,
+} from "../../../../../api/client/authentication/services/database/client";
 import { generateToken } from "../../../../../utils/jwt";
 import { HttpStatusCode, ConflictError } from "../../../../../exceptions";
 import { ROLE } from "@prisma/client";
@@ -38,24 +41,32 @@ describe("signUp handler (unit)", () => {
     const { req, res, next } = buildMockReqRes({ email: "test@test.com", password: "password123" });
     await signUp(req, res, next);
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST })
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
     );
   });
 
   it("returns 400 when password is too short", async () => {
-    const { req, res, next } = buildMockReqRes({ fullName: "Test User", email: "test@test.com", password: "short" });
+    const { req, res, next } = buildMockReqRes({
+      fullName: "Test User",
+      email: "test@test.com",
+      password: "short",
+    });
     await signUp(req, res, next);
     expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST })
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
     );
   });
 
   it("returns 409 when email already exists", async () => {
     mockedFindClient.mockResolvedValue({ id: "user_1" });
-    const { req, res, next } = buildMockReqRes({ fullName: "Test User", email: "test@test.com", password: "password123" });
-    
+    const { req, res, next } = buildMockReqRes({
+      fullName: "Test User",
+      email: "test@test.com",
+      password: "password123",
+    });
+
     await signUp(req, res, next);
-    
+
     expect(mockedFindClient).toHaveBeenCalledWith({ email: "test@test.com" });
     expect(next).toHaveBeenCalledWith(expect.any(ConflictError));
   });
@@ -68,20 +79,27 @@ describe("signUp handler (unit)", () => {
       email: "test@test.com",
       password: "hashed_password",
       fullName: "Test User",
-      role: ROLE.CLIENT
+      role: ROLE.CLIENT,
     });
     mockedGenerateToken.mockReturnValue("jwt.token.here");
 
-    const { req, res, next } = buildMockReqRes({ fullName: "Test User", email: "test@test.com", password: "password123", termsAndCondition: true });
+    const { req, res, next } = buildMockReqRes({
+      fullName: "Test User",
+      email: "test@test.com",
+      password: "password123",
+      termsAndCondition: true,
+    });
 
     await signUp(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.CREATED);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-      message: "Sign up successful.",
-      token: "jwt.token.here",
-      user: expect.not.objectContaining({ password: expect.anything() }),
-    }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Sign up successful.",
+        token: "jwt.token.here",
+        user: expect.not.objectContaining({ password: expect.anything() }),
+      }),
+    );
     expect(next).not.toHaveBeenCalled();
   });
 });

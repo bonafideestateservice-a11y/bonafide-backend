@@ -4,17 +4,14 @@ import { getAgentAssignmentsById } from "../../../../../api/admin/verification/s
 import { getVerificationAgentByUserId } from "../../../../../api/admin/authentication/services/database/agent";
 import { HttpStatusCode } from "../../../../../exceptions";
 
-jest.mock(
-  "../../../../../api/admin/verification/services/database/agent-assignment",
-);
+jest.mock("../../../../../api/admin/verification/services/database/agent-assignment");
 jest.mock("../../../../../api/admin/authentication/services/database/agent");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
 const mockedGetAgentAssignmentsById = getAgentAssignmentsById as jest.Mock;
-const mockedGetVerificationAgentByUserId =
-  getVerificationAgentByUserId as jest.Mock;
+const mockedGetVerificationAgentByUserId = getVerificationAgentByUserId as jest.Mock;
 
 function buildMockReqRes() {
   const req = {
