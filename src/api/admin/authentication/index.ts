@@ -3,8 +3,10 @@ import { ROLE } from "@prisma/client";
 import { checkJwt } from "../../../middlewares/check-jwt";
 import { checkRoles } from "../../../middlewares/check-roles";
 import * as AuthenticationController from "./handlers";
+import multer from "multer";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
 
@@ -68,6 +70,79 @@ router.post("/login", AuthenticationController.login);
  *         description: Password changed successfully
  */
 router.post("/change-password", checkJwt, adminOrAgent, AuthenticationController.changePassword);
+
+/**
+ * @swagger
+ * /api/{version}/admin/profile:
+ *   get:
+ *     tags: [Admin Authentication]
+ *     summary: Get the authenticated admin profile
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Admin profile }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Profile not found }
+ */
+router.get("/profile", checkJwt, adminOrAgent, AuthenticationController.getProfile);
+
+/**
+ * @swagger
+ * /api/{version}/admin/profile:
+ *   patch:
+ *     tags: [Admin Authentication]
+ *     summary: Update the authenticated admin profile
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName: { type: string }
+ *               phone: { type: string }
+ *               location: { type: string }
+ *               profilePhoto: { type: string, format: binary }
+ *     responses:
+ *       200: { description: Updated admin profile }
+ *       400: { description: Invalid or empty profile update }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Profile not found }
+ */
+router.patch(
+  "/profile",
+  checkJwt,
+  adminOrAgent,
+  upload.single("profilePhoto"),
+  AuthenticationController.updateProfile,
+);
+
+/**
+ * @swagger
+ * /api/{version}/admin/profile/email:
+ *   patch:
+ *     tags: [Admin Authentication]
+ *     summary: Change the authenticated admin email
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [newEmail, password]
+ *             properties:
+ *               newEmail: { type: string, format: email }
+ *               password: { type: string }
+ *     responses:
+ *       200: { description: Updated admin profile }
+ *       400: { description: Invalid email or password confirmation }
+ *       401: { description: Incorrect password }
+ *       409: { description: Email already in use }
+ */
+router.patch("/profile/email", checkJwt, adminOrAgent, AuthenticationController.changeEmail);
 
 /**
  * @swagger

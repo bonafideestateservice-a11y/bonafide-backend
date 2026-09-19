@@ -4,3 +4,6 @@ export * from "./forgot-password";
 export * from "./reset-password";
 export * from "./verify-otp";
 export * from "./get-agents-information";
+export * from "./get-profile";
+export * from "./update-profile";
+export * from "./change-email";

@@ -15,6 +15,9 @@ export interface UpdateAdminData {
   fullName?: string;
   email?: string;
   password?: string | null;
+  phone?: string | null;
+  location?: string | null;
+  profilePhoto?: string | null;
   role?: ROLE;
   termsAndCondition?: boolean;
 }
@@ -23,6 +26,11 @@ export interface FindAdminUnique {
   email?: string;
   id?: string;
 }
+
+export type AdminProfile = Pick<
+  User,
+  "id" | "fullName" | "email" | "phone" | "location" | "profilePhoto" | "role"
+>;
 
 export const createAdmin = async (data: CreateAdminData): Promise<User> => {
   try {
@@ -71,6 +79,26 @@ export const findAdmin = async (unique: FindAdminUnique): Promise<User | null> =
   }
 };
 
+export const getAdminProfile = async (adminId: string): Promise<AdminProfile | null> => {
+  try {
+    return await prismaClient.user.findUnique({
+      where: { id: adminId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        location: true,
+        profilePhoto: true,
+        role: true,
+      },
+    });
+  } catch (error) {
+    logger.error(`Error fetching admin profile userId=${adminId} ${error}`);
+    throw error;
+  }
+};
+
 export const updateAdmin = async (
   where: Prisma.UserWhereUniqueInput,
   data: UpdateAdminData,
@@ -82,6 +110,55 @@ export const updateAdmin = async (
   } catch (error) {
     logger.error(`Error updating user ${error}`);
     throw new Error("Failed to update user");
+  }
+};
+
+export const updateAdminProfile = async (
+  adminId: string,
+  data: Pick<UpdateAdminData, "fullName" | "phone" | "location" | "profilePhoto">,
+): Promise<AdminProfile> => {
+  try {
+    const updated = await prismaClient.user.update({
+      where: { id: adminId },
+      data,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        location: true,
+        profilePhoto: true,
+        role: true,
+      },
+    });
+    logger.info(`Admin profile updated userId=${updated.id}`);
+    return updated;
+  } catch (error) {
+    logger.error(`Error updating admin profile userId=${adminId} ${error}`);
+    throw error;
+  }
+};
+
+export const updateAdminEmail = async (adminId: string, email: string): Promise<AdminProfile> => {
+  try {
+    const updated = await prismaClient.user.update({
+      where: { id: adminId },
+      data: { email },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        location: true,
+        profilePhoto: true,
+        role: true,
+      },
+    });
+    logger.info(`Admin email updated userId=${updated.id}`);
+    return updated;
+  } catch (error) {
+    logger.error(`Error updating admin email userId=${adminId} ${error}`);
+    throw error;
   }
 };
 

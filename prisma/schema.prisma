@@ -12,6 +12,8 @@ model User {
   fullName             String
   email                String                @unique
   phone                String?
+  location             String?
+  profilePhoto         String?
   termsAndCondition    Boolean               @default(false)
   password             String?
   provider             String?               @default("local")
