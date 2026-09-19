@@ -4,3 +4,6 @@ export * from "./login";
 export * from "./reset-password";
 export * from "./signup";
 export * from "./verify-otp";
+export * from "./get-profile";
+export * from "./update-profile";
+export * from "./change-email";

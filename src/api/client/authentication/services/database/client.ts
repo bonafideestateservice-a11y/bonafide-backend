@@ -17,6 +17,9 @@ export interface UpdateClientData {
   fullName?: string;
   email?: string;
   password?: string | null;
+  phone?: string | null;
+  location?: string | null;
+  profilePhoto?: string | null;
   role?: ROLE;
   termsAndCondition?: boolean;
   provider?: string | null;
@@ -27,6 +30,11 @@ export interface FindClientUnique {
   email?: string;
   id?: string;
 }
+
+export type ClientProfile = Pick<
+  User,
+  "id" | "fullName" | "email" | "phone" | "location" | "profilePhoto" | "role"
+>;
 
 export const createClient = async (data: CreateClientData): Promise<User> => {
   try {
@@ -77,6 +85,26 @@ export const findClient = async (unique: FindClientUnique): Promise<User | null>
   }
 };
 
+export const getClientProfile = async (clientId: string): Promise<ClientProfile | null> => {
+  try {
+    return await prismaClient.user.findUnique({
+      where: { id: clientId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        location: true,
+        profilePhoto: true,
+        role: true,
+      },
+    });
+  } catch (error) {
+    logger.error(`Error fetching client profile userId=${clientId} ${error}`);
+    throw error;
+  }
+};
+
 export const updateClient = async (
   where: Prisma.UserWhereUniqueInput,
   data: UpdateClientData,
@@ -88,6 +116,58 @@ export const updateClient = async (
   } catch (error) {
     logger.error(`Error updating user ${error}`);
     throw new Error("Failed to update user");
+  }
+};
+
+export const updateClientProfile = async (
+  clientId: string,
+  data: Pick<UpdateClientData, "fullName" | "phone" | "location" | "profilePhoto">,
+): Promise<ClientProfile> => {
+  try {
+    const updated = await prismaClient.user.update({
+      where: { id: clientId },
+      data,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        location: true,
+        profilePhoto: true,
+        role: true,
+      },
+    });
+    logger.info(`Client profile updated userId=${updated.id}`);
+    return updated;
+  } catch (error) {
+    logger.error(`Error updating client profile userId=${clientId} ${error}`);
+    throw error;
+  }
+};
+
+export const updateClientEmail = async (
+  clientId: string,
+  email: string,
+): Promise<ClientProfile> => {
+  try {
+    const updated = await prismaClient.user.update({
+      where: { id: clientId },
+      data: { email },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        location: true,
+        profilePhoto: true,
+        role: true,
+      },
+    });
+    logger.info(`Client email updated userId=${updated.id}`);
+    return updated;
+  } catch (error) {
+    logger.error(`Error updating client email userId=${clientId} ${error}`);
+    throw error;
   }
 };
 

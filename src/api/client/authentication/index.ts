@@ -20,8 +20,13 @@ import {
   facebookLoginError,
   facebookLogout,
 } from "./handlers/facebook-auth";
+import { getProfile } from "./handlers/get-profile";
+import { updateProfile } from "./handlers/update-profile";
+import { changeEmail } from "./handlers/change-email";
+import multer from "multer";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 /**
  * @swagger
@@ -149,6 +154,78 @@ router.post("/login", login);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post("/change-password", checkJwt, changePassword);
+
+/**
+ * @swagger
+ * /api/{version}/client/profile:
+ *   get:
+ *     tags: [Authentication]
+ *     summary: Get the authenticated client profile
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Client profile }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Profile not found }
+ */
+router.get("/profile", checkJwt, getProfile);
+
+/**
+ * @swagger
+ * /api/{version}/client/profile:
+ *   patch:
+ *     tags: [Authentication]
+ *     summary: Update the authenticated client profile
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName: { type: string }
+ *               phone: { type: string }
+ *               location: { type: string }
+ *               profilePhoto: { type: string, format: binary }
+ *     responses:
+ *       200: { description: Updated client profile }
+ *       400: { description: Invalid or empty profile update }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Profile not found }
+ */
+router.patch(
+  "/profile",
+  checkJwt,
+  upload.single("profilePhoto"),
+  updateProfile,
+);
+
+/**
+ * @swagger
+ * /api/{version}/client/profile/email:
+ *   patch:
+ *     tags: [Authentication]
+ *     summary: Change the authenticated client email
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [newEmail, password]
+ *             properties:
+ *               newEmail: { type: string, format: email }
+ *               password: { type: string }
+ *     responses:
+ *       200: { description: Updated client profile }
+ *       400: { description: Invalid email or password confirmation }
+ *       401: { description: Incorrect password }
+ *       409: { description: Email already in use }
+ */
+router.patch("/profile/email", checkJwt, changeEmail);
 
 /**
  * @swagger
