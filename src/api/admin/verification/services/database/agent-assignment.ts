@@ -297,6 +297,104 @@ export const getAgentAssignmentChecklist = async (
   }
 };
 
+export interface ChecklistMediaData {
+  url: string;
+  fileName: string;
+  fileType: string;
+  fileSizeBytes: number;
+}
+
+export type UpdatedAgentChecklistItem = {
+  id: string;
+  label: string;
+  status: "PENDING" | "COMPLETE";
+  media: { url: string }[];
+};
+
+export const updateAgentChecklistItem = async (
+  agentId: string,
+  assignmentId: string,
+  itemId: string,
+  status: "PENDING" | "COMPLETE",
+  media: ChecklistMediaData[] = [],
+): Promise<UpdatedAgentChecklistItem | null> => {
+  try {
+    return await prismaClient.$transaction(async (transaction) => {
+      const item = await transaction.verificationChecklistItem.findFirst({
+        where: {
+          id: itemId,
+          agentAssignmentId: assignmentId,
+          agentAssignment: { agentId },
+        },
+        select: {
+          id: true,
+          agentAssignment: { select: { verificationRequestId: true } },
+        },
+      });
+
+      if (!item) return null;
+
+      await transaction.verificationChecklistItem.update({
+        where: { id: item.id },
+        data: { status },
+      });
+
+      if (media.length > 0) {
+        await transaction.document.createMany({
+          data: media.map((file) => ({
+            ...file,
+            verificationRequestId: item.agentAssignment.verificationRequestId,
+            checklistItemId: item.id,
+          })),
+        });
+      }
+
+      const checklistItems = await transaction.verificationChecklistItem.findMany({
+        where: { agentAssignmentId: assignmentId },
+        select: {
+          id: true,
+          label: true,
+          status: true,
+          media: { select: { url: true } },
+        },
+      });
+      const completedItems = checklistItems.filter(
+        (checklistItem) => checklistItem.status === "COMPLETE",
+      ).length;
+      const progressPercent = checklistItems.length
+        ? Math.round((completedItems / checklistItems.length) * 100)
+        : 0;
+
+      await transaction.agentAssignment.update({
+        where: { id: assignmentId },
+        data: { progressPercent },
+      });
+
+      return checklistItems.find((checklistItem) => checklistItem.id === item.id) ?? null;
+    });
+  } catch (error) {
+    logger.error(`Error updating checklist item itemId=${itemId} assignmentId=${assignmentId} ${error}`);
+    throw error;
+  }
+};
+
+export const updateAgentAssignmentNotes = async (
+  agentId: string,
+  assignmentId: string,
+  additionalNotes: string,
+): Promise<boolean> => {
+  try {
+    const result = await prismaClient.agentAssignment.updateMany({
+      where: { id: assignmentId, agentId },
+      data: { additionalNotes },
+    });
+    return result.count > 0;
+  } catch (error) {
+    logger.error(`Error updating assignment notes assignmentId=${assignmentId} ${error}`);
+    throw error;
+  }
+};
+
 const activeAssignmentStatuses: AgentAssignmentStatus[] = [
   AgentAssignmentStatus.ASSIGNED,
   AgentAssignmentStatus.ACCEPTED,

@@ -9,8 +9,12 @@ import { getAgentsVerificationRequestReport } from "./handlers/get-agents-verifi
 import { getAgentAssignment } from "./handlers/get-agent-assignment";
 import { startVerification } from "./handlers/start-verification";
 import { getAgentAssignmentChecklist } from "./handlers/get-agent-assignment-checklist";
+import { updateAgentChecklistItemHandler } from "./handlers/update-agent-checklist-item";
+import { updateAgentAssignment } from "./handlers/update-agent-assignment";
+import multer from "multer";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
 
 /**
@@ -65,6 +69,82 @@ router.get(
   adminOrAgent,
   getAgentAssignmentChecklist,
 );
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification/agent-assignments/{id}/checklist/{itemId}:
+ *   patch:
+ *     tags: [Admin Verification]
+ *     summary: Update a checklist item and optionally attach media
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status: { type: string, enum: [PENDING, COMPLETE] }
+ *               media: { type: array, items: { type: string, format: binary } }
+ *     responses:
+ *       200: { description: Updated checklist item }
+ *       400: { description: Invalid checklist status }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Checklist item not found }
+ */
+router.patch(
+  "/verification/agent-assignments/:id/checklist/:itemId",
+  checkJwt,
+  adminOrAgent,
+  upload.array("media"),
+  updateAgentChecklistItemHandler,
+);
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification/agent-assignments/{id}:
+ *   patch:
+ *     tags: [Admin Verification]
+ *     summary: Save agent assignment notes
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               additionalNotes: { type: string }
+ *     responses:
+ *       200: { description: Updated agent assignment notes }
+ *       400: { description: Invalid notes payload }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Assignment not found }
+ */
+router.patch("/verification/agent-assignments/:id", checkJwt, adminOrAgent, updateAgentAssignment);
 
 /**
  * @swagger
