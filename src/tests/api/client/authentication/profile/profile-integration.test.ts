@@ -1,7 +1,10 @@
 import request from "supertest";
 import bcrypt from "bcryptjs";
 import app from "../../../../../app";
-import { createClient, deleteClient } from "../../../../../api/client/authentication/services/database/client";
+import {
+  createClient,
+  deleteClient,
+} from "../../../../../api/client/authentication/services/database/client";
 import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";
 
@@ -53,7 +56,11 @@ describe("Client profile endpoints (integration, real DB)", () => {
       .send({ fullName: "Updated Client", phone: "+2347000000000", location: "Lagos" });
     expect(response.status).toBe(200);
     expect(response.body).toEqual(
-      expect.objectContaining({ fullName: "Updated Client", phone: "+2347000000000", location: "Lagos" }),
+      expect.objectContaining({
+        fullName: "Updated Client",
+        phone: "+2347000000000",
+        location: "Lagos",
+      }),
     );
   });
 

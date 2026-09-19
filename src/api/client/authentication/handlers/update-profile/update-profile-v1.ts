@@ -44,7 +44,8 @@ export const updateProfile = async (
       data.fullName = body.fullName.trim();
     }
     if (body.phone !== undefined) {
-      if (typeof body.phone !== "string") return next(new BadRequestError("Phone must be a string."));
+      if (typeof body.phone !== "string")
+        return next(new BadRequestError("Phone must be a string."));
       data.phone = body.phone.trim() || null;
     }
     if (body.location !== undefined) {

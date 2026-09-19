@@ -13,11 +13,15 @@ import { HttpStatusCode } from "../../../../../exceptions";
 jest.mock("cloudinary", () => ({
   v2: {
     config: jest.fn(),
-    uploader: { upload: jest.fn().mockResolvedValue({ secure_url: "https://cdn.test/profile.jpg" }) },
+    uploader: {
+      upload: jest.fn().mockResolvedValue({ secure_url: "https://cdn.test/profile.jpg" }),
+    },
   },
 }));
 jest.mock("../../../../../api/client/authentication/services/database/client");
-jest.mock("../../../../../utils/password", () => ({ verifyPassword: jest.fn().mockResolvedValue(true) }));
+jest.mock("../../../../../utils/password", () => ({
+  verifyPassword: jest.fn().mockResolvedValue(true),
+}));
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));

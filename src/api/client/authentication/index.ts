@@ -194,12 +194,7 @@ router.get("/profile", checkJwt, getProfile);
  *       401: { description: Missing or invalid authentication token }
  *       404: { description: Profile not found }
  */
-router.patch(
-  "/profile",
-  checkJwt,
-  upload.single("profilePhoto"),
-  updateProfile,
-);
+router.patch("/profile", checkJwt, upload.single("profilePhoto"), updateProfile);
 
 /**
  * @swagger
