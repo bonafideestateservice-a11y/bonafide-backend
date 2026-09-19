@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
-import { updateAgentAssignment } from "../../../../../api/admin/verification/handlers/update-agent-assignment";
+import { updateAgentAssignmentNotes } from "../../../../../api/admin/verification/handlers/update-agent-assignment-notes";
 import { getVerificationAgentByUserId } from "../../../../../api/admin/authentication/services/database/agent";
-import { updateAgentAssignmentNotes } from "../../../../../api/admin/verification/services/database/agent-assignment";
+import { updateAgentAssignmentNotes as updateAssignmentNotesService } from "../../../../../api/admin/verification/services/database/agent-assignment";
 import { HttpStatusCode } from "../../../../../exceptions";
 
 jest.mock("../../../../../api/admin/authentication/services/database/agent");
@@ -11,7 +11,7 @@ jest.mock("../../../../../utils/logger", () => ({
 }));
 
 const mockedGetAgent = getVerificationAgentByUserId as jest.Mock;
-const mockedUpdateNotes = updateAgentAssignmentNotes as jest.Mock;
+const mockedUpdateNotes = updateAssignmentNotesService as jest.Mock;
 
 function buildMockReqRes(body: Record<string, unknown> = {}) {
   const req = {
@@ -24,7 +24,7 @@ function buildMockReqRes(body: Record<string, unknown> = {}) {
   return { req, res, next };
 }
 
-describe("updateAgentAssignment handler (unit)", () => {
+describe("updateAgentAssignmentNotes handler (unit)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedGetAgent.mockResolvedValue({ id: "agent-1" });
@@ -34,7 +34,7 @@ describe("updateAgentAssignment handler (unit)", () => {
     mockedUpdateNotes.mockResolvedValue(true);
     const { req, res, next } = buildMockReqRes({ additionalNotes: "Call before arrival." });
 
-    await updateAgentAssignment(req, res, next);
+    await updateAgentAssignmentNotes(req, res, next);
 
     expect(mockedUpdateNotes).toHaveBeenCalledWith(
       "agent-1",
@@ -52,7 +52,7 @@ describe("updateAgentAssignment handler (unit)", () => {
   it("rejects a missing notes value", async () => {
     const { req, res, next } = buildMockReqRes();
 
-    await updateAgentAssignment(req, res, next);
+    await updateAgentAssignmentNotes(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
@@ -64,7 +64,7 @@ describe("updateAgentAssignment handler (unit)", () => {
     mockedUpdateNotes.mockResolvedValue(false);
     const { req, res, next } = buildMockReqRes({ additionalNotes: "Updated" });
 
-    await updateAgentAssignment(req, res, next);
+    await updateAgentAssignmentNotes(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: HttpStatusCode.NOT_FOUND }),

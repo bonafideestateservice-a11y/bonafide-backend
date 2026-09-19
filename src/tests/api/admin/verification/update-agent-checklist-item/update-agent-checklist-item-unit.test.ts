@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { updateAgentChecklistItemHandler } from "../../../../../api/admin/verification/handlers/update-agent-checklist-item";
+import { updateAgentAssignmentChecklistItem } from "../../../../../api/admin/verification/handlers/update-agent-checklist-item";
 import { getVerificationAgentByUserId } from "../../../../../api/admin/authentication/services/database/agent";
 import { updateAgentChecklistItem } from "../../../../../api/admin/verification/services/database/agent-assignment";
 import { HttpStatusCode } from "../../../../../exceptions";
@@ -31,7 +31,7 @@ function buildMockReqRes(body: Record<string, unknown> = {}, files?: Express.Mul
   return { req, res, next };
 }
 
-describe("updateAgentChecklistItemHandler (unit)", () => {
+describe("updateAgentAssignmentChecklistItem (unit)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedGetAgent.mockResolvedValue({ id: "agent-1" });
@@ -42,7 +42,7 @@ describe("updateAgentChecklistItemHandler (unit)", () => {
     mockedUpdateItem.mockResolvedValue(item);
     const { req, res, next } = buildMockReqRes({ status: "COMPLETE" });
 
-    await updateAgentChecklistItemHandler(req, res, next);
+    await updateAgentAssignmentChecklistItem(req, res, next);
 
     expect(mockedUpdateItem).toHaveBeenCalledWith(
       "agent-1",
@@ -59,7 +59,7 @@ describe("updateAgentChecklistItemHandler (unit)", () => {
   it("rejects an invalid status", async () => {
     const { req, res, next } = buildMockReqRes({ status: "DONE" });
 
-    await updateAgentChecklistItemHandler(req, res, next);
+    await updateAgentAssignmentChecklistItem(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
@@ -71,7 +71,7 @@ describe("updateAgentChecklistItemHandler (unit)", () => {
     mockedUpdateItem.mockResolvedValue(null);
     const { req, res, next } = buildMockReqRes({ status: "COMPLETE" });
 
-    await updateAgentChecklistItemHandler(req, res, next);
+    await updateAgentAssignmentChecklistItem(req, res, next);
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: HttpStatusCode.NOT_FOUND }),

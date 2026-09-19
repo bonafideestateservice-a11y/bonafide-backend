@@ -9,8 +9,8 @@ import { getAgentsVerificationRequestReport } from "./handlers/get-agents-verifi
 import { getAgentAssignment } from "./handlers/get-agent-assignment";
 import { startVerification } from "./handlers/start-verification";
 import { getAgentAssignmentChecklist } from "./handlers/get-agent-assignment-checklist";
-import { updateAgentChecklistItemHandler } from "./handlers/update-agent-checklist-item";
-import { updateAgentAssignment } from "./handlers/update-agent-assignment";
+import { updateAgentAssignmentChecklistItem } from "./handlers/update-agent-checklist-item";
+import { updateAgentAssignmentNotes } from "./handlers/update-agent-assignment-notes";
 import multer from "multer";
 
 const router = Router();
@@ -110,12 +110,12 @@ router.patch(
   checkJwt,
   adminOrAgent,
   upload.array("media"),
-  updateAgentChecklistItemHandler,
+  updateAgentAssignmentChecklistItem,
 );
 
 /**
  * @swagger
- * /api/{version}/admin/verification/agent-assignments/{id}:
+ * /api/{version}/admin/verification/agent-assignments-notes/{id}:
  *   patch:
  *     tags: [Admin Verification]
  *     summary: Save agent assignment notes
@@ -144,7 +144,12 @@ router.patch(
  *       401: { description: Missing or invalid authentication token }
  *       404: { description: Assignment not found }
  */
-router.patch("/verification/agent-assignments/:id", checkJwt, adminOrAgent, updateAgentAssignment);
+router.patch(
+  "/verification/agent-assignments-notes/:id",
+  checkJwt,
+  adminOrAgent,
+  updateAgentAssignmentNotes,
+);
 
 /**
  * @swagger

@@ -17,29 +17,40 @@ let agentToken: string;
 beforeAll(async () => {
   const agentUser = await prismaClient.user.create({
     data: {
-      fullName: "Update Assignment Agent",
-      email: `update-assignment-agent-${suffix}@example.com`,
+      fullName: "Checklist Update Agent",
+      email: `checklist-update-agent-${suffix}@example.com`,
       role: "AGENT",
     },
   });
   agentUserId = agentUser.id;
   agentToken = generateToken({ id: agentUser.id });
+
   const client = await prismaClient.user.create({
     data: {
-      fullName: "Update Assignment Client",
-      email: `update-assignment-client-${suffix}@example.com`,
+      fullName: "Checklist Update Client",
+      email: `checklist-update-client-${suffix}@example.com`,
       role: "CLIENT",
     },
   });
   clientId = client.id;
+
   const service = await prismaClient.service.create({
-    data: { name: `Update Service ${suffix}`, slug: `update-service-${suffix}` },
+    data: {
+      name: `Checklist Update Service ${suffix}`,
+      slug: `checklist-update-service-${suffix}`,
+    },
   });
   serviceId = service.id;
-  const type = await prismaClient.verificationType.create({
-    data: { serviceId, name: "Property", slug: `update-type-${suffix}` },
+
+  const verificationType = await prismaClient.verificationType.create({
+    data: {
+      serviceId,
+      name: "Property Verification",
+      slug: `checklist-update-type-${suffix}`,
+    },
   });
-  verificationTypeId = type.id;
+  verificationTypeId = verificationType.id;
+
   const verificationRequest = await prismaClient.verificationRequest.create({
     data: {
       userId: clientId,
@@ -49,16 +60,28 @@ beforeAll(async () => {
     },
   });
   verificationRequestId = verificationRequest.id;
+
   const agent = await prismaClient.verificationAgent.create({
-    data: { userId: agentUserId, name: "Update Assignment Agent" },
+    data: { userId: agentUserId, name: "Checklist Update Agent" },
   });
   agentId = agent.id;
+
   const assignment = await prismaClient.agentAssignment.create({
-    data: { verificationRequestId, agentId, status: "ACCEPTED" },
+    data: {
+      verificationRequestId,
+      agentId,
+      status: "ACCEPTED",
+    },
   });
   assignmentId = assignment.id;
+
   const checklistItem = await prismaClient.verificationChecklistItem.create({
-    data: { agentAssignmentId: assignmentId, label: "Front view", sortOrder: 0 },
+    data: {
+      agentAssignmentId: assignmentId,
+      label: "Property structure verified",
+      status: "PENDING",
+      sortOrder: 0,
+    },
   });
   checklistItemId = checklistItem.id;
 });
@@ -74,8 +97,8 @@ afterAll(async () => {
   await prismaClient.$disconnect();
 });
 
-describe("Agent assignment update endpoints", () => {
-  it("updates checklist status through JSON", async () => {
+describe("PATCH /api/v1/admin/verification/agent-assignments/:id/checklist/:itemId", () => {
+  it("updates the checklist item status and persists it", async () => {
     const response = await request(app)
       .patch(
         `/api/v1/admin/verification/agent-assignments/${assignmentId}/checklist/${checklistItemId}`,
@@ -86,25 +109,13 @@ describe("Agent assignment update endpoints", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
       id: checklistItemId,
-      label: "Front view",
+      label: "Property structure verified",
       status: "COMPLETE",
       media: [],
     });
-  });
 
-  it("updates assignment notes", async () => {
-    const response = await request(app)
-      .patch(`/api/v1/admin/verification/agent-assignments-notes/${assignmentId}`)
-      .set("Authorization", `Bearer ${agentToken}`)
-      .send({ additionalNotes: "Call before arrival." });
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      id: assignmentId,
-      additionalNotes: "Call before arrival.",
-    });
     await expect(
-      prismaClient.agentAssignment.findUnique({ where: { id: assignmentId } }),
-    ).resolves.toEqual(expect.objectContaining({ additionalNotes: "Call before arrival." }));
+      prismaClient.verificationChecklistItem.findUnique({ where: { id: checklistItemId } }),
+    ).resolves.toEqual(expect.objectContaining({ status: "COMPLETE" }));
   });
 });

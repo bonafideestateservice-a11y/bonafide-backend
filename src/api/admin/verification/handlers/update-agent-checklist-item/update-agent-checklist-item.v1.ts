@@ -21,7 +21,7 @@ cloudinary.config({
   secure: true,
 });
 
-export const updateAgentChecklistItemHandler = async (
+export const updateAgentAssignmentChecklistItem = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -76,4 +76,4 @@ export const updateAgentChecklistItemHandler = async (
   }
 };
 
-export default updateAgentChecklistItemHandler;
+export default updateAgentAssignmentChecklistItem;

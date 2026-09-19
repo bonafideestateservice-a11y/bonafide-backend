@@ -7,10 +7,10 @@ import {
 } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationAgentByUserId } from "../../../authentication/services/database/agent";
-import { updateAgentAssignmentNotes } from "../../services/database/agent-assignment";
+import { updateAgentAssignmentNotes as updateAssignmentNotesService } from "../../services/database/agent-assignment";
 import { logger } from "../../../../../utils/logger";
 
-export const updateAgentAssignment = async (
+export const updateAgentAssignmentNotes = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -27,7 +27,7 @@ export const updateAgentAssignment = async (
     const agent = await getVerificationAgentByUserId(userId);
     if (!agent) return next(new NotFoundError("Verification agent not found."));
 
-    const updated = await updateAgentAssignmentNotes(
+    const updated = await updateAssignmentNotesService(
       agent.id,
       req.params.id,
       req.body.additionalNotes,
@@ -44,4 +44,4 @@ export const updateAgentAssignment = async (
   }
 };
 
-export default updateAgentAssignment;
+export default updateAgentAssignmentNotes;
