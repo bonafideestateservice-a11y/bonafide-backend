@@ -8,6 +8,7 @@ import { getAgentsReports } from "./handlers/get-agents-reports";
 import { getAgentsVerificationRequestReport } from "./handlers/get-agents-verification-request-report";
 import { getAgentAssignment } from "./handlers/get-agent-assignment";
 import { startVerification } from "./handlers/start-verification";
+import { getAgentAssignmentChecklist } from "./handlers/get-agent-assignment-checklist";
 
 const router = Router();
 const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
@@ -35,6 +36,35 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *       404: { description: Assignment not found }
  */
 router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent, startVerification);
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification/agent-assignments/{id}/checklist:
+ *   get:
+ *     tags: [Admin Verification]
+ *     summary: Get an agent assignment checklist
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Checklist, client documents, client details, and progress }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Assignment not found }
+ */
+router.get(
+  "/verification/agent-assignments/:id/checklist",
+  checkJwt,
+  adminOrAgent,
+  getAgentAssignmentChecklist,
+);
 
 /**
  * @swagger

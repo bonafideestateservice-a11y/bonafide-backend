@@ -208,6 +208,95 @@ export const startAgentAssignment = async (
   }
 };
 
+export type AgentAssignmentChecklist = {
+  checklistItems: {
+    id: string;
+    label: string;
+    status: "PENDING" | "COMPLETE";
+    media: { url: string }[];
+  }[];
+  clientDocuments: {
+    id: string;
+    fileName: string;
+    fileSizeBytes: number;
+    url: string;
+  }[];
+  client: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email: string;
+  };
+  additionalNotes: string | null;
+  progressPercent: number;
+  payment: { status: string; amountInCents: number };
+};
+
+export const getAgentAssignmentChecklist = async (
+  agentId: string,
+  assignmentId: string,
+): Promise<AgentAssignmentChecklist | null> => {
+  try {
+    const assignment = await prismaClient.agentAssignment.findFirst({
+      where: { id: assignmentId, agentId },
+      select: {
+        id: true,
+        additionalNotes: true,
+        checklistItems: {
+          select: {
+            id: true,
+            label: true,
+            status: true,
+            media: { select: { url: true } },
+          },
+          orderBy: { sortOrder: "asc" },
+        },
+        verificationRequest: {
+          select: {
+            user: { select: { fullName: true, phone: true, email: true } },
+            documents: {
+              where: { checklistItemId: null, verificationReportId: null },
+              select: { id: true, fileName: true, fileSizeBytes: true, url: true },
+              orderBy: { createdAt: "asc" },
+            },
+            transaction: { select: { status: true, amountInCents: true } },
+          },
+        },
+      },
+    });
+
+    if (!assignment) return null;
+
+    const completedItems = assignment.checklistItems.filter(
+      (item) => item.status === "COMPLETE",
+    ).length;
+    const progressPercent = assignment.checklistItems.length
+      ? Math.round((completedItems / assignment.checklistItems.length) * 100)
+      : 0;
+    const names = assignment.verificationRequest.user.fullName.trim().split(/\s+/);
+    const transaction = assignment.verificationRequest.transaction;
+
+    return {
+      checklistItems: assignment.checklistItems,
+      clientDocuments: assignment.verificationRequest.documents,
+      client: {
+        firstName: names[0] || "",
+        lastName: names.slice(1).join(" "),
+        phone: assignment.verificationRequest.user.phone ?? "",
+        email: assignment.verificationRequest.user.email,
+      },
+      additionalNotes: assignment.additionalNotes,
+      progressPercent,
+      payment: transaction
+        ? { status: transaction.status, amountInCents: transaction.amountInCents }
+        : { status: "PENDING", amountInCents: 0 },
+    };
+  } catch (error) {
+    logger.error(`Error fetching assignment checklist assignmentId=${assignmentId} ${error}`);
+    throw error;
+  }
+};
+
 const activeAssignmentStatuses: AgentAssignmentStatus[] = [
   AgentAssignmentStatus.ASSIGNED,
   AgentAssignmentStatus.ACCEPTED,
