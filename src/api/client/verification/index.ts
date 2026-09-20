@@ -12,6 +12,8 @@ import { getVerificationTypesPlan } from "./handlers/get-verification-types-plan
 import { getVerificationRequest } from "./handlers/get-verification-request";
 import { getVerificationRequestTracking } from "./handlers/get-verification-request-tracking";
 import { patchVerificationRequestNotificationPreferences } from "./handlers/patch-verification-request-notification-preferences";
+import { getVerificationRequestReportSummary } from "./handlers/get-verification-request-report-summary";
+import { getVerificationRequestFullReport } from "./handlers/get-verification-request-full-report";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -530,4 +532,143 @@ router.get("/verification-requests/:id/tracking", checkJwt, getVerificationReque
  */
 router.patch("/verification-requests/:id/notification-preferences", checkJwt, patchVerificationRequestNotificationPreferences);
 
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/report-summary:
+ *   get:
+ *     tags: [Verification]
+ *     summary: Get report summary for a specific verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Report summary retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: "success" }
+ *                 message: { type: string, example: "Report summary retrieved successfully" }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     property: { type: string }
+ *                     inspectionDate: { type: string, format: "date-time", nullable: true }
+ *                     agent:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         firstName: { type: string }
+ *                         lastName: { type: string }
+ *                     location: { type: string }
+ *                     reportType: { type: string }
+ *                     insights:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           label: { type: string }
+ *                           value: { type: string }
+ *                           status: { type: string, enum: ["good", "warning", "bad"] }
+ *                     mediaPreview:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           url: { type: string }
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       404:
+ *         description: Verification request not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/verification-requests/:id/report-summary", checkJwt, getVerificationRequestReportSummary);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/report/full:
+ *   get:
+ *     tags: [Verification]
+ *     summary: Get full report for a specific verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Full report retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: "success" }
+ *                 message: { type: string, example: "Full report retrieved successfully" }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id: { type: string }
+ *                     reportId: { type: string }
+ *                     generatedAt: { type: string, format: "date-time", nullable: true }
+ *                     reviewStatus: { type: string }
+ *                     property:
+ *                       type: object
+ *                       properties:
+ *                         name: { type: string }
+ *                         address: { type: string }
+ *                         type: { type: string }
+ *                         plotSize: { type: string }
+ *                         builtYear: { type: string }
+ *                     summary: { type: string }
+ *                     ownershipFindings: { type: string }
+ *                     findings:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           label: { type: string }
+ *                           value: { type: string }
+ *                           status: { type: string }
+ *                     photos:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           url: { type: string }
+ *                           label: { type: string }
+ *                     agentNotes: { type: string }
+ *                     agent:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         firstName: { type: string }
+ *                         lastName: { type: string }
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       404:
+ *         description: Verification report not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/verification-requests/:id/report/full", checkJwt, getVerificationRequestFullReport);
+
 export default router;
+

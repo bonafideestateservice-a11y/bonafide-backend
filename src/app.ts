@@ -32,7 +32,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(
   session({
-    secret: config.jwt.secret,
+    secret: config.jwt.secret || "fallback-test-secret",
     resave: false,
     saveUninitialized: false,
   }),

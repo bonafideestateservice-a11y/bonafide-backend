@@ -311,3 +311,177 @@ export const getVerificationRequestTrackingForUser = async (
     throw error;
   }
 };
+
+export type VerificationRequestReportSummary = Prisma.VerificationRequestGetPayload<{
+  select: {
+    details: true;
+    report: {
+      select: {
+        generatedAt: true;
+        findings: true;
+      };
+    };
+    agentAssignment: {
+      select: {
+        agent: {
+          select: {
+            name: true;
+          };
+        };
+        checklistItems: {
+          select: {
+            media: {
+              select: {
+                url: true;
+              };
+              take: 3;
+            };
+          };
+        };
+      };
+    };
+    verificationPlan: {
+      select: {
+        name: true;
+      };
+    };
+  };
+}>;
+
+export const getVerificationRequestReportSummaryForUser = async (
+  id: string,
+  userId: string,
+): Promise<VerificationRequestReportSummary | null> => {
+  try {
+    const summary = await prismaClient.verificationRequest.findFirst({
+      where: {
+        id,
+        userId,
+      },
+      select: {
+        details: true,
+        report: {
+          select: {
+            generatedAt: true,
+            findings: true,
+          },
+        },
+        agentAssignment: {
+          select: {
+            agent: {
+              select: {
+                name: true,
+              },
+            },
+            checklistItems: {
+              select: {
+                media: {
+                  select: {
+                    url: true,
+                  },
+                  take: 3,
+                },
+              },
+            },
+          },
+        },
+        verificationPlan: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+    return summary;
+  } catch (error) {
+    logger.error(`Error getting verification request report summary ${error}`);
+    throw error;
+  }
+};
+
+export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload<{
+  select: {
+    id: true;
+    details: true;
+    report: {
+      select: {
+        id: true;
+        generatedAt: true;
+        reviewStatus: true;
+        summary: true;
+        findings: true;
+      };
+    };
+    agentAssignment: {
+      select: {
+        additionalNotes: true;
+        agent: {
+          select: {
+            name: true;
+          };
+        };
+        checklistItems: {
+          select: {
+            label: true;
+            media: {
+              select: {
+                url: true;
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+}>;
+
+export const getVerificationRequestFullReportForUser = async (
+  id: string,
+  userId: string,
+): Promise<VerificationRequestFullReport | null> => {
+  try {
+    const fullReport = await prismaClient.verificationRequest.findFirst({
+      where: {
+        id,
+        userId,
+      },
+      select: {
+        id: true,
+        details: true,
+        report: {
+          select: {
+            id: true,
+            generatedAt: true,
+            reviewStatus: true,
+            summary: true,
+            findings: true,
+          },
+        },
+        agentAssignment: {
+          select: {
+            additionalNotes: true,
+            agent: {
+              select: {
+                name: true,
+              },
+            },
+            checklistItems: {
+              select: {
+                label: true,
+                media: {
+                  select: {
+                    url: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    return fullReport;
+  } catch (error) {
+    logger.error(`Error getting verification request full report ${error}`);
+    throw error;
+  }
+};
