@@ -13,8 +13,8 @@ PATCH /verification-requests/:id/plan
 Make Payment (summary)
 GET /verification-requests/:id
 Pay with Card
-POST /verification-requests/:id/payments
-POST /payments/webhook
-Payment Successful
+POST /verification-requests/:id/transactions
+POST /transactions/webhook
+Transaction Successful
 GET /verification-requests/:id
 GET /verification-requests/:id/receipt

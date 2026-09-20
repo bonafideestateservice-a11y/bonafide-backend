@@ -18,6 +18,8 @@ export interface UpdateVerificationRequestData {
   status?: VerificationStatus;
   details?: Prisma.InputJsonValue;
   additionalNote?: string | null;
+  notifyOnInspectionStart?: boolean;
+  notifyOnReportReady?: boolean;
 }
 
 export interface FindVerificationRequestUnique {
@@ -194,5 +196,118 @@ export const deleteVerificationRequest = async (
   } catch (error) {
     logger.error(`Error deleting verification request ${error}`);
     throw new Error("Failed to delete verification request");
+  }
+};
+
+export type VerificationRequestTracking = Prisma.VerificationRequestGetPayload<{
+  select: {
+    id: true;
+    details: true;
+    createdAt: true;
+    notifyOnInspectionStart: true;
+    notifyOnReportReady: true;
+    verificationType: {
+      select: {
+        name: true;
+      };
+    };
+    agentAssignment: {
+      select: {
+        status: true;
+        createdAt: true;
+        scheduledAt: true;
+        completedAt: true;
+        progressPercent: true;
+        checklistItems: {
+          select: {
+            status: true;
+            media: {
+              select: {
+                url: true;
+                fileName: true;
+              };
+            };
+          };
+        };
+        agent: {
+          select: {
+            name: true;
+            user: {
+              select: {
+                profilePhoto: true;
+              };
+            };
+          };
+        };
+      };
+    };
+    report: {
+      select: {
+        generatedAt: true;
+      };
+    };
+  };
+}>;
+
+export const getVerificationRequestTrackingForUser = async (
+  id: string,
+  userId: string,
+): Promise<VerificationRequestTracking | null> => {
+  try {
+    const tracking = await prismaClient.verificationRequest.findFirst({
+      where: { id, userId },
+      select: {
+        id: true,
+        details: true,
+        createdAt: true,
+        notifyOnInspectionStart: true,
+        notifyOnReportReady: true,
+        verificationType: {
+          select: {
+            name: true,
+          },
+        },
+        agentAssignment: {
+          select: {
+            status: true,
+            createdAt: true,
+            scheduledAt: true,
+            completedAt: true,
+            progressPercent: true,
+            checklistItems: {
+              select: {
+                status: true,
+                media: {
+                  select: {
+                    url: true,
+                    fileName: true,
+                  },
+                },
+              },
+            },
+            agent: {
+              select: {
+                name: true,
+                user: {
+                  select: {
+                    profilePhoto: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        report: {
+          select: {
+            generatedAt: true,
+          },
+        },
+      },
+    });
+    logger.info(`Verification request tracking lookup requestId=${id} userId=${userId} found=${!!tracking}`);
+    return tracking;
+  } catch (error) {
+    logger.error(`Error finding verification request tracking ${error}`);
+    throw error;
   }
 };

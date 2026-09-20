@@ -10,6 +10,8 @@ import { patchVerificationRequest } from "./handlers/patch-verification-request"
 import { patchVerificationRequestPlan } from "./handlers/patch-verification-request-plan";
 import { getVerificationTypesPlan } from "./handlers/get-verification-types-plan";
 import { getVerificationRequest } from "./handlers/get-verification-request";
+import { getVerificationRequestTracking } from "./handlers/get-verification-request-tracking";
+import { patchVerificationRequestNotificationPreferences } from "./handlers/patch-verification-request-notification-preferences";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -400,4 +402,132 @@ router.get("/verification-requests", checkJwt, getVerificationRequests);
  *       500:
  *         description: Internal server error
  */
+router.get("/verification-requests/reports-summary", checkJwt, getVerificationReportSummary);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/tracking:
+ *   get:
+ *     tags: [Verification]
+ *     summary: Get tracking information for a verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Tracking information retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: "success" }
+ *                 message: { type: string, example: "Tracking information retrieved successfully" }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id: { type: string }
+ *                     verificationType:
+ *                       type: object
+ *                       properties:
+ *                         name: { type: string }
+ *                     address: { type: string }
+ *                     progressPercent: { type: number }
+ *                     timeline:
+ *                       type: object
+ *                       properties:
+ *                         requestSubmittedAt: { type: string, format: "date-time" }
+ *                         agentAssignedAt: { type: string, format: "date-time", nullable: true }
+ *                         inspectionStartedAt: { type: string, format: "date-time", nullable: true }
+ *                         inspectionCompletedAt: { type: string, format: "date-time", nullable: true }
+ *                         reportReadyAt: { type: string, format: "date-time", nullable: true }
+ *                     agent:
+ *                       type: object
+ *                       nullable: true
+ *                       properties:
+ *                         firstName: { type: string }
+ *                         lastName: { type: string }
+ *                         isVerified: { type: boolean }
+ *                         photoUrl: { type: string, nullable: true }
+ *                     inspectionUploads:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           url: { type: string }
+ *                           label: { type: string }
+ *                     notificationPreferences:
+ *                       type: object
+ *                       properties:
+ *                         notifyOnInspectionStart: { type: boolean }
+ *                         notifyOnReportReady: { type: boolean }
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       404:
+ *         description: Verification request not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get("/verification-requests/:id/tracking", checkJwt, getVerificationRequestTracking);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/notification-preferences:
+ *   patch:
+ *     tags: [Verification]
+ *     summary: Update notification preferences for a verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notifyOnInspectionStart: { type: boolean }
+ *               notifyOnReportReady: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: Notification preferences updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: "success" }
+ *                 message: { type: string, example: "Notification preferences updated successfully" }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     notifyOnInspectionStart: { type: boolean }
+ *                     notifyOnReportReady: { type: boolean }
+ *       400:
+ *         description: Invalid request body
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       404:
+ *         description: Verification request not found
+ *       500:
+ *         description: Internal server error
+ */
+router.patch("/verification-requests/:id/notification-preferences", checkJwt, patchVerificationRequestNotificationPreferences);
+
 export default router;

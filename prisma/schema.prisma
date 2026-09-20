@@ -156,6 +156,8 @@ model VerificationRequest {
   status             VerificationStatus @default(DRAFT)
   details            Json
   additionalNote     String?
+  notifyOnInspectionStart Boolean @default(true)
+  notifyOnReportReady     Boolean @default(true)
 
   documents       Document[]
   transaction     Transaction?

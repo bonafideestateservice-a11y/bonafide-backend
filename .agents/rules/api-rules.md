@@ -1,3 +1,23 @@
+# API RULES
+
+## Source: src/api/api.instructions.md
+
+---
+description: API endpoint architecture and implementation rules
+applyTo: "src/api/**/*.ts"
+---
+
+Follow `src/api/api.md`.
+
+- Keep routes in the owning domain router.
+- Add Swagger documentation beside every public endpoint.
+- Put Prisma access in the nearest database service.
+- Use existing middleware, exception classes, logger, and response conventions.
+- Add focused unit and integration tests for new endpoints.
+
+
+## Source: src/api/api.md
+
 # API Development Guide
 
 This document is the guide for creating and changing HTTP endpoints under `src/api`. Follow the existing module boundaries and keep endpoint behavior easy to test.
@@ -114,7 +134,9 @@ When creating or changing an endpoint:
 
 Do not create nested guide files for individual API modules unless a future module has rules that cannot be represented here.
 
-POST /transactions/webhook   (gateway → your server, not client-facing)
+POST /payments/webhook   (gateway → your server, not client-facing)
 → 200
-  // on success: Transaction.status=SUCCESS, Transaction.paidAt=now, VerificationRequest.status=SUBMITTED
-  // on failure: Transaction.status=FAILED, VerificationRequest.status=PAYMENT_FAILED
+  // on success: Payment.status=SUCCESS, Payment.paidAt=now, VerificationRequest.status=SUBMITTED
+  // on failure: Payment.status=FAILED, VerificationRequest.status=PAYMENT_FAILED
+
+
