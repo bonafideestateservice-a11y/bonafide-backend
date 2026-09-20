@@ -435,15 +435,13 @@ export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload
   };
 }>;
 
-export const getVerificationRequestFullReportForUser = async (
+export const getVerificationRequestFullReportData = async (
   id: string,
-  userId: string,
 ): Promise<VerificationRequestFullReport | null> => {
   try {
     const fullReport = await prismaClient.verificationRequest.findFirst({
       where: {
         id,
-        userId,
       },
       select: {
         id: true,

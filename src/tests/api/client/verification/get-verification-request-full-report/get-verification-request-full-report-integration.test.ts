@@ -7,14 +7,12 @@ import {
 import { createVerificationRequest } from "../../../../../api/client/verification/services/database/verification-request";
 import { createVerificationType } from "../../../../../api/client/verification/services/database/verification-type";
 import { createVerificationPlan } from "../../../../../api/client/verification/services/database/verification-plan";
-import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";
 
 const testSuffix = Date.now();
 const testEmail = `get-full-report-${testSuffix}@example.com`;
 const agentEmail = `agent-full-${testSuffix}@example.com`;
 let testUserId: string;
-let authToken: string;
 let verificationTypeId: string;
 let verificationPlanId: string;
 let verificationRequestId: string;
@@ -31,7 +29,6 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
       fullName: "Full Report Test User",
     });
     testUserId = user.id;
-    authToken = generateToken({ id: user.id });
 
     const service = await prismaClient.service.create({
       data: {
@@ -190,18 +187,19 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
     await prismaClient.$disconnect();
   });
 
-  it("returns 401 without authentication", async () => {
+  it("returns 200 without authentication (public endpoint)", async () => {
     const res = await request(app).get(endpoint());
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("success");
   });
 
   it("returns 404 for a non-existent request id", async () => {
-    const res = await request(app).get(`/api/v1/client/verification-requests/req-99999/report/full`).set("Authorization", `Bearer ${authToken}`);
+    const res = await request(app).get(`/api/v1/client/verification-requests/req-99999/report/full`);
     expect(res.status).toBe(404);
   });
 
   it("returns full report details from DB correctly", async () => {
-    const res = await request(app).get(endpoint()).set("Authorization", `Bearer ${authToken}`);
+    const res = await request(app).get(endpoint());
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("success");

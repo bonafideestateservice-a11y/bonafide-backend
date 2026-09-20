@@ -601,8 +601,7 @@ router.get("/verification-requests/:id/report-summary", checkJwt, getVerificatio
  *   get:
  *     tags: [Verification]
  *     summary: Get full report for a specific verification request
- *     security:
- *       - bearerAuth: []
+ *     security: []
  *     parameters:
  *       - in: path
  *         name: version
@@ -659,16 +658,14 @@ router.get("/verification-requests/:id/report-summary", checkJwt, getVerificatio
  *                       type: object
  *                       nullable: true
  *                       properties:
- *                         firstName: { type: string }
- *                         lastName: { type: string }
- *       401:
- *         description: Missing or invalid authentication token
+*                        firstName: { type: string }
+ *                        lastName: { type: string }
  *       404:
  *         description: Verification report not found
  *       500:
  *         description: Internal server error
  */
-router.get("/verification-requests/:id/report/full", checkJwt, getVerificationRequestFullReport);
+router.get("/verification-requests/:id/report/full", getVerificationRequestFullReport);
 
 export default router;
 

@@ -1,7 +1,6 @@
 import { NextFunction, Request, Response } from "express";
-import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptions";
-import { CustomRequest } from "../../../../../middlewares/check-jwt";
-import { getVerificationRequestFullReportForUser } from "../../services/database/verification-request";
+import { HttpStatusCode, NotFoundError } from "../../../../../exceptions";
+import { getVerificationRequestFullReportData } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
 
 export const getVerificationRequestFullReport = async (
@@ -10,21 +9,13 @@ export const getVerificationRequestFullReport = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const customReq = req as CustomRequest;
-    const userId = customReq.user?.id ?? customReq.token?.id;
-
-    if (!userId) {
-      return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
-    }
-
     const verificationRequestId = req.params.id;
     if (!verificationRequestId?.trim()) {
       return next(new NotFoundError("Verification request not found."));
     }
 
-    const fullReport = await getVerificationRequestFullReportForUser(
+    const fullReport = await getVerificationRequestFullReportData(
       verificationRequestId,
-      userId,
     );
 
     if (!fullReport || !fullReport.report) {

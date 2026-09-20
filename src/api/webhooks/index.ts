@@ -1,30 +1,11 @@
-import { Router, Request, Response } from "express";
+import express from "express";
+import { paystackWebhook, callback_url } from "./paystack";
+import { stripeWebhook } from "./stripe";
 
-import { HttpStatusCode } from "../../exceptions";
+const webHookRouter = express.Router();
 
-const router = Router();
+webHookRouter.post("/paystack", paystackWebhook);
+webHookRouter.get("/paystack/callback", callback_url);
+webHookRouter.post("/stripe", stripeWebhook);
 
-/**
- * @swagger
- * /api/{version}/webhook/payments:
- *   post:
- *     tags: [Webhooks]
- *     summary: Handle payment provider webhooks
- *     security: []
- *     parameters:
- *       - in: path
- *         name: version
- *         required: true
- *         schema: { type: string }
- *     responses:
- *       200:
- *         description: Webhook acknowledged
- */
-router.post("/payments", (req: Request, res: Response) => {
-  // TODO: implement webhook signature verification
-  // TODO: dispatch req.body.event and req.body.data to handlers
-
-  res.status(HttpStatusCode.OK).json({ status: "ok", received: true });
-});
-
-export default router;
+export default webHookRouter;

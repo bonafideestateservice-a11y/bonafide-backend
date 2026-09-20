@@ -289,3 +289,17 @@ model VerificationReport {
 
   @@index([viewedAt])
 }
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  integration String
+  data        Json?
+  verified    Boolean  @default(false)
+  processed   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([integration, processed])
+}

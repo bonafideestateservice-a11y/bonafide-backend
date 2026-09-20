@@ -1,20 +1,18 @@
 import { Request, Response, NextFunction } from "express";
 import { getVerificationRequestFullReport } from "../../../../../api/client/verification/handlers/get-verification-request-full-report";
 import * as databaseService from "../../../../../api/client/verification/services/database/verification-request";
-import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptions";
-import { CustomRequest } from "../../../../../middlewares/check-jwt";
+import { HttpStatusCode, NotFoundError } from "../../../../../exceptions";
 
 jest.mock("../../../../../api/client/verification/services/database/verification-request");
 
 describe("GET /verification-requests/:id/report/full - Unit", () => {
-  let req: Partial<CustomRequest>;
+  let req: Partial<Request>;
   let res: Partial<Response>;
   let next: jest.Mock;
 
   beforeEach(() => {
     req = {
       params: { id: "req-123" },
-      user: { id: "user-123" } as any,
     };
     res = {
       status: jest.fn().mockReturnThis(),
@@ -24,14 +22,6 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
     jest.clearAllMocks();
   });
 
-  it("should return 401 if user is not authenticated", async () => {
-    req.user = undefined;
-    req.token = undefined;
-    await getVerificationRequestFullReport(req as Request, res as Response, next);
-    expect(next).toHaveBeenCalledWith(expect.any(ApiError));
-    expect(next.mock.calls[0][0].statusCode).toBe(HttpStatusCode.UNAUTHORIZED);
-  });
-
   it("should return 404 if request ID is missing", async () => {
     req.params = { id: "   " };
     await getVerificationRequestFullReport(req as Request, res as Response, next);
@@ -39,7 +29,7 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
   });
 
   it("should return 404 if request/report is not found", async () => {
-    (databaseService.getVerificationRequestFullReportForUser as jest.Mock).mockResolvedValue(null);
+    (databaseService.getVerificationRequestFullReportData as jest.Mock).mockResolvedValue(null);
     await getVerificationRequestFullReport(req as Request, res as Response, next);
     expect(next).toHaveBeenCalledWith(expect.any(NotFoundError));
   });
@@ -74,7 +64,7 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
       },
     };
 
-    (databaseService.getVerificationRequestFullReportForUser as jest.Mock).mockResolvedValue(mockFullReport);
+    (databaseService.getVerificationRequestFullReportData as jest.Mock).mockResolvedValue(mockFullReport);
 
     await getVerificationRequestFullReport(req as Request, res as Response, next);
 
