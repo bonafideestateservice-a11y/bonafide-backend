@@ -144,6 +144,12 @@ enum PropertyStatus {
   REJECTED
 }
 
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+  LAND
+}
+
 enum PaymentMethod {
   CARD
   PAYPAL
@@ -256,13 +262,24 @@ model AgentAssignment {
 }
 
 model Property {
-  id        String         @id @default(cuid())
-  name      String
-  address   String
-  status    PropertyStatus @default(PENDING)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id            String         @id @default(cuid())
+  name          String
+  address       String
+  title         String         @default("")
+  propertyType  PropertyType   @default(RESIDENTIAL)
+  area          String?
+  city          String?
+  country       String?
+  priceAmount   Int            @default(0)
+  priceCurrency String         @default("NGN")
+  viewCount     Int            @default(0)
+  coverImageUrl String?
+  isPublished   Boolean        @default(false)
+  status        PropertyStatus @default(PENDING)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
+  @@index([isPublished, createdAt])
   @@index([status])
   @@index([createdAt])
 }

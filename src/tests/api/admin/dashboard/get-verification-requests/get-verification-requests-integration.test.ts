@@ -1,9 +1,4 @@
 import request from "supertest";
-
-jest.mock("@paystack/paystack-sdk", () => ({
-  Paystack: class {},
-}));
-
 import app from "../../../../../app";
 import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";

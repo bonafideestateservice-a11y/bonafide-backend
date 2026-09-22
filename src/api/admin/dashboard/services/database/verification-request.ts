@@ -149,9 +149,9 @@ export const getVerificationRequestsForAdmin = async ({
         }
       : {}),
   };
+  const statusFilter = getStatusFilter(status, agentId);
   const where: Prisma.VerificationRequestWhereInput = {
-    ...baseWhere,
-    ...getStatusFilter(status, agentId),
+    AND: [baseWhere, statusFilter],
   };
   const countStatuses: Array<
     [keyof VerificationRequestListResult["counts"], VerificationRequestListStatus | undefined]
@@ -176,7 +176,9 @@ export const getVerificationRequestsForAdmin = async ({
       }),
       ...countStatuses.map(([, countStatus]) =>
         prismaClient.verificationRequest.count({
-          where: { ...baseWhere, ...getStatusFilter(countStatus, agentId) },
+          where: {
+            AND: [baseWhere, getStatusFilter(countStatus, agentId)],
+          },
         }),
       ),
     ]);

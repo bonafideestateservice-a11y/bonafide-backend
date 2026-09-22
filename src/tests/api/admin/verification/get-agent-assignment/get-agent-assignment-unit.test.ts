@@ -35,7 +35,7 @@ describe("getAgentAssignment handler (unit)", () => {
         details: { propertyAddress: "Plot 45, Lekki Phase 1, Lagos" },
         verificationType: { name: "Property Verification" },
         user: { fullName: "Client David", phone: "08012345678", email: "david@example.com" },
-        transaction: { status: "SUCCESS", amountInCents: 3500000, currency: "NGN" },
+        transactions: [{ status: "SUCCESS", amountInCents: 3500000, currency: "NGN" }],
       },
     });
     const { req, res, next } = buildMockReqRes();
