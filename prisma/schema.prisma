@@ -24,6 +24,8 @@ model User {
   passwordResetTokens  PasswordResetToken[]
   verificationRequests VerificationRequest[]
   verificationAgent    VerificationAgent?
+  paystackCustomerCode String?               @unique
+  paystackSubscriptions PaystackSubscription[]
 
   @@index([role, createdAt])
   @@index([createdAt])
@@ -74,7 +76,7 @@ model Service {
   name        String
   slug        String  @unique
   description String?
-
+ 
   verificationTypes VerificationType[]
 
   createdAt DateTime @default(now())
@@ -109,8 +111,10 @@ model VerificationPlan {
   description        String?
   priceInCents       Int
   currency           String                 @default("NGN")
+  paystackPlanCode   String?                @unique
 
   verificationRequests VerificationRequest[]
+  paystackSubscriptions PaystackSubscription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -160,9 +164,10 @@ model VerificationRequest {
   notifyOnReportReady     Boolean @default(true)
 
   documents       Document[]
-  transaction     Transaction?
+  transactions    Transaction[]
   report          VerificationReport?
   agentAssignment AgentAssignment?
+  paystackSubscription PaystackSubscription?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -255,17 +260,54 @@ model VerificationChecklistItem {
 
 model Transaction {
   id                    String              @id @default(cuid())
-  verificationRequestId String              @unique
+  verificationRequestId String
   verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id])
   amountInCents         Int
   currency              String              @default("NGN")
   method                PaymentMethod
   status                PaymentStatus       @default(PENDING)
-  providerRef           String?
+  providerRef           String?             @unique
+  authorizationUrl      String?
+  accessCode            String?
   paidAt                DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([verificationRequestId, createdAt])
+}
+
+enum PaystackSubscriptionStatus {
+  ACTIVE
+  NON_RENEWING
+  PAYMENT_FAILED
+  DISABLED
+  EXPIRED
+}
+
+model PaystackSubscription {
+  id                    String                    @id @default(cuid())
+  userId                String
+  verificationRequestId String                    @unique
+  verificationPlanId    String
+  customerCode          String
+  subscriptionCode      String                    @unique
+  emailToken            String?
+  status                PaystackSubscriptionStatus @default(ACTIVE)
+  nextPaymentDate       DateTime?
+  startedAt             DateTime?
+  disabledAt            DateTime?
+
+  user                 User               @relation(fields: [userId], references: [id])
+  verificationRequest  VerificationRequest @relation(fields: [verificationRequestId], references: [id])
+  verificationPlan     VerificationPlan  @relation(fields: [verificationPlanId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([verificationPlanId])
+  @@index([customerCode])
 }
 
 model VerificationReport {

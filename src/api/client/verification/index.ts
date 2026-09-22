@@ -14,6 +14,7 @@ import { getVerificationRequestTracking } from "./handlers/get-verification-requ
 import { patchVerificationRequestNotificationPreferences } from "./handlers/patch-verification-request-notification-preferences";
 import { getVerificationRequestReportSummary } from "./handlers/get-verification-request-report-summary";
 import { getVerificationRequestFullReport } from "./handlers/get-verification-request-full-report";
+import { initializeVerificationPayment } from "./handlers/initialize-verification-payment";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -296,6 +297,41 @@ router.patch("/verification-requests/:id/plan", checkJwt, patchVerificationReque
 
 /**
  * @swagger
+ * /api/{version}/client/verification-requests/{id}/payment/initialize:
+ *   post:
+ *     tags: [Verification]
+ *     summary: Initialize payment for a verification request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Paystack checkout session
+ *       400:
+ *         description: Request has no selected or configured plan
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       403:
+ *         description: Verification request belongs to another user
+ *       409:
+ *         description: Payment already exists or is being initialized
+ */
+router.post(
+  "/verification-requests/:id/payment/initialize",
+  checkJwt,
+  initializeVerificationPayment,
+);
+
+/**
+ * @swagger
  * /api/{version}/client/verification-requests/{id}/documents:
  *   post:
  *     tags: [Verification]
@@ -530,7 +566,11 @@ router.get("/verification-requests/:id/tracking", checkJwt, getVerificationReque
  *       500:
  *         description: Internal server error
  */
-router.patch("/verification-requests/:id/notification-preferences", checkJwt, patchVerificationRequestNotificationPreferences);
+router.patch(
+  "/verification-requests/:id/notification-preferences",
+  checkJwt,
+  patchVerificationRequestNotificationPreferences,
+);
 
 /**
  * @swagger
@@ -593,7 +633,11 @@ router.patch("/verification-requests/:id/notification-preferences", checkJwt, pa
  *       500:
  *         description: Internal server error
  */
-router.get("/verification-requests/:id/report-summary", checkJwt, getVerificationRequestReportSummary);
+router.get(
+  "/verification-requests/:id/report-summary",
+  checkJwt,
+  getVerificationRequestReportSummary,
+);
 
 /**
  * @swagger
@@ -658,7 +702,7 @@ router.get("/verification-requests/:id/report-summary", checkJwt, getVerificatio
  *                       type: object
  *                       nullable: true
  *                       properties:
-*                        firstName: { type: string }
+ *                        firstName: { type: string }
  *                        lastName: { type: string }
  *       404:
  *         description: Verification report not found
@@ -668,4 +712,3 @@ router.get("/verification-requests/:id/report-summary", checkJwt, getVerificatio
 router.get("/verification-requests/:id/report/full", getVerificationRequestFullReport);
 
 export default router;
-

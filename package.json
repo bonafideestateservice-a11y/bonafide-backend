@@ -9,6 +9,7 @@
   "scripts": {
     "migrate": "npx prisma migrate dev",
     "db:seed": "npx prisma db seed",
+    "paystack:plans": "ts-node --transpile-only scripts/setup-paystack-plans.ts",
     "test": "jest --runInBand",
     "format": "prettier --write \"src/**/*.ts\" \"postman/**/*.ts\" \"prisma/seed.ts\" \"*.js\" \"*.json\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"postman/**/*.ts\" \"prisma/seed.ts\" \"*.js\" \"*.json\"",
@@ -22,6 +23,7 @@
     "postinstall": "npm rebuild sharp --force --platform=linux --arch=x64 --libc=glibc && prisma generate && npx --yes puppeteer@22.15.0 browsers install chrome"
   },
   "dependencies": {
+    "@paystack/paystack-sdk": "^1.2.0",
     "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",

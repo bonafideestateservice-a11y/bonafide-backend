@@ -74,8 +74,10 @@ export type AgentAssignmentDetail = Prisma.AgentAssignmentGetPayload<{
         details: true;
         user: { select: { fullName: true; phone: true; email: true } };
         verificationType: { select: { name: true } };
-        transaction: {
+        transactions: {
           select: { status: true; amountInCents: true; currency: true };
+          orderBy: { createdAt: "desc" };
+          take: 1;
         };
       };
     };
@@ -99,8 +101,10 @@ export const getAgentAssignmentById = async (
             details: true,
             user: { select: { fullName: true, phone: true, email: true } },
             verificationType: { select: { name: true } },
-            transaction: {
+            transactions: {
               select: { status: true, amountInCents: true, currency: true },
+              orderBy: { createdAt: "desc" },
+              take: 1,
             },
           },
         },
@@ -259,7 +263,11 @@ export const getAgentAssignmentChecklist = async (
               select: { id: true, fileName: true, fileSizeBytes: true, url: true },
               orderBy: { createdAt: "asc" },
             },
-            transaction: { select: { status: true, amountInCents: true } },
+            transactions: {
+              select: { status: true, amountInCents: true },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
           },
         },
       },
@@ -274,7 +282,7 @@ export const getAgentAssignmentChecklist = async (
       ? Math.round((completedItems / assignment.checklistItems.length) * 100)
       : 0;
     const names = assignment.verificationRequest.user.fullName.trim().split(/\s+/);
-    const transaction = assignment.verificationRequest.transaction;
+    const transaction = assignment.verificationRequest.transactions[0];
 
     return {
       checklistItems: assignment.checklistItems,

@@ -31,7 +31,7 @@ export const getAgentAssignment = async (
     if (!assignment) return next(new NotFoundError("Assignment not found."));
 
     const client = getNames(assignment.verificationRequest.user.fullName);
-    const transaction = assignment.verificationRequest.transaction;
+    const transaction = assignment.verificationRequest.transactions[0];
     res.status(HttpStatusCode.OK).json({
       id: assignment.id,
       status: assignment.status,
