@@ -9,6 +9,7 @@ export type VerificationAgentInformation = Prisma.VerificationAgentGetPayload<{
     name: true;
     phone: true;
     region: true;
+    status: true;
     createdAt: true;
     updatedAt: true;
     user: { select: { fullName: true; email: true; role: true } };
@@ -26,6 +27,7 @@ export const getAllVerificationAgents = async (): Promise<VerificationAgentInfor
         name: true,
         phone: true,
         region: true,
+        status: true,
         createdAt: true,
         updatedAt: true,
         user: { select: { fullName: true, email: true, role: true } },

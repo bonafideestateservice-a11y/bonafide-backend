@@ -3,6 +3,7 @@ import { Router, Request, Response } from "express";
 import clientAuthenticationRoutes from "./api/client/authentication";
 import clientVerificationRoutes from "./api/client/verification";
 import adminAuthenticationRoutes from "./api/admin/authentication";
+import adminDashboardRoutes from "./api/admin/dashboard";
 import adminVerificationRoutes from "./api/admin/verification";
 import webhookRoutes from "./api/webhooks";
 
@@ -16,6 +17,7 @@ router.get("/healthcheck", healthCheckHandler);
 router.use("/:version/client", clientAuthenticationRoutes);
 router.use("/:version/client", clientVerificationRoutes);
 router.use("/:version/admin", adminAuthenticationRoutes);
+router.use("/:version/admin", adminDashboardRoutes);
 router.use("/:version/admin", adminVerificationRoutes);
 router.use("/:version/webhook", webhookRoutes);
 

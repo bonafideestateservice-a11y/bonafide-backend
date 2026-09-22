@@ -51,6 +51,11 @@ enum ROLE {
   AGENT
 }
 
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum VERIFICATION_FREQUENCY {
   ONE_TIME
   MONTHLY
@@ -131,6 +136,12 @@ enum VerificationStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+enum PropertyStatus {
+  PENDING
+  VERIFIED
+  REJECTED
 }
 
 enum PaymentMethod {
@@ -215,6 +226,7 @@ model VerificationAgent {
   name   String
   phone  String?
   region String?
+  status AgentStatus @default(ACTIVE)
 
   assignments AgentAssignment[]
   reports     VerificationReport[]
@@ -241,6 +253,18 @@ model AgentAssignment {
   updatedAt DateTime @updatedAt
 
   @@index([agentId])
+}
+
+model Property {
+  id        String         @id @default(cuid())
+  name      String
+  address   String
+  status    PropertyStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
 }
 
 model VerificationChecklistItem {
