@@ -1,4 +1,9 @@
 import request from "supertest";
+
+jest.mock("@paystack/paystack-sdk", () => ({
+  Paystack: class {},
+}));
+
 import app from "../../../../../app";
 import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";
@@ -119,6 +124,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!adminId) {
+    await prismaClient.$disconnect();
+    return;
+  }
   await prismaClient.agentAssignment.deleteMany({ where: { id: { in: assignmentIds } } });
   await prismaClient.verificationRequest.deleteMany({ where: { id: { in: requestIds } } });
   await prismaClient.verificationAgent.delete({ where: { id: agentId } });

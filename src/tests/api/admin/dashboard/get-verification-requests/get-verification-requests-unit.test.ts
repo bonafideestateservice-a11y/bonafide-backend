@@ -128,4 +128,15 @@ describe("getVerificationRequests handler (unit)", () => {
       expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
     );
   });
+
+  it("converts service failures to internal server errors", async () => {
+    mockedGetVerificationRequests.mockRejectedValue(new Error("DB exploded"));
+    const { req, res, next } = buildMockReqRes({});
+
+    await getVerificationRequests(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: HttpStatusCode.INTERNAL_SERVER }),
+    );
+  });
 });
