@@ -15,6 +15,7 @@ import { patchVerificationRequestNotificationPreferences } from "./handlers/patc
 import { getVerificationRequestReportSummary } from "./handlers/get-verification-request-report-summary";
 import { getVerificationRequestFullReport } from "./handlers/get-verification-request-full-report";
 import { initializeVerificationPaymentPaystack } from "./handlers/initialize-verification-payment-paystack";
+import { initializeVerificationPaymentStripe } from "./handlers/initialize-verification-payment-stripe";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -328,6 +329,12 @@ router.post(
   "/verification-requests/:id/payment/initialize-paystack",
   checkJwt,
   initializeVerificationPaymentPaystack,
+);
+
+router.post(
+  "/verification-requests/:id/payment/initialize-stripe",
+  checkJwt,
+  initializeVerificationPaymentStripe,
 );
 
 /**

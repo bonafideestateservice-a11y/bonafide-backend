@@ -117,6 +117,7 @@ model VerificationPlan {
   priceInCents       Int
   currency           String                 @default("NGN")
   paystackPlanCode   String?                @unique
+  stripePriceId      String?                @unique
 
   verificationRequests VerificationRequest[]
   paystackSubscriptions PaystackSubscription[]

@@ -3,12 +3,18 @@ import { PaymentMetadata } from "../../types/paystack";
 
 export interface CreatePaymentSessionParams {
   quantity?: number;
+  priceId?: string;
+  mode: "payment" | "subscription";
   metadata: PaymentMetadata;
 }
 
-export async function createStripeSession({ quantity = 1, metadata }: CreatePaymentSessionParams) {
+export async function createStripeSession({
+  quantity = 1,
+  priceId = process.env.STRIPE_PRICE_ID,
+  mode,
+  metadata,
+}: CreatePaymentSessionParams) {
   const clientUrl = process.env.CLIENT_URL;
-  const priceId = process.env.STRIPE_PRICE_ID;
 
   if (!clientUrl) throw new Error("CLIENT_URL is required");
   if (!priceId) throw new Error("STRIPE_PRICE_ID is required");
@@ -20,7 +26,7 @@ export async function createStripeSession({ quantity = 1, metadata }: CreatePaym
     success_url: clientUrl,
     cancel_url: clientUrl,
     line_items: [{ price: priceId, quantity }],
-    mode: "subscription",
+    mode,
     metadata: { ...metadata },
   });
 
