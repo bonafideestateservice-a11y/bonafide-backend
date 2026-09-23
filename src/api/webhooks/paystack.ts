@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { PaymentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
-import { sendEmail } from "../../libs/email";
+import { sendEmail } from "../../libs/zeptomail";
 
 type PaystackEvent = {
   event?: string;

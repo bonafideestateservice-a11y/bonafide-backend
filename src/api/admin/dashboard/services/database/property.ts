@@ -67,6 +67,9 @@ const propertySelect = {
 
 export type PropertyListItem = Prisma.PropertyGetPayload<{ select: typeof propertySelect }>;
 
+const escapeRegularExpression = (value: string): string =>
+  value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+
 export interface PropertyListResult {
   data: PropertyListItem[];
   meta: { page: number; limit: number; totalItems: number; totalPages: number };
@@ -94,32 +97,33 @@ export const getAllProperties = async ({
   sortOrder = "desc",
 }: GetPropertiesQuery = {}): Promise<PropertyListResult> => {
   const normalizedSearch = search.trim();
-  const baseWhere: Prisma.PropertyWhereInput = {
-    ...(type ? { propertyType: type } : {}),
-    ...(normalizedSearch
-      ? {
-          OR: [
-            { title: { contains: normalizedSearch, mode: "insensitive" } },
-            { name: { contains: normalizedSearch, mode: "insensitive" } },
-            { address: { contains: normalizedSearch, mode: "insensitive" } },
-            { area: { contains: normalizedSearch, mode: "insensitive" } },
-            { city: { contains: normalizedSearch, mode: "insensitive" } },
-          ],
-        }
-      : {}),
-  };
   const statusWhere: Prisma.PropertyWhereInput =
     status === "published"
       ? { isPublished: true }
       : status === "unpublished"
         ? { isPublished: false }
         : {};
-  const where: Prisma.PropertyWhereInput = { AND: [baseWhere, statusWhere] };
-  const countWhere = (isPublished?: boolean): Prisma.PropertyWhereInput => ({
-    AND: [baseWhere, ...(isPublished === undefined ? [] : [{ isPublished }])],
-  });
-
   try {
+    const matchingSearchIds = normalizedSearch
+      ? await prismaClient.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT "id"
+          FROM "Property"
+          WHERE LOWER(COALESCE("title", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
+             OR LOWER(COALESCE("name", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
+             OR LOWER(COALESCE("address", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
+             OR LOWER(COALESCE("area", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
+             OR LOWER(COALESCE("city", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
+        `)
+      : undefined;
+    const baseWhere: Prisma.PropertyWhereInput = {
+      ...(type ? { propertyType: type } : {}),
+      ...(matchingSearchIds ? { id: { in: matchingSearchIds.map(({ id }) => id) } } : {}),
+    };
+    const where: Prisma.PropertyWhereInput = { AND: [baseWhere, statusWhere] };
+    const countWhere = (isPublished?: boolean): Prisma.PropertyWhereInput => ({
+      AND: [baseWhere, ...(isPublished === undefined ? [] : [{ isPublished }])],
+    });
+
     const [totalItems, data, all, published, unpublished] = await Promise.all([
       prismaClient.property.count({ where }),
       prismaClient.property.findMany({
