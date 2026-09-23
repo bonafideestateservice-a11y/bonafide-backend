@@ -23,3 +23,18 @@ src/events/
 - Be aware that this is an in-process bus: events are not durable and are lost if the process stops.
 
 When adding an event, update the enum, emit it from the owning application flow, register its listener, and add focused tests for the emitter/listener behavior.
+
+## Application Event Catalog
+
+| Event                          | Payload                                                   | Emission point                                                               | Endpoint or workflow                                                                            |
+| ------------------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `USER_REGISTERED`              | `{ userId, email }`                                       | No current emitter; listener is registered                                   | Add to the successful signup flow when registration side effects are required                   |
+| `USER_LOGIN`                   | Not defined                                               | No current emitter or listener                                               | Add to the successful client/admin login flows when needed                                      |
+| `PAYMENT_RECEIVED`             | `{ amount, reference }`                                   | No current emitter; listener is registered                                   | Payment webhook flows should emit this after a successful Paystack or Stripe transaction update |
+| `FORGOT_PASSWORD`              | Defined by the forgot-password handlers                   | Client and admin forgot-password handlers                                    | Client/admin forgot-password endpoints                                                          |
+| `VERIFICATION_REQUEST_CREATED` | `{ verificationRequestId, userId }`                       | `createVerificationRequest` after `VerificationRequest.create` succeeds      | Client `POST /verification-requests`                                                            |
+| `REPORT_UPLOADED`              | `{ reportId, verificationRequestId, submittedByAgentId }` | `createVerificationReport` after `VerificationReport.create` succeeds        | Any workflow using the client verification-report database service                              |
+| `AGENT_ASSIGNED`               | `{ assignmentId, verificationRequestId, agentId }`        | No current assignment-creation service exists                                | Emit when an `AgentAssignment` record is created, not when an agent starts it                   |
+| `INSPECTION_STARTED`           | `{ assignmentId, verificationRequestId, agentId }`        | `startAgentAssignment` after an `ASSIGNED` to `ACCEPTED` transaction commits | Admin `POST /verification/agent-assignments/:id/start`                                          |
+
+Listeners are registered in `listeners.ts`. Event names and payload interfaces are defined in `index.ts`.

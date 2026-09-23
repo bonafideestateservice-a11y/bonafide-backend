@@ -1,4 +1,5 @@
 import { Prisma, VerificationRequest, VerificationStatus } from "@prisma/client";
+import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 
@@ -130,6 +131,10 @@ export const createVerificationRequest = async (
   try {
     const verificationRequest = await prismaClient.verificationRequest.create({
       data,
+    });
+    appEvents.emit(AppEventTypes.VERIFICATION_REQUEST_CREATED, {
+      verificationRequestId: verificationRequest.id,
+      userId: verificationRequest.userId,
     });
     logger.info(`Verification request created successfully requestId=${verificationRequest.id}`);
     return verificationRequest;

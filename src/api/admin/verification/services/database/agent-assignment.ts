@@ -1,4 +1,5 @@
 import { AgentAssignmentStatus, Prisma } from "@prisma/client";
+import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 
@@ -62,6 +63,35 @@ export interface AgentAssignmentsFilter {
   status?: "ALL" | "IN_PROGRESS";
   search?: string;
 }
+
+export interface CreateAgentAssignmentData {
+  verificationRequestId: string;
+  agentId: string;
+}
+
+export const createAgentAssignment = async ({
+  verificationRequestId,
+  agentId,
+}: CreateAgentAssignmentData) => {
+  try {
+    const assignment = await prismaClient.agentAssignment.create({
+      data: { verificationRequestId, agentId },
+    });
+
+    appEvents.emit(AppEventTypes.AGENT_ASSIGNED, {
+      assignmentId: assignment.id,
+      verificationRequestId: assignment.verificationRequestId,
+      agentId: assignment.agentId,
+    });
+
+    return assignment;
+  } catch (error) {
+    logger.error(
+      `Error creating agent assignment verificationRequestId=${verificationRequestId} agentId=${agentId} ${error}`,
+    );
+    throw error;
+  }
+};
 
 export type AgentAssignmentDetail = Prisma.AgentAssignmentGetPayload<{
   select: {
@@ -134,11 +164,13 @@ export const startAgentAssignment = async (
   assignmentId: string,
 ): Promise<StartedAgentAssignment | null> => {
   try {
-    return await prismaClient.$transaction(async (transaction) => {
+    let startedEvent: { assignmentId: string; verificationRequestId: string } | undefined;
+    const result = await prismaClient.$transaction(async (transaction) => {
       const assignment = await transaction.agentAssignment.findFirst({
         where: { id: assignmentId, agentId },
         select: {
           id: true,
+          verificationRequestId: true,
           status: true,
           verificationRequest: {
             select: {
@@ -186,6 +218,13 @@ export const startAgentAssignment = async (
         },
       });
 
+      if (status === AgentAssignmentStatus.ACCEPTED) {
+        startedEvent = {
+          assignmentId: assignment.id,
+          verificationRequestId: assignment.verificationRequestId,
+        };
+      }
+
       const checklistItems = await transaction.verificationChecklistItem.findMany({
         where: { agentAssignmentId: assignment.id },
         select: { id: true, label: true, status: true, sortOrder: true },
@@ -206,6 +245,15 @@ export const startAgentAssignment = async (
         })),
       };
     });
+
+    if (startedEvent) {
+      appEvents.emit(AppEventTypes.INSPECTION_STARTED, {
+        ...startedEvent,
+        agentId,
+      });
+    }
+
+    return result;
   } catch (error) {
     logger.error(`Error starting agent assignment assignmentId=${assignmentId} ${error}`);
     throw error;

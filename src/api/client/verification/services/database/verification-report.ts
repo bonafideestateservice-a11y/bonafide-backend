@@ -1,4 +1,5 @@
 import { Prisma, VerificationReport } from "@prisma/client";
+import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 
@@ -46,6 +47,11 @@ export const createVerificationReport = async (
   try {
     const verificationReport = await prismaClient.verificationReport.create({
       data,
+    });
+    appEvents.emit(AppEventTypes.REPORT_UPLOADED, {
+      reportId: verificationReport.id,
+      verificationRequestId: verificationReport.verificationRequestId,
+      submittedByAgentId: verificationReport.submittedByAgentId,
     });
     logger.info(`Verification report created successfully reportId=${verificationReport.id}`);
     return verificationReport;

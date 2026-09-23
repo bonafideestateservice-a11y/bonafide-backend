@@ -2,6 +2,7 @@ import {
   AgentAssignedPayload,
   appEvents,
   AppEventTypes,
+  InspectionStartedPayload,
   ReportUploadedPayload,
   VerificationRequestCreatedPayload,
 } from "./index";
@@ -33,5 +34,11 @@ appEvents.on(AppEventTypes.REPORT_UPLOADED, (payload: ReportUploadedPayload) => 
 appEvents.on(AppEventTypes.AGENT_ASSIGNED, (payload: AgentAssignedPayload) => {
   logger.info(
     `[event] AGENT_ASSIGNED assignmentId=${payload.assignmentId} requestId=${payload.verificationRequestId} agentId=${payload.agentId}`,
+  );
+});
+
+appEvents.on(AppEventTypes.INSPECTION_STARTED, (payload: InspectionStartedPayload) => {
+  logger.info(
+    `[event] INSPECTION_STARTED assignmentId=${payload.assignmentId} requestId=${payload.verificationRequestId} agentId=${payload.agentId}`,
   );
 });

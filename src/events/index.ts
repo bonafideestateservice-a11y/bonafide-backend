@@ -8,6 +8,7 @@ export enum AppEventTypes {
   VERIFICATION_REQUEST_CREATED = "VERIFICATION_REQUEST_CREATED",
   REPORT_UPLOADED = "REPORT_UPLOADED",
   AGENT_ASSIGNED = "AGENT_ASSIGNED",
+  INSPECTION_STARTED = "INSPECTION_STARTED",
 }
 
 export interface VerificationRequestCreatedPayload {
@@ -22,6 +23,12 @@ export interface ReportUploadedPayload {
 }
 
 export interface AgentAssignedPayload {
+  assignmentId: string;
+  verificationRequestId: string;
+  agentId: string;
+}
+
+export interface InspectionStartedPayload {
   assignmentId: string;
   verificationRequestId: string;
   agentId: string;
