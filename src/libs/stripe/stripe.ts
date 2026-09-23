@@ -1,10 +1,12 @@
 import { stripe } from "./index";
+import { PaymentMetadata } from "../../types/paystack";
 
 export interface CreatePaymentSessionParams {
   quantity?: number;
+  metadata: PaymentMetadata;
 }
 
-export async function createStripeSession({ quantity = 1 }: CreatePaymentSessionParams = {}) {
+export async function createStripeSession({ quantity = 1, metadata }: CreatePaymentSessionParams) {
   const clientUrl = process.env.CLIENT_URL;
   const priceId = process.env.STRIPE_PRICE_ID;
 
@@ -19,6 +21,7 @@ export async function createStripeSession({ quantity = 1 }: CreatePaymentSession
     cancel_url: clientUrl,
     line_items: [{ price: priceId, quantity }],
     mode: "subscription",
+    metadata: { ...metadata },
   });
 
   return session.url;

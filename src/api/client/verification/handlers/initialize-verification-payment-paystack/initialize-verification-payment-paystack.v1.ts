@@ -22,7 +22,7 @@ import {
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 
-export const initializeVerificationPayment = async (
+export const initializeVerificationPaymentPaystack = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -217,4 +217,4 @@ export const initializeVerificationPayment = async (
   }
 };
 
-export default initializeVerificationPayment;
+export default initializeVerificationPaymentPaystack;

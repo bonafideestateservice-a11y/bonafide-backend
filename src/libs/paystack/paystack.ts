@@ -1,5 +1,5 @@
 import { Paystack } from "@paystack/paystack-sdk";
-import { CreateTransactionParams } from "../../types/paystack";
+import { CreateTransactionParams, PaymentMetadata } from "../../types/paystack";
 
 const paystack = new Paystack(process.env.PAYSTACK_SECRET_KEY || "");
 
@@ -11,6 +11,13 @@ export async function createPaystackSession(params: CreateTransactionParams) {
   const callback_url = `${process.env.SERVER_URL}/account.html`;
   const description = `Paystack transaction by user ${params.userId}`;
 
+  const metadata: PaymentMetadata = {
+    userId: params.userId,
+    verificationRequestId: params.verificationRequestId,
+    transactionId: params.transactionId,
+    description,
+  };
+
   const response = await paystack.transaction.initialize({
     email: params.email,
     customer: params.customer,
@@ -19,12 +26,7 @@ export async function createPaystackSession(params: CreateTransactionParams) {
     channels: ["card"],
     callback_url,
     currency: params.currency,
-    metadata: {
-      userId: params.userId,
-      verificationRequestId: params.verificationRequestId,
-      transactionId: params.transactionId,
-      description,
-    },
+    metadata,
   });
 
   if (response.status === false) {

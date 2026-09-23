@@ -14,7 +14,7 @@ import { getVerificationRequestTracking } from "./handlers/get-verification-requ
 import { patchVerificationRequestNotificationPreferences } from "./handlers/patch-verification-request-notification-preferences";
 import { getVerificationRequestReportSummary } from "./handlers/get-verification-request-report-summary";
 import { getVerificationRequestFullReport } from "./handlers/get-verification-request-full-report";
-import { initializeVerificationPayment } from "./handlers/initialize-verification-payment";
+import { initializeVerificationPaymentPaystack } from "./handlers/initialize-verification-payment-paystack";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -325,9 +325,9 @@ router.patch("/verification-requests/:id/plan", checkJwt, patchVerificationReque
  *         description: Payment already exists or is being initialized
  */
 router.post(
-  "/verification-requests/:id/payment/initialize",
+  "/verification-requests/:id/payment/initialize-paystack",
   checkJwt,
-  initializeVerificationPayment,
+  initializeVerificationPaymentPaystack,
 );
 
 /**
