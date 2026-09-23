@@ -26,6 +26,7 @@ model User {
   verificationAgent    VerificationAgent?
   paystackCustomerCode String?               @unique
   paystackSubscriptions PaystackSubscription[]
+  stripeSubscriptions StripeSubscription[]
 
   @@index([role, createdAt])
   @@index([createdAt])
@@ -121,6 +122,7 @@ model VerificationPlan {
 
   verificationRequests VerificationRequest[]
   paystackSubscriptions PaystackSubscription[]
+  stripeSubscriptions StripeSubscription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -186,6 +188,7 @@ model VerificationRequest {
   report          VerificationReport?
   agentAssignment AgentAssignment?
   paystackSubscription PaystackSubscription?
+  stripeSubscription StripeSubscription?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -309,6 +312,7 @@ model Transaction {
   method                PaymentMethod
   status                PaymentStatus       @default(PENDING)
   providerRef           String?             @unique
+  stripeSubscriptionId   String?
   authorizationUrl      String?
   accessCode            String?
   paidAt                DateTime?
@@ -317,6 +321,7 @@ model Transaction {
   updatedAt DateTime @updatedAt
 
   @@index([verificationRequestId, createdAt])
+  @@index([stripeSubscriptionId, createdAt])
 }
 
 enum PaystackSubscriptionStatus {
@@ -325,6 +330,11 @@ enum PaystackSubscriptionStatus {
   PAYMENT_FAILED
   DISABLED
   EXPIRED
+}
+
+enum StripeSubscriptionStatus {
+  ACTIVE
+  INACTIVE
 }
 
 model PaystackSubscription {
@@ -350,6 +360,27 @@ model PaystackSubscription {
   @@index([userId])
   @@index([verificationPlanId])
   @@index([customerCode])
+}
+
+model StripeSubscription {
+  id                    String                   @id @default(cuid())
+  userId                String
+  verificationRequestId String                   @unique
+  verificationPlanId    String
+  subscriptionId        String                   @unique
+  status                StripeSubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd      DateTime?
+  lastRenewalDate       DateTime?
+
+  user                User               @relation(fields: [userId], references: [id])
+  verificationRequest VerificationRequest @relation(fields: [verificationRequestId], references: [id])
+  verificationPlan    VerificationPlan  @relation(fields: [verificationPlanId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([verificationPlanId])
 }
 
 model VerificationReport {

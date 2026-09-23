@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { PaymentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
-import { sendEmail } from "../../libs/zeptomail";
+
 
 type PaystackEvent = {
   event?: string;
@@ -279,11 +279,7 @@ const handleExpiringCards = async (event: PaystackEvent) => {
   });
   if (!user) return;
 
-  await sendEmail(
-    user.email,
-    "Your Paystack card is expiring soon",
-    `Hello ${user.fullName}, your card linked to your verification subscription is expiring soon. Please update your payment method.`,
-  );
+  
 };
 
 export const paystackWebhook = async (req: Request, res: Response, _next: NextFunction) => {

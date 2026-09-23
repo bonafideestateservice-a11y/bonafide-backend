@@ -28,6 +28,7 @@ export async function createStripeSession({
     line_items: [{ price: priceId, quantity }],
     mode,
     metadata: { ...metadata },
+    ...(mode === "subscription" ? { subscription_data: { metadata: { ...metadata } } } : {}),
   });
 
   return session.url;

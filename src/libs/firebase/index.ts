@@ -1,8 +1,8 @@
-import { logger } from "../../utils/logger";
+import admin from "firebase-admin";
+import serviceAccount from "./juyonna-web-app-458af-firebase-adminsdk-fbsvc-6e8678447e.json";
 
-export const sendPushNotification = async (token: string, title: string, body: string) => {
-  // TODO: integrate with a push provider (e.g. Firebase Cloud Messaging, OneSignal)
-  logger.info(`[push] to=${token} title="${title}"`);
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+});
 
-  return { token, title, body, sent: true };
-};
+export const messaging = admin.messaging();

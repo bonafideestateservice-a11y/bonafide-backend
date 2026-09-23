@@ -4,11 +4,12 @@ import helmet from "helmet";
 import morgan from "morgan";
 import session from "express-session";
 import passport from "passport";
-
 import { config } from "./config";
 import { logger } from "./utils/logger";
 import { errorHandler, notFoundHandler } from "./middlewares/error-handler";
 import routes from "./routes";
+
+type RequestWithRawBody = express.Request & { rawBody?: Buffer };
 
 const app = express();
 
@@ -27,7 +28,13 @@ app.use(
 
 app.use(morgan("combined", { stream: { write: (message) => logger.http(message.trim()) } }));
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, _res, buffer) => {
+      (req as RequestWithRawBody).rawBody = buffer;
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true }));
 
 app.use(
