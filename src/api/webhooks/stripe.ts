@@ -159,6 +159,13 @@ const recordRenewalPayment = async (invoice: Stripe.Invoice) => {
     return;
   }
 
+  if (invoice.billing_reason === "subscription_create") {
+    const initialTransaction = await prismaClient.transaction.findFirst({
+      where: { stripeSubscriptionId: subscriptionId, status: PaymentStatus.SUCCESS },
+    });
+    if (initialTransaction) return;
+  }
+
   const paidAt = invoiceWithSubscription.status_transitions?.paid_at
     ? new Date(invoiceWithSubscription.status_transitions.paid_at * 1000)
     : new Date(invoice.created * 1000);

@@ -304,7 +304,9 @@ export const getVerificationRequestTrackingForUser = async (
         },
       },
     });
-    logger.info(`Verification request tracking lookup requestId=${id} userId=${userId} found=${!!tracking}`);
+    logger.info(
+      `Verification request tracking lookup requestId=${id} userId=${userId} found=${!!tracking}`,
+    );
     return tracking;
   } catch (error) {
     logger.error(`Error finding verification request tracking ${error}`);
