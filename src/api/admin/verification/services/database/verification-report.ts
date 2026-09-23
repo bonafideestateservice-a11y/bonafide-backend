@@ -1,4 +1,5 @@
 import { AgentAssignmentStatus, Prisma, ReportReviewStatus } from "@prisma/client";
+import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 
@@ -156,7 +157,8 @@ export const submitAgentAssignmentReport = async (
   assignmentId: string,
 ): Promise<SubmitAgentReportResult | null> => {
   try {
-    return await prismaClient.$transaction(async (transaction) => {
+    let uploadedReport: { reportId: string; verificationRequestId: string } | undefined;
+    const result = await prismaClient.$transaction(async (transaction) => {
       const assignment = await transaction.agentAssignment.findFirst({
         where: { id: assignmentId, agentId },
         select: {
@@ -199,6 +201,13 @@ export const submitAgentAssignmentReport = async (
             select: { id: true, reviewStatus: true, generatedAt: true },
           });
 
+      if (!assignment.verificationRequest.report) {
+        uploadedReport = {
+          reportId: report.id,
+          verificationRequestId: assignment.verificationRequestId,
+        };
+      }
+
       await transaction.agentAssignment.update({
         where: { id: assignment.id },
         data: {
@@ -214,6 +223,15 @@ export const submitAgentAssignmentReport = async (
         generatedAt: report.generatedAt ?? generatedAt,
       };
     });
+
+    if (uploadedReport) {
+      appEvents.emit(AppEventTypes.REPORT_UPLOADED, {
+        ...uploadedReport,
+        submittedByAgentId: agentId,
+      });
+    }
+
+    return result;
   } catch (error) {
     logger.error(`Error submitting assignment report assignmentId=${assignmentId} ${error}`);
     throw error;
