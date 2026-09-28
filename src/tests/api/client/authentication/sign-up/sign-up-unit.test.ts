@@ -8,6 +8,7 @@ import {
 import { generateToken } from "../../../../../utils/jwt";
 import { HttpStatusCode, ConflictError } from "../../../../../exceptions";
 import { ROLE } from "@prisma/client";
+import { appEvents, AppEventTypes } from "../../../../../events";
 
 // --- Mock external dependencies ---
 jest.mock("bcryptjs");
@@ -15,6 +16,10 @@ jest.mock("../../../../../api/client/authentication/services/database/client");
 jest.mock("../../../../../utils/jwt");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
+jest.mock("../../../../../events", () => ({
+  appEvents: { emit: jest.fn() },
+  AppEventTypes: { USER_REGISTERED: "USER_REGISTERED" },
 }));
 
 const mockedBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
@@ -100,6 +105,11 @@ describe("signUp handler (unit)", () => {
         user: expect.not.objectContaining({ password: expect.anything() }),
       }),
     );
+    expect(appEvents.emit).toHaveBeenCalledWith(AppEventTypes.USER_REGISTERED, {
+      userId: "u1",
+      email: "test@test.com",
+      firstName: "Test User",
+    });
     expect(next).not.toHaveBeenCalled();
   });
 });

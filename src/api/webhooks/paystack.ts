@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { PaymentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
-
+import { appEvents, AppEventTypes } from "../../events";
 
 type PaystackEvent = {
   event?: string;
@@ -116,6 +116,33 @@ const handleChargeSuccess = async (event: PaystackEvent) => {
       data: { status: VerificationStatus.SUBMITTED },
     }),
   ]);
+
+  const paidTransaction = await prismaClient.transaction.findUnique({
+    where: { id: transaction.id },
+    include: {
+      verificationRequest: {
+        include: {
+          user: true,
+          verificationPlan: { include: { verificationType: true } },
+        },
+      },
+    },
+  });
+
+  if (paidTransaction) {
+    appEvents.emit(AppEventTypes.PAYMENT_RECEIVED, {
+      userId: paidTransaction.verificationRequest.user.id,
+      email: paidTransaction.verificationRequest.user.email,
+      firstName: paidTransaction.verificationRequest.user.fullName,
+      amount: paidTransaction.amountInCents,
+      reference: paidTransaction.providerRef ?? reference,
+      payment_receipt: paidTransaction.providerRef ?? reference,
+      booking_ref: paidTransaction.verificationRequestId,
+      receipt_id: paidTransaction.id,
+      currency: paidTransaction.currency,
+      service_name: paidTransaction.verificationRequest.verificationPlan?.verificationType.name,
+    });
+  }
 
   logger.info(`Paystack transaction marked successful reference=${reference}`);
 };
@@ -278,8 +305,6 @@ const handleExpiringCards = async (event: PaystackEvent) => {
     select: { email: true, fullName: true },
   });
   if (!user) return;
-
-  
 };
 
 export const paystackWebhook = async (req: Request, res: Response, _next: NextFunction) => {

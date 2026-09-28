@@ -6,6 +6,7 @@ import { HttpStatusCode, ConflictError, ApiError } from "../../../../../exceptio
 import { logger } from "../../../../../utils/logger";
 import { generateToken } from "../../../../../utils/jwt";
 import { hashPassword } from "../../../../../utils/password";
+import { appEvents, AppEventTypes } from "../../../../../events";
 
 export const signUp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -56,6 +57,12 @@ export const signUp = async (req: Request, res: Response, next: NextFunction): P
       password: hashedPassword,
       role: resolvedRole,
       termsAndCondition: termsAndCondition === true,
+    });
+
+    appEvents.emit(AppEventTypes.USER_REGISTERED, {
+      userId: user.id,
+      email: user.email,
+      firstName: user.fullName,
     });
 
     logger.info(`New user signed up: userId=${user.id} email=${user.email}`);

@@ -27,6 +27,8 @@ model User {
   paystackCustomerCode String?               @unique
   paystackSubscriptions PaystackSubscription[]
   stripeSubscriptions StripeSubscription[]
+  notifications       Notification[]        @relation("UserNotifications")
+  fcmTokens            FCMToken[]
 
   @@index([role, createdAt])
   @@index([createdAt])
@@ -82,8 +84,9 @@ model Service {
   name        String
   slug        String  @unique
   description String?
- 
+
   verificationTypes VerificationType[]
+  notifications     Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -101,6 +104,7 @@ model VerificationType {
   verificationPlans      VerificationPlan[]
   verificationRequests   VerificationRequest[]
   checklistTemplateItems ChecklistTemplateItem[]
+  notifications          Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -170,25 +174,26 @@ enum ChecklistItemStatus {
 }
 
 model VerificationRequest {
-  id                 String             @id @default(cuid())
-  userId             String
-  user               User               @relation(fields: [userId], references: [id])
-  verificationTypeId String
-  verificationType   VerificationType   @relation(fields: [verificationTypeId], references: [id])
-  verificationPlanId String?
-  verificationPlan   VerificationPlan?  @relation(fields: [verificationPlanId], references: [id])
-  status             VerificationStatus @default(DRAFT)
-  details            Json
-  additionalNote     String?
+  id                    String             @id @default(cuid())
+  userId                String
+  user                  User               @relation(fields: [userId], references: [id])
+  verificationTypeId    String
+  verificationType      VerificationType   @relation(fields: [verificationTypeId], references: [id])
+  verificationPlanId    String?
+  verificationPlan      VerificationPlan?  @relation(fields: [verificationPlanId], references: [id])
+  status                VerificationStatus @default(DRAFT)
+  details               Json
+  additionalNote        String?
   notifyOnInspectionStart Boolean @default(true)
   notifyOnReportReady     Boolean @default(true)
 
-  documents       Document[]
-  transactions    Transaction[]
-  report          VerificationReport?
-  agentAssignment AgentAssignment?
-  paystackSubscription PaystackSubscription?
-  stripeSubscription StripeSubscription?
+  documents             Document[]
+  transactions          Transaction[]
+  report                VerificationReport?
+  agentAssignment       AgentAssignment?
+  paystackSubscription  PaystackSubscription?
+  stripeSubscription    StripeSubscription?
+  notifications        Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -417,4 +422,61 @@ model WebhookEvent {
   updatedAt DateTime @updatedAt
 
   @@index([integration, processed])
+}
+
+model Notification {
+  id                    String             @id @default(uuid())
+  userId                String
+  type                  NotificationType
+  serviceId             String?
+  verificationTypeId    String?
+  verificationRequestId String?
+  createdAt             DateTime           @default(now())
+  notificationStatus    NotificationStatus @default(PENDING)
+  body                  String?
+  meta                  Json?
+  sentAt                DateTime?
+  title                 String?
+  read                  Boolean            @default(false)
+
+  user                 User               @relation("UserNotifications", fields: [userId], references: [id])
+  service              Service?           @relation(fields: [serviceId], references: [id])
+  verificationType     VerificationType?  @relation(fields: [verificationTypeId], references: [id])
+  verificationRequest  VerificationRequest? @relation(fields: [verificationRequestId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([serviceId])
+  @@index([verificationTypeId])
+  @@index([verificationRequestId])
+}
+
+
+enum NotificationType {
+  USER_REGISTERED
+  USER_LOGIN
+  PAYMENT_RECEIVED
+  FORGOT_PASSWORD
+  VERIFICATION_REQUEST_CREATED
+  REPORT_UPLOADED
+  AGENT_ASSIGNED
+  INSPECTION_STARTED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model FCMToken {
+  id         String   @id @default(uuid())
+  userId     String?
+  token      String   @unique
+  lastSeenAt DateTime @default(now())
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
 }

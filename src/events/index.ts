@@ -11,6 +11,32 @@ export enum AppEventTypes {
   INSPECTION_STARTED = "INSPECTION_STARTED",
 }
 
+export interface ForgotPasswordPayload {
+  userId: string;
+  email: string;
+  otp: string;
+  expiresIn: string;
+}
+
+export interface UserRegisteredPayload {
+  userId: string;
+  email: string;
+  firstName: string;
+}
+
+export interface PaymentReceivedPayload {
+  userId: string;
+  email: string;
+  firstName: string;
+  amount: number;
+  reference: string;
+  payment_receipt: string;
+  booking_ref: string;
+  receipt_id: string;
+  currency: string;
+  service_name?: string;
+}
+
 export interface VerificationRequestCreatedPayload {
   verificationRequestId: string;
   userId: string;

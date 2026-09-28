@@ -4,6 +4,7 @@ import { Request, Response } from "express";
 import { stripe } from "../../libs/stripe";
 import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
+import { appEvents, AppEventTypes } from "../../events";
 
 type RequestWithRawBody = Request & { rawBody?: Buffer };
 
@@ -29,6 +30,32 @@ const getSubscriptionDetails = (subscription: Stripe.Subscription) => {
     currentPeriodEnd: toDate(item?.current_period_end),
     lastRenewalDate: toDate(item?.current_period_start),
   };
+};
+
+type PaymentTransaction = Prisma.TransactionGetPayload<{
+  include: {
+    verificationRequest: {
+      include: {
+        user: true;
+        verificationPlan: { include: { verificationType: true } };
+      };
+    };
+  };
+}>;
+
+const emitPaymentReceived = (transaction: PaymentTransaction) => {
+  appEvents.emit(AppEventTypes.PAYMENT_RECEIVED, {
+    userId: transaction.verificationRequest.user.id,
+    email: transaction.verificationRequest.user.email,
+    firstName: transaction.verificationRequest.user.fullName,
+    amount: transaction.amountInCents,
+    reference: transaction.providerRef ?? transaction.id,
+    payment_receipt: transaction.providerRef ?? transaction.id,
+    booking_ref: transaction.verificationRequestId,
+    receipt_id: transaction.id,
+    currency: transaction.currency,
+    service_name: transaction.verificationRequest.verificationPlan?.verificationType.name,
+  });
 };
 
 const markTransactionSuccessful = async (
@@ -63,7 +90,21 @@ const markTransactionSuccessful = async (
     }),
   ]);
 
-  return transaction;
+  const paidTransaction = await prismaClient.transaction.findUnique({
+    where: { id: transaction.id },
+    include: {
+      verificationRequest: {
+        include: {
+          user: true,
+          verificationPlan: { include: { verificationType: true } },
+        },
+      },
+    },
+  });
+
+  if (paidTransaction) emitPaymentReceived(paidTransaction);
+
+  return paidTransaction;
 };
 
 const upsertSubscription = async (
@@ -195,6 +236,22 @@ const recordRenewalPayment = async (invoice: Stripe.Invoice) => {
     },
     data: { status: VerificationStatus.SUBMITTED },
   });
+
+  const paidTransaction = await prismaClient.transaction.findUnique({
+    where: { id: transaction.id },
+    include: {
+      verificationRequest: {
+        include: {
+          user: true,
+          verificationPlan: { include: { verificationType: true } },
+        },
+      },
+    },
+  });
+
+  if (paidTransaction) emitPaymentReceived(paidTransaction);
+
+  return paidTransaction;
 };
 
 export const stripeWebhook = async (req: Request, res: Response) => {

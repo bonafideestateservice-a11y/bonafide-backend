@@ -5,6 +5,7 @@ import { getAllPropertiesHandler } from "./handlers/get-all-properties";
 import { getDashboardStatsHandler } from "./handlers/get-dashboard-stats";
 import { getVerificationRequestsHandler } from "./handlers/get-verification-requests";
 import { publishPropertyHandler } from "./handlers/publish-property";
+import { getAllActivitiesHandler } from "./handlers/get-all-activities";
 
 const router = Router();
 
@@ -29,6 +30,27 @@ const router = Router();
  *       500: { description: Internal server error }
  */
 router.get("/dashboard/stats", checkJwt, checkIsAdmin, getDashboardStatsHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/dashboard/activities:
+ *   get:
+ *     tags: [Admin Dashboard]
+ *     summary: Get sent notification activities
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Sent notification activities }
+ *       401: { description: Missing or invalid authentication token }
+ *       403: { description: Insufficient permissions }
+ *       500: { description: Internal server error }
+ */
+router.get("/dashboard/activities", checkJwt, checkIsAdmin, getAllActivitiesHandler);
 
 /**
  * @swagger

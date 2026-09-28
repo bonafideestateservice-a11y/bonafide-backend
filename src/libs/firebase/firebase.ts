@@ -1,75 +1,40 @@
 import { messaging } from "./index";
 import {
-  createNotification,
-  updateNotification,
-} from "../../api/authentication/services/database/notifications";
-import { getActiveFcmTokensForUser } from "../../api/authentication/services/database/pushToken";
-import { NotificationType, NotificationStatus, ServiceType } from "@prisma/client";
+  deactivateFcmToken,
+  getActiveFcmTokensForUser,
+} from "../../api/services/database/fcm-token";
+import { Notification } from "@prisma/client";
 import { logger } from "../../utils/logger";
-import { CreateNotificationInput } from "../../api/authentication/services/database/notifications";
-import { deactivateFcmToken } from "../../api/authentication/services/database/pushToken";
 
 /**
- * Send a notification to a user: Save notification row, retrieve user's tokens and send.
- * Accepts all fields for CreateNotificationInput and UpdateNotificationInput.
+ * Send push delivery for a notification record created by an event listener.
  */
 
 // ...existing code...
 
-export async function sendNotificationToUser(
-  createInput: CreateNotificationInput,
-  updateInput?: Partial<{
-    notificationStatus?: NotificationStatus;
-    title?: string;
-    serviceType?: ServiceType;
-    body?: string;
-    sentAt?: Date | null;
-    meta?: any;
-  }>,
-) {
-  logger.info("sendNotificationToUser called", { createInput, updateInput });
+export async function sendNotificationToUser(notification: Notification) {
+  logger.info("sendNotificationToUser called", { notification });
 
-  if (!createInput.userId || !createInput.type) {
+  if (!notification.id || !notification.userId || !notification.type) {
     logger.warn("sendNotificationToUser called without userId or type", {
-      userId: createInput.userId,
-      type: createInput.type,
+      notificationId: notification.id,
+      userId: notification.userId,
+      type: notification.type,
     });
     return { ok: false, message: "userId and type required" };
   }
 
-  let notification;
-  try {
-    notification = await createNotification({
-      ...createInput,
-      notificationStatus: createInput.notificationStatus ?? NotificationStatus.PENDING,
-      serviceType: createInput.serviceType ?? "GENERAL",
-      sentAt: createInput.sentAt ?? null,
-      meta: createInput.meta ?? null,
-    });
-  } catch (err) {
-    logger.error("Failed to create notification record", err);
-    return { ok: false, message: "failed to create notification" };
-  }
-
   let tokens: any[] = [];
   try {
-    tokens = await getActiveFcmTokensForUser(createInput.userId);
+    tokens = await getActiveFcmTokensForUser(notification.userId);
   } catch (err) {
     logger.error("Failed to fetch FCM tokens", err);
-    await updateNotification(notification.id, {
-      notificationStatus: NotificationStatus.FAILED,
-      ...(updateInput || {}),
-    });
     return { ok: false, message: "failed to fetch tokens" };
   }
 
   const fcmTokens = tokens.map((t: any) => t.token).filter(Boolean);
 
   if (fcmTokens.length === 0) {
-    await updateNotification(notification.id, {
-      notificationStatus: NotificationStatus.FAILED,
-      ...(updateInput || {}),
-    });
     return { ok: false, message: "no tokens for user" };
   }
 
@@ -79,15 +44,19 @@ export async function sendNotificationToUser(
       const messagePayload = {
         token: fcmToken,
         notification: {
-          title: createInput.title ?? "",
-          body: createInput.body ?? "",
+          title: notification.title ?? "",
+          body: notification.body ?? "",
         },
         data: Object.fromEntries(
           Object.entries({
-            ...createInput.meta,
-            type: createInput.type,
+            ...(notification.meta &&
+            typeof notification.meta === "object" &&
+            !Array.isArray(notification.meta)
+              ? notification.meta
+              : {}),
+            type: notification.type,
             notificationId: notification.id,
-            userId: createInput.userId,
+            userId: notification.userId,
           }).map(([key, value]) => [key, String(value)]), // Convert all values to strings
         ),
       };
@@ -95,12 +64,13 @@ export async function sendNotificationToUser(
       await messaging.send(messagePayload);
     } catch (err: any) {
       logger.error("FCM send error", { fcmToken, error: err });
+      const errorMessage = err instanceof Error ? err.message : String(err);
 
       // Handle invalid tokens
       if (
         err.code === "messaging/registration-token-not-registered" ||
-        err.message.includes("NotRegistered") ||
-        err.message.includes("Requested entity was not found")
+        errorMessage.includes("NotRegistered") ||
+        errorMessage.includes("Requested entity was not found")
       ) {
         try {
           await deactivateFcmToken(fcmToken);
@@ -116,13 +86,6 @@ export async function sendNotificationToUser(
       receipts.push({ token: fcmToken, error: String(err) });
     }
   }
-
-  await updateNotification(notification.id, {
-    notificationStatus: receipts.length === 0 ? NotificationStatus.SENT : NotificationStatus.FAILED,
-    sentAt: new Date(),
-    ...(updateInput || {}),
-    meta: { receipts, ...(updateInput?.meta || {}) },
-  });
 
   return {
     ok: receipts.length === 0,
