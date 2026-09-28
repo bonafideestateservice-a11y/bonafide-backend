@@ -1,4 +1,4 @@
-import { messaging } from "./index";
+import { getMessaging } from "./index";
 import {
   deactivateFcmToken,
   getActiveFcmTokensForUser,
@@ -22,6 +22,12 @@ export async function sendNotificationToUser(notification: Notification) {
       type: notification.type,
     });
     return { ok: false, message: "userId and type required" };
+  }
+
+  const messaging = getMessaging();
+  if (!messaging) {
+    logger.warn("Firebase Admin is not configured; skipping push delivery");
+    return { ok: false, message: "Firebase Admin is not configured" };
   }
 
   let tokens: any[] = [];

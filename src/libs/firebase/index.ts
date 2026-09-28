@@ -1,8 +1,26 @@
 import admin from "firebase-admin";
-import serviceAccount from "./juyonna-web-app-458af-firebase-adminsdk-fbsvc-6e8678447e.json";
+import { logger } from "../../utils/logger";
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
-});
+let firebaseApp: admin.app.App | undefined;
 
-export const messaging = admin.messaging();
+export function getMessaging() {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+  if (!serviceAccountJson) {
+    return null;
+  }
+
+  try {
+    const serviceAccount = JSON.parse(serviceAccountJson) as admin.ServiceAccount;
+    firebaseApp ??= admin.apps.length
+      ? admin.app()
+      : admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
+
+    return admin.messaging(firebaseApp);
+  } catch (error) {
+    logger.error("Firebase Admin initialization failed", { error });
+    return null;
+  }
+}
