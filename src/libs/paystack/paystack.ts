@@ -1,7 +1,46 @@
-import { Paystack } from "@paystack/paystack-sdk";
+import axios, { AxiosRequestConfig, Method } from "axios";
 import { CreateTransactionParams, PaymentMetadata } from "../../types/paystack";
 
-const paystack = new Paystack(process.env.PAYSTACK_SECRET_KEY || "");
+type PaystackResponse<T> = {
+  status: boolean;
+  message?: string;
+  data: T;
+};
+
+type PaystackTransactionSession = {
+  reference: string;
+  authorization_url: string;
+  access_code: string;
+};
+
+type PaystackCustomer = {
+  customer_code: string;
+};
+
+async function paystackRequest<T>(
+  method: Method,
+  path: string,
+  data?: Record<string, unknown>,
+  params?: Record<string, unknown>,
+): Promise<T> {
+  const config: AxiosRequestConfig = {
+    method,
+    url: `https://api.paystack.co${path}`,
+    headers: {
+      Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY || ""}`,
+      "Content-Type": "application/json",
+    },
+    ...(data ? { data } : {}),
+    ...(params ? { params } : {}),
+  };
+  const response = await axios.request<PaystackResponse<T>>(config);
+
+  if (!response.data.status) {
+    throw new Error(response.data.message || "Paystack request failed");
+  }
+
+  return response.data.data;
+}
 
 export async function createPaystackSession(params: CreateTransactionParams) {
   if (!params.email || !params.amount || !params.customer) {
@@ -18,7 +57,7 @@ export async function createPaystackSession(params: CreateTransactionParams) {
     description,
   };
 
-  const response = await paystack.transaction.initialize({
+  return paystackRequest<PaystackTransactionSession>("POST", "/transaction/initialize", {
     email: params.email,
     customer: params.customer,
     amount: params.amount,
@@ -28,22 +67,15 @@ export async function createPaystackSession(params: CreateTransactionParams) {
     currency: params.currency,
     metadata,
   });
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to initialize Paystack transaction");
-  }
-
-  return response.data;
 }
 
 export async function verifyPaystackTransaction(reference: string) {
-  const response = await paystack.transaction.verify(reference);
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to verify Paystack transaction");
-  }
-
-  const { status, amount, metadata } = response.data;
+  const data = await paystackRequest<{
+    status: string;
+    amount: number;
+    metadata: PaymentMetadata;
+  }>("GET", `/transaction/verify/${encodeURIComponent(reference)}`);
+  const { status, amount, metadata } = data;
   return { status, amount, metadata };
 }
 
@@ -52,89 +84,55 @@ export async function createPaystackRefund(
   amount?: number,
   currency?: string,
 ) {
-  const response = await paystack.refund.create({
+  return paystackRequest("POST", "/refund", {
     transaction: transactionId,
     ...(amount ? { amount } : {}),
     ...(currency ? { currency } : {}),
   });
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to create Paystack refund");
-  }
-
-  return response.data;
 }
 
 export async function retryPaystackRefund(
   refundId: number,
   bankDetails: { accountNumber: string; bankId: string; currency?: string },
 ) {
-  const response = await paystack.refund.retryWithCustomerDetails(refundId, {
+  return paystackRequest("POST", "/refund/retry_with_customer_details", {
+    refund: refundId,
     refund_account_details: {
       currency: bankDetails.currency || "NGN",
       account_number: bankDetails.accountNumber,
       bank_id: bankDetails.bankId,
     },
   });
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to retry Paystack refund");
-  }
-
-  return response.data;
 }
 
 export async function getPaystackBanks(country = "nigeria") {
-  const response = await paystack.bank.list({ country });
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to fetch Paystack banks");
-  }
-
-  return response.data;
+  return paystackRequest("GET", "/bank", undefined, { country });
 }
 
 export async function resolvePaystackAccount(accountNumber: string, bankCode: string) {
-  const response = await paystack.bank.resolve({
+  return paystackRequest("GET", "/bank/resolve", undefined, {
     account_number: accountNumber,
     bank_code: bankCode,
   });
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to resolve Paystack account");
-  }
-
-  return response.data;
 }
 
 export async function createPaystackCustomer(email: string) {
-  const response = await paystack.customer.create({ email });
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to create Paystack customer");
-  }
-
-  return response.data;
+  return paystackRequest<PaystackCustomer>("POST", "/customer", { email });
 }
 
 export async function listPaystackPlans() {
-  const response = await paystack.plan.list({});
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to fetch Paystack plans");
-  }
-
-  return response.data;
+  return paystackRequest("GET", "/plan");
 }
 
 export async function listPaystackSubscriptions(customer: string) {
-  const response = await paystack.subscription.list({ customer });
+  const subscriptions = await paystackRequest<Array<{ status: string }>>(
+    "GET",
+    "/subscription",
+    undefined,
+    { customer },
+  );
 
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to fetch Paystack subscriptions");
-  }
-
-  return response.data.filter(
+  return subscriptions.filter(
     (subscription: { status: string }) =>
       subscription.status === "active" || subscription.status === "non-renewing",
   );
@@ -146,24 +144,14 @@ export async function createPaystackSubscription(
   authorization?: string,
   start_date?: string,
 ) {
-  const response = await paystack.subscription.create({
+  return paystackRequest("POST", "/subscription", {
     customer,
     plan,
     authorization,
     start_date,
   });
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to create Paystack subscription");
-  }
-
-  return response.data;
 }
 
 export async function cancelPaystackSubscription(code: string, token: string) {
-  const response = await paystack.subscription.disable({ code, token });
-
-  if (response.status === false) {
-    throw new Error(response.message || "Failed to cancel Paystack subscription");
-  }
+  await paystackRequest("POST", "/subscription/disable", { code, token });
 }
