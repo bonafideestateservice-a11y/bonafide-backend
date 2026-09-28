@@ -1,7 +1,7 @@
 import Stripe from "stripe";
 import { PaymentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { Request, Response } from "express";
-import { stripe } from "../../libs/stripe";
+import { getStripeClient } from "../../libs/stripe";
 import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
 import { appEvents, AppEventTypes } from "../../events";
@@ -267,7 +267,7 @@ export const stripeWebhook = async (req: Request, res: Response) => {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, providedSignature, secret);
+    event = getStripeClient().webhooks.constructEvent(rawBody, providedSignature, secret);
   } catch (error) {
     logger.error(`Stripe webhook signature verification failed: ${error}`);
     return res.sendStatus(400);
@@ -301,7 +301,7 @@ export const stripeWebhook = async (req: Request, res: Response) => {
 
         let subscription: Stripe.Subscription | undefined;
         if (typeof session.subscription === "string") {
-          subscription = await stripe.subscriptions.retrieve(session.subscription);
+          subscription = await getStripeClient().subscriptions.retrieve(session.subscription);
         }
         await markTransactionSuccessful(metadata, session.id, subscription?.id);
         if (subscription) {

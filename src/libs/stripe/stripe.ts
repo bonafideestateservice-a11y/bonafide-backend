@@ -1,4 +1,4 @@
-import { stripe } from "./index";
+import { getStripeClient } from "./index";
 import { PaymentMetadata } from "../../types/paystack";
 
 export interface CreatePaymentSessionParams {
@@ -22,7 +22,7 @@ export async function createStripeSession({
     throw new Error("quantity must be a positive integer");
   }
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripeClient().checkout.sessions.create({
     success_url: clientUrl,
     cancel_url: clientUrl,
     line_items: [{ price: priceId, quantity }],
