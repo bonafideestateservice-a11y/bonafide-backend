@@ -1,5 +1,4 @@
 import { Router, Request, Response } from "express";
-
 import clientAuthenticationRoutes from "./api/client/authentication";
 import clientVerificationRoutes from "./api/client/verification";
 import adminAuthenticationRoutes from "./api/admin/authentication";

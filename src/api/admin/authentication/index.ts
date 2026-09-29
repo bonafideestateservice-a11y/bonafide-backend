@@ -2,7 +2,16 @@ import { Router } from "express";
 import { ROLE } from "@prisma/client";
 import { checkJwt } from "../../../middlewares/check-jwt";
 import { checkRoles } from "../../../middlewares/check-roles";
-import * as AuthenticationController from "./handlers";
+import { login } from "./handlers/login/login-v1";
+import { changePassword } from "./handlers/change-password/change-password-v1";
+import { forgotPassword } from "./handlers/forgot-password/forgot-password-v1";
+import { resetPassword } from "./handlers/reset-password/reset-password-v1";
+import { verifyOtp } from "./handlers/verify-otp/verify-otp-v1";
+import { getAgentsInformation } from "./handlers/get-agents-information/get-agents-information.v1";
+import { getProfile } from "./handlers/get-profile/get-profile-v1";
+import { updateProfile } from "./handlers/update-profile/update-profile-v1";
+import { changeEmail } from "./handlers/change-email/change-email-v1";
+import { updateNotificationSettings } from "./handlers/update-notification-settings/update-notification-settings-v1";
 import multer from "multer";
 
 const router = Router();
@@ -37,7 +46,7 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *       200:
  *         description: Login successful
  */
-router.post("/login", AuthenticationController.login);
+router.post("/login", login);
 
 /**
  * @swagger
@@ -69,7 +78,7 @@ router.post("/login", AuthenticationController.login);
  *       200:
  *         description: Password changed successfully
  */
-router.post("/change-password", checkJwt, adminOrAgent, AuthenticationController.changePassword);
+router.post("/change-password", checkJwt, adminOrAgent, changePassword);
 
 /**
  * @swagger
@@ -84,7 +93,7 @@ router.post("/change-password", checkJwt, adminOrAgent, AuthenticationController
  *       401: { description: Missing or invalid authentication token }
  *       404: { description: Profile not found }
  */
-router.get("/profile", checkJwt, adminOrAgent, AuthenticationController.getProfile);
+router.get("/profile", checkJwt, adminOrAgent, getProfile);
 
 /**
  * @swagger
@@ -110,13 +119,7 @@ router.get("/profile", checkJwt, adminOrAgent, AuthenticationController.getProfi
  *       401: { description: Missing or invalid authentication token }
  *       404: { description: Profile not found }
  */
-router.patch(
-  "/profile",
-  checkJwt,
-  adminOrAgent,
-  upload.single("profilePhoto"),
-  AuthenticationController.updateProfile,
-);
+router.patch("/profile", checkJwt, adminOrAgent, upload.single("profilePhoto"), updateProfile);
 
 /**
  * @swagger
@@ -142,7 +145,39 @@ router.patch(
  *       401: { description: Incorrect password }
  *       409: { description: Email already in use }
  */
-router.patch("/profile/email", checkJwt, adminOrAgent, AuthenticationController.changeEmail);
+router.patch("/profile/email", checkJwt, adminOrAgent, changeEmail);
+
+/**
+ * @swagger
+ * /api/{version}/admin/notification-settings:
+ *   patch:
+ *     tags: [Admin Authentication]
+ *     summary: Update the authenticated admin's notification settings
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email: { type: boolean }
+ *               sms: { type: boolean }
+ *               push: { type: boolean }
+ *     responses:
+ *       200: { description: Notification settings updated }
+ *       400: { description: Invalid or missing notification settings }
+ *       401: { description: Missing or invalid authentication token }
+ *       403: { description: Insufficient permissions }
+ *       404: { description: Profile not found }
+ */
+router.patch("/notification-settings", checkJwt, adminOrAgent, updateNotificationSettings);
 
 /**
  * @swagger
@@ -169,7 +204,7 @@ router.patch("/profile/email", checkJwt, adminOrAgent, AuthenticationController.
  *       200:
  *         description: Reset token generated
  */
-router.post("/forgot-password", AuthenticationController.forgotPassword);
+router.post("/forgot-password", forgotPassword);
 
 /**
  * @swagger
@@ -199,7 +234,7 @@ router.post("/forgot-password", AuthenticationController.forgotPassword);
  *       400:
  *         description: Invalid or expired OTP
  */
-router.post("/verify-otp", AuthenticationController.verifyOtp);
+router.post("/verify-otp", verifyOtp);
 
 /**
  * @swagger
@@ -233,7 +268,7 @@ router.post("/verify-otp", AuthenticationController.verifyOtp);
  *       400:
  *         description: Invalid/expired OTP or missing fields
  */
-router.post("/reset-password", AuthenticationController.resetPassword);
+router.post("/reset-password", resetPassword);
 
 /**
  * @swagger
@@ -258,6 +293,6 @@ router.post("/reset-password", AuthenticationController.resetPassword);
  *       500:
  *         description: Internal server error
  */
-router.get("/agents/me", checkJwt, adminOrAgent, AuthenticationController.getAgentsInformation);
+router.get("/agents/me", checkJwt, adminOrAgent, getAgentsInformation);
 
 export default router;

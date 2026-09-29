@@ -29,6 +29,7 @@ model User {
   stripeSubscriptions StripeSubscription[]
   notifications       Notification[]        @relation("UserNotifications")
   fcmTokens            FCMToken[]
+  notificationSettings NotificationSettings?
 
   @@index([role, createdAt])
   @@index([createdAt])
@@ -448,6 +449,18 @@ model Notification {
   @@index([serviceId])
   @@index([verificationTypeId])
   @@index([verificationRequestId])
+}
+
+model NotificationSettings {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  email     Boolean  @default(false)
+  sms       Boolean  @default(false)
+  push      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 

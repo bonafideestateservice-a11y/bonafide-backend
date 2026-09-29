@@ -7,3 +7,4 @@ export * from "./verify-otp";
 export * from "./get-profile";
 export * from "./update-profile";
 export * from "./change-email";
+export * from "./update-notification-settings";

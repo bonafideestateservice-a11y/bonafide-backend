@@ -23,6 +23,7 @@ import {
 import { getProfile } from "./handlers/get-profile";
 import { updateProfile } from "./handlers/update-profile";
 import { changeEmail } from "./handlers/change-email";
+import { updateNotificationSettings } from "./handlers/update-notification-settings";
 import multer from "multer";
 
 const router = Router();
@@ -221,6 +222,37 @@ router.patch("/profile", checkJwt, upload.single("profilePhoto"), updateProfile)
  *       409: { description: Email already in use }
  */
 router.patch("/profile/email", checkJwt, changeEmail);
+
+/**
+ * @swagger
+ * /api/{version}/client/notification-settings:
+ *   patch:
+ *     tags: [Authentication]
+ *     summary: Update the authenticated client's notification settings
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email: { type: boolean }
+ *               sms: { type: boolean }
+ *               push: { type: boolean }
+ *     responses:
+ *       200: { description: Notification settings updated }
+ *       400: { description: Invalid or missing notification settings }
+ *       401: { description: Missing or invalid authentication token }
+ *       404: { description: Profile not found }
+ */
+router.patch("/notification-settings", checkJwt, updateNotificationSettings);
 
 /**
  * @swagger

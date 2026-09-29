@@ -1,4 +1,10 @@
-import { Notification, NotificationStatus, NotificationType, Prisma } from "@prisma/client";
+import {
+  Notification,
+  NotificationSettings,
+  NotificationStatus,
+  NotificationType,
+  Prisma,
+} from "@prisma/client";
 import { prismaClient } from "../../../utils/prisma";
 import { logger } from "../../../utils/logger";
 
@@ -32,6 +38,37 @@ export interface UpdateNotificationData {
 
 export type CreateNotificationInput = CreateNotificationData;
 export type UpdateNotificationInput = UpdateNotificationData;
+
+export interface UpdateNotificationSettingsData {
+  email?: boolean;
+  sms?: boolean;
+  push?: boolean;
+}
+
+export const updateNotificationSettings = async (
+  userId: string,
+  data: UpdateNotificationSettingsData,
+): Promise<NotificationSettings | null> => {
+  try {
+    const user = await prismaClient.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) return null;
+
+    const settings = await prismaClient.notificationSettings.upsert({
+      where: { userId },
+      create: { userId, ...data },
+      update: data,
+    });
+
+    logger.info(`Notification settings updated userId=${userId}`);
+    return settings;
+  } catch (error) {
+    logger.error(`Error updating notification settings userId=${userId} ${error}`);
+    throw error;
+  }
+};
 
 export const createNotification = async (data: CreateNotificationData): Promise<Notification> => {
   try {
