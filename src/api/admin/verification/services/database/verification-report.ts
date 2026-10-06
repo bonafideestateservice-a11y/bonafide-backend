@@ -245,7 +245,9 @@ export const submitAgentAssignmentReport = async (
         await transaction.agentAssignment.delete({ where: { id: assignment.id } });
         await transaction.verificationRequest.update({
           where: { id: verificationRequestId },
-          data: { status: await nextStatusAfterRecurringReport(transaction, verificationRequestId) },
+          data: {
+            status: await nextStatusAfterRecurringReport(transaction, verificationRequestId),
+          },
         });
       } else {
         await transaction.agentAssignment.update({

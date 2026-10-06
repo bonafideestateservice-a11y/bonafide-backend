@@ -223,7 +223,9 @@ describe("POST /api/v1/webhook/stripe", () => {
         description: "Monthly land verification",
       };
       const subscriptionId = `sub_checkout_${suffix}`;
-      retrieveSubscription.mockResolvedValue(subscriptionObject(subscriptionId, "active", metadata));
+      retrieveSubscription.mockResolvedValue(
+        subscriptionObject(subscriptionId, "active", metadata),
+      );
       const sessionId = `cs_checkout_${suffix}`;
 
       const response = await send("checkout.session.completed", {

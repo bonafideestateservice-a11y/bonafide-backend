@@ -36,10 +36,7 @@ import { appEvents } from "../../../../events";
 const SECRET = "paystack-unit-secret";
 
 const buildReqRes = (body: object, secret = SECRET) => {
-  const signature = crypto
-    .createHmac("sha512", secret)
-    .update(JSON.stringify(body))
-    .digest("hex");
+  const signature = crypto.createHmac("sha512", secret).update(JSON.stringify(body)).digest("hex");
   const req = { headers: { "x-paystack-signature": signature }, body } as unknown as Request;
   const res = {
     sendStatus: jest.fn().mockReturnThis(),
@@ -162,7 +159,10 @@ describe("paystackWebhook (unit)", () => {
           nextPaymentDate: new Date("2026-11-20T00:00:00Z"),
         },
       ]);
-      prismaMock.transaction.create.mockImplementation(async ({ data }) => ({ id: "txn-2", ...data }));
+      prismaMock.transaction.create.mockImplementation(async ({ data }) => ({
+        id: "txn-2",
+        ...data,
+      }));
 
       await run({
         event: "charge.success",
@@ -187,7 +187,10 @@ describe("paystackWebhook (unit)", () => {
   });
 
   it("charge.failed marks the due payment failed", async () => {
-    prismaMock.transaction.findFirst.mockResolvedValue({ id: "txn-1", verificationRequestId: "vr-1" });
+    prismaMock.transaction.findFirst.mockResolvedValue({
+      id: "txn-1",
+      verificationRequestId: "vr-1",
+    });
 
     await run({ event: "charge.failed", data: { reference: "ref-1" } });
 

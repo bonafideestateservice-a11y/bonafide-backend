@@ -60,7 +60,12 @@ const createTransaction = (
 
 const reportPeriod = (verificationRequestId: string, transactionId: string) =>
   prismaClient.verificationReport.create({
-    data: { verificationRequestId, transactionId, submittedByAgentId: agentId, generatedAt: new Date() },
+    data: {
+      verificationRequestId,
+      transactionId,
+      submittedByAgentId: agentId,
+      generatedAt: new Date(),
+    },
   });
 
 const requestStatus = async (id: string) =>
@@ -264,7 +269,9 @@ describe("POST /api/v1/webhook/paystack", () => {
     it("records a renewal without interrupting an inspection in progress", async () => {
       const reference = `ref-renew-1-${suffix}`;
 
-      const response = await send(chargeSuccess(reference, { subscription_code: subscriptionCode }));
+      const response = await send(
+        chargeSuccess(reference, { subscription_code: subscriptionCode }),
+      );
 
       expect(response.status).toBe(200);
       const renewal = await prismaClient.transaction.findUniqueOrThrow({
@@ -317,7 +324,9 @@ describe("POST /api/v1/webhook/paystack", () => {
       });
       const reference = `ref-renew-closest-${suffix}`;
 
-      const response = await send(chargeSuccess(reference, { paid_at: "2026-11-19T09:00:00.000Z" }));
+      const response = await send(
+        chargeSuccess(reference, { paid_at: "2026-11-19T09:00:00.000Z" }),
+      );
 
       expect(response.status).toBe(200);
       const renewal = await prismaClient.transaction.findUniqueOrThrow({

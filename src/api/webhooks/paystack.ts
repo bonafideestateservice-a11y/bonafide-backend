@@ -62,7 +62,7 @@ const getPlanCode = (event: PaystackEvent) => event.data?.plan?.plan_code;
  * subscription code; then the customer + plan is used. A customer can hold several
  * subscriptions on one plan (e.g. two properties), so the one whose next payment date is
  * closest to the charge wins.
-*/
+ */
 
 const findSubscriptionForCharge = async (event: PaystackEvent) => {
   const subscriptionCode = getSubscriptionCode(event);

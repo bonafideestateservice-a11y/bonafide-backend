@@ -62,9 +62,18 @@ const createInspectedRequest = async () => {
     },
   });
   await prismaClient.verificationChecklistItem.create({
-    data: { agentAssignmentId: assignment.id, label: "Perimeter", status: "COMPLETE", sortOrder: 0 },
+    data: {
+      agentAssignmentId: assignment.id,
+      label: "Perimeter",
+      status: "COMPLETE",
+      sortOrder: 0,
+    },
   });
-  return { verificationRequestId: verificationRequest.id, assignmentId: assignment.id, firstPeriod };
+  return {
+    verificationRequestId: verificationRequest.id,
+    assignmentId: assignment.id,
+    firstPeriod,
+  };
 };
 
 const submitReport = (assignmentId: string) =>
@@ -109,10 +118,7 @@ afterAll(async () => {
   const where = { verificationRequestId: { in: requestIds } };
   await prismaClient.verificationChecklistItem.deleteMany({
     where: {
-      OR: [
-        { report: { verificationRequestId: { in: requestIds } } },
-        { agentAssignment: where },
-      ],
+      OR: [{ report: { verificationRequestId: { in: requestIds } } }, { agentAssignment: where }],
     },
   });
   await prismaClient.verificationReport.deleteMany({ where });

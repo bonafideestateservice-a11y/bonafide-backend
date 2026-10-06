@@ -14,7 +14,7 @@ import { prismaClient } from "../../../utils/prisma";
  *
  * A "paid period" is a successful transaction. It is reported once a report points at it
  * (VerificationReport.transactionId).
-*/
+ */
 
 type Db = Prisma.TransactionClient | typeof prismaClient;
 
@@ -103,7 +103,7 @@ export const markRequestPaymentFailed = (db: Db, verificationRequestId: string) 
 /**
  * The subscription ended: complete the request if every paid period is reported. Requests
  * still in progress are completed by report submission instead.
-*/
+ */
 
 export const completeRequestIfFinished = async (db: Db, verificationRequestId: string) => {
   if (await findUnreportedPaidTransaction(db, verificationRequestId)) return { count: 0 };
