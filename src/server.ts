@@ -1,5 +1,6 @@
 import app from "./app";
 import { config } from "./config";
+import { closeJobs, initJobs } from "./jobs";
 import { logger } from "./utils/logger";
 
 const server = app.listen(config.port, () => {
@@ -7,9 +8,17 @@ const server = app.listen(config.port, () => {
   logger.info(`Docs available at http://localhost:${config.port}/docs`);
 });
 
+if (config.runWorkers) {
+  initJobs();
+}
+
 const shutdown = (signal: string) => {
   logger.info(`${signal} received, shutting down`);
-  server.close(() => process.exit(0));
+  server.close(() => {
+    closeJobs()
+      .catch((error) => logger.error("Error stopping background workers", error))
+      .finally(() => process.exit(0));
+  });
 };
 
 process.on("SIGINT", () => shutdown("SIGINT"));

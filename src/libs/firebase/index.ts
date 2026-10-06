@@ -4,18 +4,19 @@ import { logger } from "../../utils/logger";
 let firebaseApp: admin.app.App | undefined;
 
 export function getMessaging() {
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
-  if (!serviceAccountJson) {
+  if (!projectId || !clientEmail || !privateKey) {
     return null;
   }
 
   try {
-    const serviceAccount = JSON.parse(serviceAccountJson) as admin.ServiceAccount;
     firebaseApp ??= admin.apps.length
       ? admin.app()
       : admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
+          credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
         });
 
     return admin.messaging(firebaseApp);

@@ -4,6 +4,7 @@ import {
   NotificationStatus,
   NotificationType,
   Prisma,
+  ROLE,
 } from "@prisma/client";
 import { prismaClient } from "../../../utils/prisma";
 import { logger } from "../../../utils/logger";
@@ -69,6 +70,87 @@ export const updateNotificationSettings = async (
     throw error;
   }
 };
+
+export type NotificationChannelSetting = "email" | "push";
+
+export const isNotificationChannelEnabled = async (
+  userId: string,
+  channel: NotificationChannelSetting,
+): Promise<boolean> => {
+  try {
+    const settings = await prismaClient.notificationSettings.findUnique({
+      where: { userId },
+      select: { email: true, push: true },
+    });
+    return settings?.[channel] ?? false;
+  } catch (error) {
+    logger.error(`Error reading notification settings userId=${userId} ${error}`);
+    throw error;
+  }
+};
+
+const notificationRecipientSelect = {
+  id: true,
+  email: true,
+  fullName: true,
+  phone: true,
+} satisfies Prisma.UserSelect;
+
+export type NotificationRecipient = Prisma.UserGetPayload<{
+  select: typeof notificationRecipientSelect;
+}>;
+
+export const getNotificationRecipient = async (
+  userId: string,
+): Promise<NotificationRecipient | null> => {
+  try {
+    return await prismaClient.user.findUnique({
+      where: { id: userId },
+      select: notificationRecipientSelect,
+    });
+  } catch (error) {
+    logger.error(`Error fetching notification recipient userId=${userId} ${error}`);
+    throw error;
+  }
+};
+
+export const getAdminNotificationRecipients = async (
+  excludeUserIds: string[] = [],
+): Promise<NotificationRecipient[]> => {
+  try {
+    return await prismaClient.user.findMany({
+      where: { role: ROLE.ADMIN, id: { notIn: excludeUserIds } },
+      select: notificationRecipientSelect,
+    });
+  } catch (error) {
+    logger.error(`Error fetching admin notification recipients ${error}`);
+    throw error;
+  }
+};
+
+export const getVerificationRequestNotificationContext = async (verificationRequestId: string) => {
+  try {
+    return await prismaClient.verificationRequest.findUnique({
+      where: { id: verificationRequestId },
+      include: {
+        user: { select: notificationRecipientSelect },
+        verificationType: { include: { service: true } },
+        agentAssignment: {
+          include: { agent: { include: { user: { select: notificationRecipientSelect } } } },
+        },
+      },
+    });
+  } catch (error) {
+    logger.error(
+      `Error fetching notification context verificationRequestId=${verificationRequestId} ${error}`,
+    );
+    throw error;
+  }
+};
+
+export type VerificationRequestNotificationContext = NonNullable<
+  Awaited<ReturnType<typeof getVerificationRequestNotificationContext>>
+>;
 
 export const createNotification = async (data: CreateNotificationData): Promise<Notification> => {
   try {

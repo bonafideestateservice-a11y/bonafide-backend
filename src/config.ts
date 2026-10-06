@@ -15,6 +15,8 @@ interface Config {
   };
   corsOrigins: string[];
   logLevel: string;
+  /** Run BullMQ workers inside the API process. Set RUN_WORKERS=false when using `npm run worker`. */
+  runWorkers: boolean;
 }
 
 export const config: Config = {
@@ -31,4 +33,5 @@ export const config: Config = {
     .map((origin) => origin.trim())
     .filter(Boolean),
   logLevel: process.env.LOG_LEVEL || "info",
+  runWorkers: process.env.RUN_WORKERS !== "false",
 };

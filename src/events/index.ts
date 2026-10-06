@@ -60,6 +60,18 @@ export interface InspectionStartedPayload {
   agentId: string;
 }
 
+export interface AppEventPayloads {
+  [AppEventTypes.USER_REGISTERED]: UserRegisteredPayload;
+  [AppEventTypes.PAYMENT_RECEIVED]: PaymentReceivedPayload;
+  [AppEventTypes.FORGOT_PASSWORD]: ForgotPasswordPayload;
+  [AppEventTypes.VERIFICATION_REQUEST_CREATED]: VerificationRequestCreatedPayload;
+  [AppEventTypes.REPORT_UPLOADED]: ReportUploadedPayload;
+  [AppEventTypes.AGENT_ASSIGNED]: AgentAssignedPayload;
+  [AppEventTypes.INSPECTION_STARTED]: InspectionStartedPayload;
+}
+
+export type PayloadEventType = keyof AppEventPayloads;
+
 class AppEvents extends EventEmitter {}
 
 export const appEvents = new AppEvents();

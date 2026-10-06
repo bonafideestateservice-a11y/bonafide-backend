@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 !.env.example
+src/libs/firebase/*-firebase-adminsdk-*.json
 *.log
 coverage/
 .DS_Store

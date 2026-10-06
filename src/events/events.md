@@ -37,4 +37,20 @@ When adding an event, update the enum, emit it from the owning application flow,
 | `AGENT_ASSIGNED`               | `{ assignmentId, verificationRequestId, agentId }`                                                                   | `createAgentAssignment` after `AgentAssignment.create` succeeds              | Any workflow that assigns an agent to a verification request                   |
 | `INSPECTION_STARTED`           | `{ assignmentId, verificationRequestId, agentId }`                                                                   | `startAgentAssignment` after an `ASSIGNED` to `ACCEPTED` transaction commits | Admin `POST /verification/agent-assignments/:id/start`                         |
 
-Listeners are registered in `listeners.ts`. Event names and payload interfaces are defined in `index.ts`.
+## Notification Delivery
+
+Listeners in `listeners.ts` only add the event to the `notification-events` BullMQ queue, so endpoints never wait on email or push delivery. The workers in `src/jobs/notifications` choose the recipients and send each message; see `src/jobs/jobs.md` for the pipeline and the email templates.
+
+| Event                          | Recipients                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `USER_REGISTERED`              | The registered user (`userId`/`email` from the payload)                                            |
+| `PAYMENT_RECEIVED`             | The paying user and all `ADMIN` users                                                              |
+| `FORGOT_PASSWORD`              | The user who initiated the reset (`userId`/`email` from the payload)                               |
+| `VERIFICATION_REQUEST_CREATED` | The user who submitted the request and all `ADMIN` users                                           |
+| `REPORT_UPLOADED`              | The user who submitted the request (unless `notifyOnReportReady` is off) and all `ADMIN` users     |
+| `AGENT_ASSIGNED`               | The user who submitted the request and the assigned agent                                          |
+| `INSPECTION_STARTED`           | The user who submitted the request (unless `notifyOnInspectionStart` is off) and all `ADMIN` users |
+
+`USER_REGISTERED` and `FORGOT_PASSWORD` are transactional emails: always sent, never recorded. Every other delivery respects the recipient's `NotificationSettings` and is recorded in the `Notification` table. An admin who is also the requesting user is notified once.
+
+Event names, payload interfaces and the `AppEventPayloads` map are defined in `index.ts`.

@@ -1,21 +1,7 @@
-const sendMailWithTemplate = jest.fn();
+const enqueueNotificationEvent = jest.fn();
 
-jest.mock("../../libs/zeptomail", () => ({
-  appEventTypeToEmailConfig: {
-    USER_REGISTERED: {
-      templateKey: "user-registered-template",
-      buildMergeInfo: (payload: Record<string, string>) => payload,
-    },
-    FORGOT_PASSWORD: {
-      templateKey: "forgot-password-template",
-      buildMergeInfo: (payload: Record<string, string>) => payload,
-    },
-  },
-  clientSendMailWithTemplate: sendMailWithTemplate,
-}));
-
-jest.mock("../../libs/firebase/firebase", () => ({
-  sendNotificationToUser: jest.fn(),
+jest.mock("../../jobs/notifications/queue", () => ({
+  enqueueNotificationEvent,
 }));
 
 jest.mock("../../utils/logger", () => ({
@@ -28,101 +14,54 @@ jest.mock("../../utils/logger", () => ({
 import { appEvents, AppEventTypes } from "../../events";
 import { logger } from "../../utils/logger";
 
-describe("USER_REGISTERED listener", () => {
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+describe("event listeners", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    sendMailWithTemplate.mockResolvedValue(undefined);
+    enqueueNotificationEvent.mockResolvedValue({ id: "job-1" });
   });
 
-  it("sends the registration email using the configured template", async () => {
-    appEvents.emit(AppEventTypes.USER_REGISTERED, {
-      userId: "user-1",
-      email: "user@example.com",
-      firstName: "Test User",
-    });
+  it.each([
+    [AppEventTypes.USER_REGISTERED, { userId: "user-1", email: "a@b.com", firstName: "A" }],
+    [
+      AppEventTypes.FORGOT_PASSWORD,
+      { userId: "user-1", email: "a@b.com", otp: "123456", expiresIn: "10 minutes" },
+    ],
+    [AppEventTypes.VERIFICATION_REQUEST_CREATED, { verificationRequestId: "vr-1", userId: "u" }],
+    [
+      AppEventTypes.REPORT_UPLOADED,
+      { reportId: "r-1", verificationRequestId: "vr-1", submittedByAgentId: "agent-1" },
+    ],
+    [
+      AppEventTypes.AGENT_ASSIGNED,
+      { assignmentId: "as-1", verificationRequestId: "vr-1", agentId: "agent-1" },
+    ],
+    [
+      AppEventTypes.INSPECTION_STARTED,
+      { assignmentId: "as-1", verificationRequestId: "vr-1", agentId: "agent-1" },
+    ],
+  ])("queues %s with its payload", async (eventType, payload) => {
+    appEvents.emit(eventType, payload);
+    await flush();
 
-    await new Promise<void>((resolve) => setImmediate(resolve));
-
-    expect(sendMailWithTemplate).toHaveBeenCalledWith({
-      mail_template_key: "user-registered-template",
-      email_address: "user@example.com",
-      name: "Test User",
-      merge_info: { firstName: "Test User" },
-    });
-    expect(logger.info).toHaveBeenCalledWith(
-      "[event] USER_REGISTERED email sent to user@example.com",
-    );
+    expect(enqueueNotificationEvent).toHaveBeenCalledWith(eventType, payload);
   });
 
-  it("logs registration email delivery failures", async () => {
-    const error = new Error("mail provider unavailable");
-    sendMailWithTemplate.mockRejectedValue(error);
+  it("logs when an event cannot be queued without throwing from emit", async () => {
+    enqueueNotificationEvent.mockRejectedValue(new Error("REDIS_URL is required"));
 
-    appEvents.emit(AppEventTypes.USER_REGISTERED, {
-      userId: "user-1",
-      email: "user@example.com",
-      firstName: "Test User",
-    });
+    expect(() =>
+      appEvents.emit(AppEventTypes.USER_REGISTERED, {
+        userId: "user-1",
+        email: "a@b.com",
+        firstName: "A",
+      }),
+    ).not.toThrow();
+    await flush();
 
-    await new Promise<void>((resolve) => setImmediate(resolve));
-
-    expect(logger.error).toHaveBeenCalledWith("[event] USER_REGISTERED email delivery failed", {
-      email: "user@example.com",
-      userId: "user-1",
-      error,
-    });
-  });
-});
-
-describe("FORGOT_PASSWORD listener", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    sendMailWithTemplate.mockResolvedValue(undefined);
-  });
-
-  it("sends the reset OTP using the configured template", async () => {
-    appEvents.emit(AppEventTypes.FORGOT_PASSWORD, {
-      userId: "user-1",
-      email: "user@example.com",
-      otp: "123456",
-      expiresIn: "10 minutes",
-    });
-
-    await new Promise<void>((resolve) => setImmediate(resolve));
-
-    expect(sendMailWithTemplate).toHaveBeenCalledWith({
-      mail_template_key: "forgot-password-template",
-      email_address: "user@example.com",
-      name: "user",
-      merge_info: {
-        firstName: "user",
-        resetLink: "123456",
-        otp: "123456",
-        expiresIn: "10 minutes",
-      },
-    });
-    expect(logger.info).toHaveBeenCalledWith(
-      "[event] FORGOT_PASSWORD email sent to user@example.com",
-    );
-  });
-
-  it("logs delivery failures without throwing from the event listener", async () => {
-    const error = new Error("mail provider unavailable");
-    sendMailWithTemplate.mockRejectedValue(error);
-
-    appEvents.emit(AppEventTypes.FORGOT_PASSWORD, {
-      userId: "user-1",
-      email: "user@example.com",
-      otp: "123456",
-      expiresIn: "10 minutes",
-    });
-
-    await new Promise<void>((resolve) => setImmediate(resolve));
-
-    expect(logger.error).toHaveBeenCalledWith("[event] FORGOT_PASSWORD email delivery failed", {
-      email: "user@example.com",
-      userId: "user-1",
-      error,
+    expect(logger.error).toHaveBeenCalledWith("[event] USER_REGISTERED could not be queued", {
+      message: "REDIS_URL is required",
     });
   });
 });
