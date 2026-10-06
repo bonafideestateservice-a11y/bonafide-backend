@@ -347,7 +347,7 @@ Assignments created before the migration with no payment linked fall back to the
    Before this change nothing set `COMPLETED` anywhere, so one-time requests never finished.
 5. **Emit `REPORT_UPLOADED`**, unchanged.
 
-**Side effect:** `GET /admin/verification/agent-assignments/:id/report` reads through the assignment, so it returns `404` once a recurring assignment is released. Agents can still see the report through `GET /admin/verification/agents/verification-requests/:id/report` (now returns the latest) and `GET /admin/verification/agents/reports`.
+**Side effect:** `GET /admin/verification/agent-assignments/:id/report` reads through the assignment, so it returns `404` once a recurring assignment is released. Use **`GET /admin/verification/agents/reports/:id`** (report ID, from the agent's reports list) to open finished work: it returns the same client, address, photos and notes, plus `id`, `verificationRequestId`, `generatedAt` and `reviewStatus`, and only returns the agent's own reports.
 
 ---
 
@@ -447,11 +447,11 @@ The full report and summary also take the agent, notes and photos from the repor
 
 ```bash
 docker run -d --rm --name bonafide-test-pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=bonafide_test -p 55432:5432 postgres:15
-DATABASE_URL=postgresql://postgres:test@localhost:55432/bonafide_test npx prisma db push
+DATABASE_URL=postgresql://postgres:test@localhost:55432/bonafide_test npx prisma migrate deploy
 DATABASE_URL=postgresql://postgres:test@localhost:55432/bonafide_test npx jest --runInBand
 ```
 
-(`prisma migrate deploy` can't build a fresh database; see below.)
+A fresh database built from migrations matches `schema.prisma` exactly (checked with `prisma migrate diff`).
 
 ## Deploying
 
@@ -460,4 +460,18 @@ DATABASE_URL=postgresql://postgres:test@localhost:55432/bonafide_test npx jest -
 3. Deploy the API (and worker) together with the migration. The new code needs the new columns.
 4. Tell the frontend about `AWAITING_RENEWAL`, `REPORT_SUBMITTED` on assignments, and `GET /client/verification-requests/:id/reports`.
 
-**Existing migration history can't build a fresh database.** `20260917000000_add_viewed_at_to_verification_report` alters `VerificationReport`, but the table is only created in `20260918000000_repair_verification_models`. Databases that already ran them are fine; CI or a new developer running `migrate deploy` on an empty database will fail. This predates this change and is not fixed here.
+**Migration history fixed (7 Oct 2026).** A fresh database couldn't be built from migrations:
+
+- `20260917000000_add_viewed_at_to_verification_report` altered `VerificationReport` before `20260918000000_repair_verification_models` created it. It's now guarded and does nothing when the table doesn't exist yet (the repair migration already creates the column and index).
+- `Notification`, `FCMToken`, their enums, `User.provider`/`providerId`, nullable `User.password` and some index changes had no migration (they were applied outside migrations). `20261007090000_add_untracked_notification_and_auth_schema` adds them, every statement guarded, so it's a no-op on databases that already have them.
+
+**Every existing database** (Aiven is done) needs the edited migration's checksum updated, or `prisma migrate dev` reports it as "modified after it was applied" and offers to reset the database:
+
+```sql
+UPDATE "_prisma_migrations"
+SET checksum = '0de9ca9835196d5f1503b6d94302889939025d7178fac418d021c7a91307bbce'
+WHERE migration_name = '20260917000000_add_viewed_at_to_verification_report'
+  AND checksum = '8e110ebea50dae1a866a6a373e4a911ece38122cea60dfc5f7aaf434c2a2f8c1';
+```
+
+Then run `npx prisma migrate deploy`.

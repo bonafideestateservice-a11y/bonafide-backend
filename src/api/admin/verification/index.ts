@@ -14,6 +14,7 @@ import { updateAgentAssignmentNotes } from "./handlers/update-agent-assignment-n
 import { submitAgentReport } from "./handlers/submit-agent-report";
 import { getAgentAssignmentReportHandler } from "./handlers/get-agent-assignment-report";
 import { assignVerificationRequestAgent } from "./handlers/assign-verification-request-agent";
+import { getAgentReport } from "./handlers/get-agent-report";
 import multer from "multer";
 
 const router = Router();
@@ -345,6 +346,35 @@ router.get("/verification/agents/stats", checkJwt, adminOrAgent, getAgentsStats)
  *       403: { description: Insufficient permissions }
  */
 router.get("/verification/agents/reports", checkJwt, adminOrAgent, getAgentsReports);
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification/agents/reports/{id}:
+ *   get:
+ *     tags: [Admin Verification]
+ *     summary: Get one of the authenticated agent's reports by report ID
+ *     description: >
+ *       Use this to open finished work. Unlike /agent-assignments/{id}/report it keeps
+ *       working after a recurring assignment is released at the end of its period.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Report ID (from the agent's reports list)
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Report details, client, checklist photos and notes }
+ *       401: { description: Missing or invalid authentication token }
+ *       403: { description: Insufficient permissions }
+ *       404: { description: Report not found, or submitted by another agent }
+ */
+router.get("/verification/agents/reports/:id", checkJwt, adminOrAgent, getAgentReport);
 
 /**
  * @swagger

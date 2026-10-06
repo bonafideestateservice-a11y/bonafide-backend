@@ -61,12 +61,22 @@ const createInspectedRequest = async () => {
       additionalNotes: "September inspection notes.",
     },
   });
-  await prismaClient.verificationChecklistItem.create({
+  const checklistItem = await prismaClient.verificationChecklistItem.create({
     data: {
       agentAssignmentId: assignment.id,
       label: "Perimeter",
       status: "COMPLETE",
       sortOrder: 0,
+    },
+  });
+  await prismaClient.document.create({
+    data: {
+      verificationRequestId: verificationRequest.id,
+      checklistItemId: checklistItem.id,
+      url: "https://cdn.test/perimeter.jpg",
+      fileName: "perimeter.jpg",
+      fileType: "image/jpeg",
+      fileSizeBytes: 1000,
     },
   });
   return {
@@ -168,6 +178,49 @@ describe("Recurring verification report workflow", () => {
         prismaClient.agentAssignment.findUnique({ where: { id: assignmentId } }),
       ).resolves.toBeNull();
       expect(await requestStatus(verificationRequestId)).toBe(VerificationStatus.AWAITING_RENEWAL);
+    });
+
+    it("still opens the released assignment's report by report ID", async () => {
+      const byAssignment = await request(app)
+        .get(`/api/v1/admin/verification/agent-assignments/${assignmentId}/report`)
+        .set("Authorization", `Bearer ${agentToken}`);
+      expect(byAssignment.status).toBe(404);
+
+      const response = await request(app)
+        .get(`/api/v1/admin/verification/agents/reports/${reportId}`)
+        .set("Authorization", `Bearer ${agentToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        id: reportId,
+        verificationRequestId,
+        generatedAt: expect.any(String),
+        reviewStatus: "PENDING",
+        client: {
+          firstName: "Recurring",
+          lastName: "client",
+          phone: "",
+          email: `recurring-report-client-${suffix}@example.com`,
+        },
+        address: "Plot 7, Abuja",
+        photos: [{ url: "https://cdn.test/perimeter.jpg", label: "Perimeter" }],
+        additionalNotes: "September inspection notes.",
+        reportUrl: null,
+      });
+    });
+
+    it("hides a report from agents who didn't write it", async () => {
+      const otherAgentUser = await createUser("AGENT", "other-agent");
+      const otherAgent = await prismaClient.verificationAgent.create({
+        data: { userId: otherAgentUser.id, name: "Other Agent" },
+      });
+
+      const response = await request(app)
+        .get(`/api/v1/admin/verification/agents/reports/${reportId}`)
+        .set("Authorization", `Bearer ${generateToken({ id: otherAgentUser.id })}`);
+
+      expect(response.status).toBe(404);
+      await prismaClient.verificationAgent.delete({ where: { id: otherAgent.id } });
     });
 
     it("lets the admin assign the next period once the renewal is paid", async () => {

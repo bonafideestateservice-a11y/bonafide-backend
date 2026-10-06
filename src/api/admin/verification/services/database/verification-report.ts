@@ -298,6 +298,42 @@ export type AgentAssignmentReport = {
   reportUrl: string | null;
 };
 
+type ReportViewSource = {
+  details: Prisma.JsonValue;
+  user: { fullName: string; phone: string | null; email: string };
+  checklistItems: { label: string; media: { url: string }[] }[];
+  additionalNotes: string | null;
+  reportUrl: string | null;
+};
+
+const toReportView = (source: ReportViewSource): AgentAssignmentReport => {
+  const names = source.user.fullName.trim().split(/\s+/);
+  const address =
+    typeof source.details === "object" && source.details !== null && !Array.isArray(source.details)
+      ? (source.details as Record<string, unknown>).propertyAddress
+      : "";
+
+  return {
+    client: {
+      firstName: names[0] || "",
+      lastName: names.slice(1).join(" "),
+      phone: source.user.phone ?? "",
+      email: source.user.email,
+    },
+    address: typeof address === "string" ? address : String(address ?? ""),
+    photos: source.checklistItems.flatMap((item) =>
+      item.media.map((media) => ({ url: media.url, label: item.label })),
+    ),
+    additionalNotes: source.additionalNotes ?? "",
+    reportUrl: source.reportUrl,
+  };
+};
+
+const reportChecklistSelect = {
+  select: { label: true, media: { select: { url: true } } },
+  orderBy: { sortOrder: "asc" },
+} satisfies Prisma.VerificationChecklistItemFindManyArgs;
+
 export const getAgentAssignmentReport = async (
   agentId: string,
   assignmentId: string,
@@ -319,43 +355,81 @@ export const getAgentAssignmentReport = async (
             },
           },
         },
-        checklistItems: {
-          select: {
-            label: true,
-            media: { select: { url: true } },
-          },
-          orderBy: { sortOrder: "asc" },
-        },
+        checklistItems: reportChecklistSelect,
       },
     });
 
     if (!assignment) return null;
-    const names = assignment.verificationRequest.user.fullName.trim().split(/\s+/);
-    const details = assignment.verificationRequest.details;
-    const address =
-      typeof details === "object" && details !== null && !Array.isArray(details)
-        ? (details as Record<string, unknown>).propertyAddress
-        : "";
 
-    return {
-      client: {
-        firstName: names[0] || "",
-        lastName: names.slice(1).join(" "),
-        phone: assignment.verificationRequest.user.phone ?? "",
-        email: assignment.verificationRequest.user.email,
-      },
-      address: typeof address === "string" ? address : String(address ?? ""),
-      photos: assignment.checklistItems.flatMap((item) =>
-        item.media.map((media) => ({ url: media.url, label: item.label })),
-      ),
-      additionalNotes: assignment.additionalNotes ?? "",
+    return toReportView({
+      details: assignment.verificationRequest.details,
+      user: assignment.verificationRequest.user,
+      checklistItems: assignment.checklistItems,
+      additionalNotes: assignment.additionalNotes,
       reportUrl:
         assignment.transaction?.report?.reportUrl ??
         assignment.verificationRequest.reports[0]?.reportUrl ??
         null,
-    };
+    });
   } catch (error) {
     logger.error(`Error fetching assignment report assignmentId=${assignmentId} ${error}`);
+    throw error;
+  }
+};
+
+export type AgentReportDetail = AgentAssignmentReport & {
+  id: string;
+  verificationRequestId: string;
+  generatedAt: Date | null;
+  reviewStatus: ReportReviewStatus;
+};
+
+/**
+ * One of the agent's own reports, by report ID. Unlike getAgentAssignmentReport this keeps
+ * working after a recurring assignment is released, because the report holds its own notes
+ * and checklist.
+ */
+export const getAgentReportById = async (
+  agentId: string,
+  reportId: string,
+): Promise<AgentReportDetail | null> => {
+  try {
+    const report = await prismaClient.verificationReport.findFirst({
+      where: { id: reportId, submittedByAgentId: agentId },
+      select: {
+        id: true,
+        verificationRequestId: true,
+        generatedAt: true,
+        reviewStatus: true,
+        reportUrl: true,
+        additionalNotes: true,
+        checklistItems: reportChecklistSelect,
+        verificationRequest: {
+          select: {
+            details: true,
+            user: { select: { fullName: true, phone: true, email: true } },
+          },
+        },
+      },
+    });
+
+    if (!report) return null;
+
+    return {
+      id: report.id,
+      verificationRequestId: report.verificationRequestId,
+      generatedAt: report.generatedAt,
+      reviewStatus: report.reviewStatus,
+      ...toReportView({
+        details: report.verificationRequest.details,
+        user: report.verificationRequest.user,
+        checklistItems: report.checklistItems,
+        additionalNotes: report.additionalNotes,
+        reportUrl: report.reportUrl,
+      }),
+    };
+  } catch (error) {
+    logger.error(`Error fetching agent report reportId=${reportId} agentId=${agentId} ${error}`);
     throw error;
   }
 };
