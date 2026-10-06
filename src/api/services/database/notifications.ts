@@ -138,6 +138,13 @@ export const getVerificationRequestNotificationContext = async (verificationRequ
         agentAssignment: {
           include: { agent: { include: { user: { select: notificationRecipientSelect } } } },
         },
+        // Recurring assignments are deleted once a period is reported, so report emails read
+        // the agent from the report itself.
+        reports: {
+          orderBy: { generatedAt: "desc" },
+          take: 5,
+          select: { id: true, agent: { select: { name: true } } },
+        },
       },
     });
   } catch (error) {

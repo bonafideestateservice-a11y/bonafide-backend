@@ -219,6 +219,7 @@ export type VerificationRequestTracking = Prisma.VerificationRequestGetPayload<{
     agentAssignment: {
       select: {
         status: true;
+        transactionId: true;
         createdAt: true;
         scheduledAt: true;
         completedAt: true;
@@ -246,10 +247,10 @@ export type VerificationRequestTracking = Prisma.VerificationRequestGetPayload<{
         };
       };
     };
-    report: {
-      select: {
-        generatedAt: true;
-      };
+    reports: {
+      select: { generatedAt: true; transactionId: true };
+      orderBy: { generatedAt: "desc" };
+      take: 1;
     };
   };
 }>;
@@ -275,6 +276,7 @@ export const getVerificationRequestTrackingForUser = async (
         agentAssignment: {
           select: {
             status: true,
+            transactionId: true,
             createdAt: true,
             scheduledAt: true,
             completedAt: true,
@@ -302,10 +304,10 @@ export const getVerificationRequestTrackingForUser = async (
             },
           },
         },
-        report: {
-          select: {
-            generatedAt: true,
-          },
+        reports: {
+          select: { generatedAt: true, transactionId: true },
+          orderBy: { generatedAt: "desc" },
+          take: 1,
         },
       },
     });
@@ -322,11 +324,15 @@ export const getVerificationRequestTrackingForUser = async (
 export type VerificationRequestReportSummary = Prisma.VerificationRequestGetPayload<{
   select: {
     details: true;
-    report: {
+    reports: {
       select: {
         generatedAt: true;
         findings: true;
+        agent: { select: { name: true } };
+        checklistItems: { select: { media: { select: { url: true }; take: 3 } } };
       };
+      orderBy: { generatedAt: "desc" };
+      take: 1;
     };
     agentAssignment: {
       select: {
@@ -367,11 +373,15 @@ export const getVerificationRequestReportSummaryForUser = async (
       },
       select: {
         details: true,
-        report: {
+        reports: {
           select: {
             generatedAt: true,
             findings: true,
+            agent: { select: { name: true } },
+            checklistItems: { select: { media: { select: { url: true }, take: 3 } } },
           },
+          orderBy: { generatedAt: "desc" },
+          take: 1,
         },
         agentAssignment: {
           select: {
@@ -410,14 +420,19 @@ export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload
   select: {
     id: true;
     details: true;
-    report: {
+    reports: {
       select: {
         id: true;
         generatedAt: true;
         reviewStatus: true;
         summary: true;
         findings: true;
+        additionalNotes: true;
+        agent: { select: { name: true } };
+        checklistItems: { select: { label: true; media: { select: { url: true } } } };
       };
+      orderBy: { generatedAt: "desc" };
+      take: 1;
     };
     agentAssignment: {
       select: {
@@ -453,14 +468,19 @@ export const getVerificationRequestFullReportData = async (
       select: {
         id: true,
         details: true,
-        report: {
+        reports: {
           select: {
             id: true,
             generatedAt: true,
             reviewStatus: true,
             summary: true,
             findings: true,
+            additionalNotes: true,
+            agent: { select: { name: true } },
+            checklistItems: { select: { label: true, media: { select: { url: true } } } },
           },
+          orderBy: { generatedAt: "desc" },
+          take: 1,
         },
         agentAssignment: {
           select: {
@@ -487,6 +507,46 @@ export const getVerificationRequestFullReportData = async (
     return fullReport;
   } catch (error) {
     logger.error(`Error getting verification request full report ${error}`);
+    throw error;
+  }
+};
+
+export type VerificationRequestReportHistoryItem = Prisma.VerificationReportGetPayload<{
+  select: {
+    id: true;
+    generatedAt: true;
+    reviewStatus: true;
+    viewedAt: true;
+    agent: { select: { name: true } };
+    transaction: { select: { paidAt: true; amountInCents: true; currency: true } };
+  };
+}>;
+
+/** Every report for a client's request, newest first; null when the request isn't theirs. */
+export const getVerificationRequestReportsForUser = async (
+  id: string,
+  userId: string,
+): Promise<VerificationRequestReportHistoryItem[] | null> => {
+  try {
+    const verificationRequest = await prismaClient.verificationRequest.findFirst({
+      where: { id, userId },
+      select: {
+        reports: {
+          orderBy: [{ generatedAt: "desc" }, { createdAt: "desc" }],
+          select: {
+            id: true,
+            generatedAt: true,
+            reviewStatus: true,
+            viewedAt: true,
+            agent: { select: { name: true } },
+            transaction: { select: { paidAt: true, amountInCents: true, currency: true } },
+          },
+        },
+      },
+    });
+    return verificationRequest?.reports ?? null;
+  } catch (error) {
+    logger.error(`Error getting verification request reports ${error}`);
     throw error;
   }
 };

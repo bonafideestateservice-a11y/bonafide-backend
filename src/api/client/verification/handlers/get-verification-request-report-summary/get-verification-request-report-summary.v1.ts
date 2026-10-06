@@ -40,9 +40,13 @@ export const getVerificationRequestReportSummary = async (
       propertyName = (summary.details as any).propertyName || propertyName;
     }
 
+    // Recurring requests have one report per paid period; summarise the latest. The report
+    // keeps its own agent and checklist; older reports fall back to the assignment.
+    const report = summary.reports[0];
+    const reportAgent = report?.agent ?? summary.agentAssignment?.agent;
     let agentData = null;
-    if (summary.agentAssignment?.agent) {
-      const agentNameParts = summary.agentAssignment.agent.name.split(" ");
+    if (reportAgent) {
+      const agentNameParts = reportAgent.name.split(" ");
       const firstName = agentNameParts[0] || "";
       const lastName = agentNameParts.slice(1).join(" ") || "";
       
@@ -53,8 +57,11 @@ export const getVerificationRequestReportSummary = async (
     }
 
     let mediaPreview: Array<{ url: string }> = [];
-    if (summary.agentAssignment?.checklistItems) {
-      for (const item of summary.agentAssignment.checklistItems) {
+    const checklistItems = report?.checklistItems.length
+      ? report.checklistItems
+      : summary.agentAssignment?.checklistItems;
+    if (checklistItems) {
+      for (const item of checklistItems) {
         if (item.media) {
           item.media.forEach((m: any) => {
             if (mediaPreview.length < 3) {
@@ -66,13 +73,13 @@ export const getVerificationRequestReportSummary = async (
     }
 
     let insights: Array<{ label: string; value: string; status: "good" | "warning" | "bad" }> = [];
-    if (summary.report?.findings && Array.isArray(summary.report.findings)) {
-      insights = summary.report.findings as any;
+    if (report?.findings && Array.isArray(report.findings)) {
+      insights = report.findings as any;
     }
 
     const responsePayload = {
       property: propertyName,
-      inspectionDate: summary.report?.generatedAt?.toISOString() || null,
+      inspectionDate: report?.generatedAt?.toISOString() || null,
       agent: agentData,
       location: propertyAddress,
       reportType: summary.verificationPlan?.name || "Standard Report",

@@ -149,6 +149,10 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
       where: { agentAssignment: { verificationRequestId } }
     });
     // Delete assignments
+    // Checklist items no longer cascade with their assignment.
+    await prismaClient.verificationChecklistItem.deleteMany({
+      where: { agentAssignment: { verificationRequestId } }
+    });
     await prismaClient.agentAssignment.deleteMany({
       where: { verificationRequestId }
     });

@@ -1,10 +1,15 @@
 import Stripe from "stripe";
-import { PaymentStatus, Prisma, VerificationStatus } from "@prisma/client";
+import { PaymentStatus, Prisma } from "@prisma/client";
 import { Request, Response } from "express";
 import { getStripeClient } from "../../libs/stripe";
 import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
 import { appEvents, AppEventTypes } from "../../events";
+import {
+  completeRequestIfFinished,
+  markRequestPaid,
+  markRequestPaymentFailed,
+} from "../services/database/verification-lifecycle";
 
 type RequestWithRawBody = Request & { rawBody?: Buffer };
 
@@ -22,6 +27,27 @@ const getMetadata = (metadata: Stripe.Metadata): CheckoutMetadata | null => {
 };
 
 const toDate = (seconds: number | null | undefined) => (seconds ? new Date(seconds * 1000) : null);
+
+// past_due: a renewal failed and Stripe is still retrying, so the subscription stays active.
+const ACTIVE_SUBSCRIPTION_STATUSES: Stripe.Subscription.Status[] = [
+  "active",
+  "trialing",
+  "past_due",
+];
+const isActiveSubscription = (status: Stripe.Subscription.Status) =>
+  ACTIVE_SUBSCRIPTION_STATUSES.includes(status);
+
+/**
+ * Apply an inactive subscription to its request: "unpaid" means Stripe gave up retrying (the
+ * period is unpaid); anything else (canceled, incomplete_expired, paused) means it ended.
+ */
+const settleInactiveSubscription = (
+  verificationRequestId: string,
+  status: Stripe.Subscription.Status,
+) =>
+  status === "unpaid"
+    ? markRequestPaymentFailed(prismaClient, verificationRequestId)
+    : completeRequestIfFinished(prismaClient, verificationRequestId);
 
 const getSubscriptionDetails = (subscription: Stripe.Subscription) => {
   const item = subscription.items.data[0];
@@ -71,8 +97,8 @@ const markTransactionSuccessful = async (
     return null;
   }
 
-  await prismaClient.$transaction([
-    prismaClient.transaction.updateMany({
+  await prismaClient.$transaction(async (tx) => {
+    await tx.transaction.updateMany({
       where: { id: transaction.id, status: { not: PaymentStatus.SUCCESS } },
       data: {
         status: PaymentStatus.SUCCESS,
@@ -80,15 +106,9 @@ const markTransactionSuccessful = async (
         ...(stripeSubscriptionId ? { stripeSubscriptionId } : {}),
         paidAt: new Date(),
       },
-    }),
-    prismaClient.verificationRequest.updateMany({
-      where: {
-        id: transaction.verificationRequestId,
-        status: { notIn: [VerificationStatus.COMPLETED, VerificationStatus.CANCELLED] },
-      },
-      data: { status: VerificationStatus.SUBMITTED },
-    }),
-  ]);
+    });
+    await markRequestPaid(tx, transaction.verificationRequestId);
+  });
 
   const paidTransaction = await prismaClient.transaction.findUnique({
     where: { id: transaction.id },
@@ -128,7 +148,7 @@ const upsertSubscription = async (
     throw new Error(`Verification request has no plan transactionId=${metadata.transactionId}`);
   }
 
-  const active = ["active", "trialing"].includes(subscription.status);
+  const active = isActiveSubscription(subscription.status);
   await prismaClient.stripeSubscription.upsert({
     where: { subscriptionId: subscription.id },
     create: {
@@ -148,35 +168,37 @@ const upsertSubscription = async (
   });
 
   if (!active) {
-    await prismaClient.verificationRequest.updateMany({
-      where: {
-        id: metadata.verificationRequestId,
-        status: VerificationStatus.PENDING_PAYMENT,
-      },
-      data: { status: VerificationStatus.PAYMENT_FAILED },
-    });
+    await settleInactiveSubscription(metadata.verificationRequestId, subscription.status);
   }
 };
 
-const deactivateSubscription = async (subscriptionId: string) => {
+/** customer.subscription.deleted: no more renewals will be charged. */
+const endSubscription = async (subscriptionId: string) => {
   const subscription = await prismaClient.stripeSubscription.findUnique({
     where: { subscriptionId },
   });
   if (!subscription) return;
 
-  await prismaClient.$transaction([
-    prismaClient.stripeSubscription.update({
-      where: { subscriptionId },
-      data: { status: "INACTIVE" },
-    }),
-    prismaClient.verificationRequest.updateMany({
-      where: {
-        id: subscription.verificationRequestId,
-        status: VerificationStatus.PENDING_PAYMENT,
-      },
-      data: { status: VerificationStatus.PAYMENT_FAILED },
-    }),
-  ]);
+  await prismaClient.stripeSubscription.update({
+    where: { subscriptionId },
+    data: { status: "INACTIVE" },
+  });
+  await completeRequestIfFinished(prismaClient, subscription.verificationRequestId);
+};
+
+/**
+ * invoice.payment_failed: flag the due payment, but keep the subscription active. Stripe
+ * retries the charge; a later invoice.paid moves the request on, and giving up arrives as a
+ * subscription update (unpaid/canceled) or deletion.
+ */
+const recordFailedInvoice = async (subscriptionId: string) => {
+  const subscription = await prismaClient.stripeSubscription.findUnique({
+    where: { subscriptionId },
+    select: { verificationRequestId: true },
+  });
+  if (!subscription) return;
+
+  await markRequestPaymentFailed(prismaClient, subscription.verificationRequestId);
 };
 
 const recordRenewalPayment = async (invoice: Stripe.Invoice) => {
@@ -229,13 +251,7 @@ const recordRenewalPayment = async (invoice: Stripe.Invoice) => {
     },
   });
 
-  await prismaClient.verificationRequest.updateMany({
-    where: {
-      id: transaction.verificationRequestId,
-      status: { notIn: [VerificationStatus.COMPLETED, VerificationStatus.CANCELLED] },
-    },
-    data: { status: VerificationStatus.SUBMITTED },
-  });
+  await markRequestPaid(prismaClient, transaction.verificationRequestId);
 
   const paidTransaction = await prismaClient.transaction.findUnique({
     where: { id: transaction.id },
@@ -320,23 +336,25 @@ export const stripeWebhook = async (req: Request, res: Response) => {
           });
           if (stored) {
             const details = getSubscriptionDetails(subscription);
+            const active = isActiveSubscription(subscription.status);
             await prismaClient.stripeSubscription.update({
               where: { subscriptionId: subscription.id },
               data: {
-                status: ["active", "trialing"].includes(subscription.status)
-                  ? "ACTIVE"
-                  : "INACTIVE",
+                status: active ? "ACTIVE" : "INACTIVE",
                 currentPeriodEnd: details.currentPeriodEnd,
                 lastRenewalDate: details.lastRenewalDate,
               },
             });
+            if (!active) {
+              await settleInactiveSubscription(stored.verificationRequestId, subscription.status);
+            }
           }
         }
         break;
       }
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        await deactivateSubscription(subscription.id);
+        await endSubscription(subscription.id);
         break;
       }
       case "invoice.payment_failed": {
@@ -345,7 +363,7 @@ export const stripeWebhook = async (req: Request, res: Response) => {
           subscription?: string | Stripe.Subscription | null;
         };
         if (typeof invoiceWithSubscription.subscription === "string") {
-          await deactivateSubscription(invoiceWithSubscription.subscription);
+          await recordFailedInvoice(invoiceWithSubscription.subscription);
         }
         break;
       }

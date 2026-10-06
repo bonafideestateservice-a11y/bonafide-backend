@@ -47,19 +47,20 @@ describe("GET /verification-requests/:id/report-summary - Unit", () => {
   it("should return report summary details successfully", async () => {
     const mockSummary = {
       details: { propertyAddress: "123 Main St", propertyName: "Test Prop" },
-      report: {
-        generatedAt: new Date("2023-12-16T10:00:00Z"),
-        findings: [
-          { label: "Ownership", value: "Verified", status: "good" }
-        ]
-      },
-      agentAssignment: {
-        agent: { name: "John Doe" },
-        checklistItems: [
-          { media: [{ url: "http://example.com/photo1.jpg" }] },
-          { media: [{ url: "http://example.com/photo2.jpg" }] }
-        ]
-      },
+      reports: [
+        {
+          generatedAt: new Date("2023-12-16T10:00:00Z"),
+          findings: [
+            { label: "Ownership", value: "Verified", status: "good" }
+          ],
+          agent: { name: "John Doe" },
+          checklistItems: [
+            { media: [{ url: "http://example.com/photo1.jpg" }] },
+            { media: [{ url: "http://example.com/photo2.jpg" }] }
+          ]
+        }
+      ],
+      agentAssignment: null,
       verificationPlan: {
         name: "Standard Plan"
       }

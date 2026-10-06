@@ -1,9 +1,14 @@
 import { NextFunction, Request, Response } from "express";
 import crypto from "crypto";
-import { PaymentStatus, Prisma, VerificationStatus } from "@prisma/client";
+import { PaymentStatus, Prisma } from "@prisma/client";
 import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
 import { appEvents, AppEventTypes } from "../../events";
+import {
+  completeRequestIfFinished,
+  markRequestPaid,
+  markRequestPaymentFailed,
+} from "../services/database/verification-lifecycle";
 
 type PaystackEvent = {
   event?: string;
@@ -13,10 +18,12 @@ type PaystackEvent = {
     amount?: number;
     currency?: string;
     subscription_code?: string;
+    invoice_code?: string;
     email_token?: string;
     customer?: { customer_code?: string; email?: string };
     plan?: { plan_code?: string };
     next_payment_date?: string;
+    paid_at?: string;
     createdAt?: string;
     [key: string]: unknown;
   };
@@ -28,13 +35,17 @@ const subscriptionStatusByEvent = {
   "subscription.disable": "DISABLED",
 } as const;
 
+// Prefers IDs unique to the event's object (charge reference, invoice code), and includes the
+// event type: subscription.create, .not_renew and .disable share a subscription_code and must
+// not be mistaken for duplicates of each other.
 const getEventId = (event: PaystackEvent) =>
-  String(
+  `${event.event ?? "unknown"}:${String(
     event.data?.reference ??
-      event.data?.subscription_code ??
+      event.data?.invoice_code ??
       event.data?.id ??
-      `paystack-${Date.now()}-${crypto.randomUUID()}`,
-  );
+      event.data?.subscription_code ??
+      `${Date.now()}-${crypto.randomUUID()}`,
+  )}`;
 
 const getSubscriptionCode = (event: PaystackEvent) =>
   event.data?.subscription_code ??
@@ -45,6 +56,42 @@ const getSubscriptionCode = (event: PaystackEvent) =>
 const getCustomerCode = (event: PaystackEvent) => event.data?.customer?.customer_code;
 
 const getPlanCode = (event: PaystackEvent) => event.data?.plan?.plan_code;
+
+/**
+ * Find the subscription a renewal charge belongs to. Renewal charges may not carry the
+ * subscription code; then the customer + plan is used. A customer can hold several
+ * subscriptions on one plan (e.g. two properties), so the one whose next payment date is
+ * closest to the charge wins.
+*/
+
+const findSubscriptionForCharge = async (event: PaystackEvent) => {
+  const subscriptionCode = getSubscriptionCode(event);
+  if (subscriptionCode) {
+    return prismaClient.paystackSubscription.findUnique({ where: { subscriptionCode } });
+  }
+
+  const customerCode = getCustomerCode(event);
+  const planCode = getPlanCode(event);
+  if (!customerCode || !planCode) return null;
+
+  const candidates = await prismaClient.paystackSubscription.findMany({
+    where: { customerCode, verificationPlan: { paystackPlanCode: planCode } },
+  });
+  if (candidates.length <= 1) return candidates[0] ?? null;
+
+  const chargedAt = event.data?.paid_at ? new Date(event.data.paid_at).getTime() : Date.now();
+  const distance = (date: Date | null) =>
+    date ? Math.abs(date.getTime() - chargedAt) : Number.POSITIVE_INFINITY;
+  const [closest] = [...candidates].sort(
+    (a, b) =>
+      Number(b.status === "ACTIVE") - Number(a.status === "ACTIVE") ||
+      distance(a.nextPaymentDate) - distance(b.nextPaymentDate),
+  );
+  logger.warn(
+    `Paystack charge matched ${candidates.length} subscriptions for customer=${customerCode} plan=${planCode}; using subscription=${closest.subscriptionCode}`,
+  );
+  return closest;
+};
 
 const verifySignature = (req: Request) => {
   const signature = req.headers["x-paystack-signature"];
@@ -74,16 +121,8 @@ const handleChargeSuccess = async (event: PaystackEvent) => {
   });
 
   if (!transaction) {
-    const subscriptionCode = getSubscriptionCode(event);
-    const customerCode = getCustomerCode(event);
-    const planCode = getPlanCode(event);
-    const subscription = subscriptionCode
-      ? await prismaClient.paystackSubscription.findUnique({ where: { subscriptionCode } })
-      : customerCode && planCode
-        ? await prismaClient.paystackSubscription.findFirst({
-            where: { customerCode, verificationPlan: { paystackPlanCode: planCode } },
-          })
-        : null;
+    // No transaction with this reference: a renewal charged by the subscription.
+    const subscription = await findSubscriptionForCharge(event);
 
     if (!subscription) {
       logger.warn(`Paystack transaction not found reference=${reference}`);
@@ -103,19 +142,14 @@ const handleChargeSuccess = async (event: PaystackEvent) => {
     });
   }
 
-  await prismaClient.$transaction([
-    prismaClient.transaction.updateMany({
+  const { verificationRequestId } = transaction;
+  await prismaClient.$transaction(async (tx) => {
+    await tx.transaction.updateMany({
       where: { id: transaction.id, status: { not: PaymentStatus.SUCCESS } },
       data: { status: PaymentStatus.SUCCESS, paidAt: new Date() },
-    }),
-    prismaClient.verificationRequest.updateMany({
-      where: {
-        id: transaction.verificationRequestId,
-        status: { notIn: [VerificationStatus.COMPLETED, VerificationStatus.CANCELLED] },
-      },
-      data: { status: VerificationStatus.SUBMITTED },
-    }),
-  ]);
+    });
+    await markRequestPaid(tx, verificationRequestId);
+  });
 
   const paidTransaction = await prismaClient.transaction.findUnique({
     where: { id: transaction.id },
@@ -156,16 +190,7 @@ const handleChargeFailure = async (event: PaystackEvent) => {
   });
 
   if (!transaction) {
-    const subscriptionCode = getSubscriptionCode(event);
-    const customerCode = getCustomerCode(event);
-    const planCode = getPlanCode(event);
-    const subscription = subscriptionCode
-      ? await prismaClient.paystackSubscription.findUnique({ where: { subscriptionCode } })
-      : customerCode && planCode
-        ? await prismaClient.paystackSubscription.findFirst({
-            where: { customerCode, verificationPlan: { paystackPlanCode: planCode } },
-          })
-        : null;
+    const subscription = await findSubscriptionForCharge(event);
     if (!subscription) return;
 
     transaction = await prismaClient.transaction.create({
@@ -180,19 +205,14 @@ const handleChargeFailure = async (event: PaystackEvent) => {
     });
   }
 
-  await prismaClient.$transaction([
-    prismaClient.transaction.updateMany({
-      where: { id: transaction.id, status: PaymentStatus.PENDING },
+  const { id: transactionId, verificationRequestId } = transaction;
+  await prismaClient.$transaction(async (tx) => {
+    await tx.transaction.updateMany({
+      where: { id: transactionId, status: PaymentStatus.PENDING },
       data: { status: PaymentStatus.FAILED },
-    }),
-    prismaClient.verificationRequest.updateMany({
-      where: {
-        id: transaction.verificationRequestId,
-        status: VerificationStatus.PENDING_PAYMENT,
-      },
-      data: { status: VerificationStatus.PAYMENT_FAILED },
-    }),
-  ]);
+    });
+    await markRequestPaymentFailed(tx, verificationRequestId);
+  });
 };
 
 const handleSubscriptionCreated = async (event: PaystackEvent) => {
@@ -220,17 +240,33 @@ const handleSubscriptionCreated = async (event: PaystackEvent) => {
     return;
   }
 
-  const transaction = await prismaClient.transaction.findFirst({
-    where: {
-      status: PaymentStatus.SUCCESS,
-      verificationRequest: { userId: user.id, verificationPlanId: plan.id },
-    },
-    orderBy: { paidAt: "desc" },
+  const existing = await prismaClient.paystackSubscription.findUnique({
+    where: { subscriptionCode },
+    select: { verificationRequestId: true },
   });
 
+  // The request this subscription was bought for: the user's latest paid request on this plan
+  // that doesn't have a subscription yet. A client with two requests on one plan therefore
+  // gets one subscription per request.
+  const transaction = existing
+    ? { verificationRequestId: existing.verificationRequestId }
+    : await prismaClient.transaction.findFirst({
+        where: {
+          status: PaymentStatus.SUCCESS,
+          verificationRequest: {
+            userId: user.id,
+            verificationPlanId: plan.id,
+            paystackSubscription: null,
+          },
+        },
+        orderBy: { paidAt: "desc" },
+        select: { verificationRequestId: true },
+      });
+
   if (!transaction) {
-    logger.warn(`No successful transaction found for Paystack subscription=${subscriptionCode}`);
-    return;
+    // Usually subscription.create arrived before the first charge.success. Fail so Paystack
+    // retries; otherwise the subscription is never stored and every renewal is lost.
+    throw new Error(`No paid request found yet for Paystack subscription=${subscriptionCode}`);
   }
 
   const parseDate = (value: unknown) => (typeof value === "string" ? new Date(value) : null);
@@ -277,19 +313,17 @@ const handleSubscriptionStatusChange = async (event: PaystackEvent) => {
     },
   });
 
+  const subscription = await prismaClient.paystackSubscription.findUnique({
+    where: { subscriptionCode },
+    select: { verificationRequestId: true },
+  });
+  if (!subscription) return;
+
   if (status === "PAYMENT_FAILED") {
-    const subscription = await prismaClient.paystackSubscription.findUnique({
-      where: { subscriptionCode },
-    });
-    if (subscription) {
-      await prismaClient.verificationRequest.updateMany({
-        where: {
-          id: subscription.verificationRequestId,
-          status: { notIn: [VerificationStatus.COMPLETED, VerificationStatus.CANCELLED] },
-        },
-        data: { status: VerificationStatus.PAYMENT_FAILED },
-      });
-    }
+    await markRequestPaymentFailed(prismaClient, subscription.verificationRequestId);
+  } else {
+    // NON_RENEWING or DISABLED: no more renewals will be charged.
+    await completeRequestIfFinished(prismaClient, subscription.verificationRequestId);
   }
 };
 

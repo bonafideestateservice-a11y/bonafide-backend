@@ -234,7 +234,10 @@ const handleReportUploaded: EventHandler<AppEventTypes.REPORT_UPLOADED> = async 
 
   const admins = await getAdminNotificationRecipients([context.user.id]);
   const base = requestRecord(context, NotificationType.REPORT_UPLOADED);
-  const agentName = context.agentAssignment?.agent.name ?? "";
+  const agentName =
+    context.reports.find((report) => report.id === payload.reportId)?.agent.name ??
+    context.agentAssignment?.agent.name ??
+    "";
   const meta = { reportId: payload.reportId, agentName };
 
   return [

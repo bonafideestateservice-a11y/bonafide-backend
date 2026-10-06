@@ -67,7 +67,7 @@ describe("GET /verification-requests/:id/tracking - Unit", () => {
           user: { profilePhoto: "http://example.com/john.jpg" }
         }
       },
-      report: null
+      reports: []
     };
 
     (databaseService.getVerificationRequestTrackingForUser as jest.Mock).mockResolvedValue(mockTracking);
@@ -104,6 +104,63 @@ describe("GET /verification-requests/:id/tracking - Unit", () => {
           notifyOnReportReady: true
         }
       })
+    });
+  });
+
+  describe("reportReadyAt", () => {
+    const buildTracking = (assignmentPeriod: string | null, reportPeriod: string | null) => ({
+      id: "req-123",
+      details: {},
+      createdAt: new Date("2026-09-01T09:00:00Z"),
+      notifyOnInspectionStart: true,
+      notifyOnReportReady: true,
+      verificationType: { name: "Land Verification" },
+      agentAssignment: assignmentPeriod
+        ? {
+            status: "ACCEPTED",
+            transactionId: assignmentPeriod,
+            createdAt: new Date("2026-10-01T09:00:00Z"),
+            scheduledAt: null,
+            completedAt: null,
+            progressPercent: 0,
+            checklistItems: [],
+            agent: { name: "John Doe", user: { profilePhoto: null } },
+          }
+        : null,
+      reports: [{ generatedAt: new Date("2026-09-20T09:00:00Z"), transactionId: reportPeriod }],
+    });
+
+    const reportReadyAt = () =>
+      (res.json as jest.Mock).mock.calls[0][0].data.timeline.reportReadyAt;
+
+    it("is null while a new recurring period is in progress", async () => {
+      (databaseService.getVerificationRequestTrackingForUser as jest.Mock).mockResolvedValue(
+        buildTracking("txn-october", "txn-september"),
+      );
+
+      await getVerificationRequestTracking(req as Request, res as Response, next);
+
+      expect(reportReadyAt()).toBeNull();
+    });
+
+    it("shows the report for the assignment's own period", async () => {
+      (databaseService.getVerificationRequestTrackingForUser as jest.Mock).mockResolvedValue(
+        buildTracking("txn-september", "txn-september"),
+      );
+
+      await getVerificationRequestTracking(req as Request, res as Response, next);
+
+      expect(reportReadyAt()).toBe("2026-09-20T09:00:00.000Z");
+    });
+
+    it("shows the latest report between recurring periods", async () => {
+      (databaseService.getVerificationRequestTrackingForUser as jest.Mock).mockResolvedValue(
+        buildTracking(null, "txn-september"),
+      );
+
+      await getVerificationRequestTracking(req as Request, res as Response, next);
+
+      expect(reportReadyAt()).toBe("2026-09-20T09:00:00.000Z");
     });
   });
 });

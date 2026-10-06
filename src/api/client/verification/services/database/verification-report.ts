@@ -78,12 +78,13 @@ export const findVerificationReport = async (
   unique: FindVerificationReportUnique,
 ): Promise<VerificationReport | null> => {
   try {
-    const where: Prisma.VerificationReportWhereUniqueInput = unique.id
-      ? { id: unique.id }
-      : { verificationRequestId: unique.verificationRequestId! };
-    const verificationReport = await prismaClient.verificationReport.findUnique({
-      where,
-    });
+    // A request can have one report per paid period; by request, return the latest.
+    const verificationReport = unique.id
+      ? await prismaClient.verificationReport.findUnique({ where: { id: unique.id } })
+      : await prismaClient.verificationReport.findFirst({
+          where: { verificationRequestId: unique.verificationRequestId },
+          orderBy: { generatedAt: "desc" },
+        });
     logger.info(
       `Verification report lookup criteria=${JSON.stringify(unique)} found=${!!verificationReport}`,
     );

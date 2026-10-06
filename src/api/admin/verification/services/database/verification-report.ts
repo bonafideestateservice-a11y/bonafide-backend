@@ -1,7 +1,16 @@
-import { AgentAssignmentStatus, Prisma, ReportReviewStatus } from "@prisma/client";
+import {
+  AgentAssignmentStatus,
+  Prisma,
+  ReportReviewStatus,
+  VerificationStatus,
+} from "@prisma/client";
 import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
+import {
+  isRecurringRequest,
+  nextStatusAfterRecurringReport,
+} from "../../../../services/database/verification-lifecycle";
 
 export interface AgentReportsFilter {
   reviewStatus?: "ALL" | "APPROVED" | "REVISION_REQUESTED";
@@ -120,6 +129,7 @@ export const getAgentVerificationRequestReport = async (
         submittedByAgentId: agentId,
         verificationRequestId,
       },
+      orderBy: { generatedAt: "desc" },
       include: {
         media: true,
         verificationRequest: {
@@ -152,6 +162,14 @@ export type SubmitAgentReportResult =
       generatedAt: Date;
     };
 
+/**
+ * Submit the report for an assignment's period. The report records the period's payment, the
+ * agent's notes and the checklist, so it outlives the assignment.
+ * - One-time requests: the assignment becomes REPORT_SUBMITTED and the request COMPLETED.
+ * - Recurring requests: the assignment is deleted and the request waits for the next period
+ *   (SUBMITTED if it's already paid, AWAITING_RENEWAL otherwise, COMPLETED if the
+ *   subscription has ended).
+ */
 export const submitAgentAssignmentReport = async (
   agentId: string,
   assignmentId: string,
@@ -164,12 +182,9 @@ export const submitAgentAssignmentReport = async (
         select: {
           id: true,
           verificationRequestId: true,
+          transactionId: true,
+          additionalNotes: true,
           checklistItems: { select: { label: true, status: true } },
-          verificationRequest: {
-            select: {
-              report: { select: { id: true, reviewStatus: true, generatedAt: true } },
-            },
-          },
         },
       });
 
@@ -188,33 +203,63 @@ export const submitAgentAssignmentReport = async (
         return { kind: "INCOMPLETE_CHECKLIST" as const, progressPercent, remainingItems };
       }
 
-      const generatedAt = new Date();
-      const report = assignment.verificationRequest.report
-        ? assignment.verificationRequest.report
-        : await transaction.verificationReport.create({
-            data: {
-              verificationRequest: { connect: { id: assignment.verificationRequestId } },
-              agent: { connect: { id: agentId } },
-              reviewStatus: ReportReviewStatus.PENDING,
-              generatedAt,
-            },
-            select: { id: true, reviewStatus: true, generatedAt: true },
+      const { verificationRequestId } = assignment;
+      const reportSelect = { id: true, reviewStatus: true, generatedAt: true } as const;
+      const existingReport = assignment.transactionId
+        ? await transaction.verificationReport.findUnique({
+            where: { transactionId: assignment.transactionId },
+            select: reportSelect,
+          })
+        : await transaction.verificationReport.findFirst({
+            where: { verificationRequestId, transactionId: null },
+            select: reportSelect,
           });
 
-      if (!assignment.verificationRequest.report) {
-        uploadedReport = {
-          reportId: report.id,
-          verificationRequestId: assignment.verificationRequestId,
-        };
+      const generatedAt = new Date();
+      const report =
+        existingReport ??
+        (await transaction.verificationReport.create({
+          data: {
+            verificationRequest: { connect: { id: verificationRequestId } },
+            agent: { connect: { id: agentId } },
+            ...(assignment.transactionId
+              ? { transaction: { connect: { id: assignment.transactionId } } }
+              : {}),
+            additionalNotes: assignment.additionalNotes,
+            reviewStatus: ReportReviewStatus.PENDING,
+            generatedAt,
+          },
+          select: reportSelect,
+        }));
+
+      if (!existingReport) {
+        uploadedReport = { reportId: report.id, verificationRequestId };
       }
 
-      await transaction.agentAssignment.update({
-        where: { id: assignment.id },
-        data: {
-          status: AgentAssignmentStatus.INSPECTION_COMPLETE,
-          completedAt: assignment.verificationRequest.report ? undefined : generatedAt,
-        },
+      await transaction.verificationChecklistItem.updateMany({
+        where: { agentAssignmentId: assignment.id },
+        data: { reportId: report.id },
       });
+
+      if (await isRecurringRequest(transaction, verificationRequestId)) {
+        await transaction.agentAssignment.delete({ where: { id: assignment.id } });
+        await transaction.verificationRequest.update({
+          where: { id: verificationRequestId },
+          data: { status: await nextStatusAfterRecurringReport(transaction, verificationRequestId) },
+        });
+      } else {
+        await transaction.agentAssignment.update({
+          where: { id: assignment.id },
+          data: {
+            status: AgentAssignmentStatus.REPORT_SUBMITTED,
+            completedAt: existingReport ? undefined : generatedAt,
+          },
+        });
+        await transaction.verificationRequest.updateMany({
+          where: { id: verificationRequestId, status: { not: VerificationStatus.CANCELLED } },
+          data: { status: VerificationStatus.COMPLETED },
+        });
+      }
 
       return {
         kind: "SUBMITTED" as const,
@@ -260,11 +305,16 @@ export const getAgentAssignmentReport = async (
       where: { id: assignmentId, agentId },
       select: {
         additionalNotes: true,
+        transaction: { select: { report: { select: { reportUrl: true } } } },
         verificationRequest: {
           select: {
             details: true,
             user: { select: { fullName: true, phone: true, email: true } },
-            report: { select: { reportUrl: true } },
+            reports: {
+              select: { reportUrl: true },
+              orderBy: { generatedAt: "desc" },
+              take: 1,
+            },
           },
         },
         checklistItems: {
@@ -297,7 +347,10 @@ export const getAgentAssignmentReport = async (
         item.media.map((media) => ({ url: media.url, label: item.label })),
       ),
       additionalNotes: assignment.additionalNotes ?? "",
-      reportUrl: assignment.verificationRequest.report?.reportUrl ?? null,
+      reportUrl:
+        assignment.transaction?.report?.reportUrl ??
+        assignment.verificationRequest.reports[0]?.reportUrl ??
+        null,
     };
   } catch (error) {
     logger.error(`Error fetching assignment report assignmentId=${assignmentId} ${error}`);

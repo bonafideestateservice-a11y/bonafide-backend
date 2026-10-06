@@ -14,6 +14,7 @@ import { getVerificationRequestTracking } from "./handlers/get-verification-requ
 import { patchVerificationRequestNotificationPreferences } from "./handlers/patch-verification-request-notification-preferences";
 import { getVerificationRequestReportSummary } from "./handlers/get-verification-request-report-summary";
 import { getVerificationRequestFullReport } from "./handlers/get-verification-request-full-report";
+import { getVerificationRequestReports } from "./handlers/get-verification-request-reports";
 import { initializeVerificationPaymentPaystack } from "./handlers/initialize-verification-payment-paystack";
 import { initializeVerificationPaymentStripe } from "./handlers/initialize-verification-payment-stripe";
 
@@ -717,5 +718,64 @@ router.get(
  *         description: Internal server error
  */
 router.get("/verification-requests/:id/report/full", getVerificationRequestFullReport);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/reports:
+ *   get:
+ *     tags: [Verification]
+ *     summary: List every report for a verification request
+ *     description: >
+ *       Recurring (monthly or quarterly) requests get one report per paid period.
+ *       Reports are returned newest first; one-time requests have at most one.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Verification reports retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: "success" }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string }
+ *                       generatedAt: { type: string, format: "date-time", nullable: true }
+ *                       reviewStatus: { type: string }
+ *                       viewed: { type: boolean }
+ *                       agent:
+ *                         type: object
+ *                         properties:
+ *                           firstName: { type: string }
+ *                           lastName: { type: string }
+ *                       payment:
+ *                         type: object
+ *                         nullable: true
+ *                         description: The payment for the period this report covers
+ *                         properties:
+ *                           paidAt: { type: string, format: "date-time", nullable: true }
+ *                           amountInCents: { type: integer }
+ *                           currency: { type: string }
+ *       401:
+ *         description: Missing or invalid authentication token
+ *       404:
+ *         description: Verification request not found
+ */
+router.get("/verification-requests/:id/reports", checkJwt, getVerificationRequestReports);
 
 export default router;

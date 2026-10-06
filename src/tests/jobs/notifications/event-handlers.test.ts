@@ -41,6 +41,7 @@ const context = (overrides: Record<string, unknown> = {}) => ({
   agentAssignment: {
     agent: { name: "Agent Smith", phone: "0802", user: { ...agentUser, phone: null } },
   },
+  reports: [{ id: "r-1", agent: { name: "Report Author" } }],
   ...overrides,
 });
 
@@ -176,6 +177,20 @@ describe("notification event handlers", () => {
 
     expect(deliveries.some((d) => d.recipient.id === "user-1")).toBe(false);
     expect(summarize(deliveries)).toContain("admin-1:email:REPORT_UPLOADED_ADMIN");
+  });
+
+  it("REPORT_UPLOADED names the report's agent after a recurring assignment is released", async () => {
+    getVerificationRequestNotificationContext.mockResolvedValue(
+      context({ agentAssignment: null }),
+    );
+
+    const deliveries = await notificationEventHandlers[AppEventTypes.REPORT_UPLOADED]({
+      reportId: "r-1",
+      verificationRequestId: "vr-1",
+      submittedByAgentId: "agent-1",
+    });
+
+    expect(emailFor(deliveries, "user-1")?.data).toMatchObject({ agentName: "Report Author" });
   });
 
   it("AGENT_ASSIGNED notifies the requester and the assigned agent, not admins", async () => {

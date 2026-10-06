@@ -67,6 +67,15 @@ export const getVerificationRequestTracking = async (
       };
     }
 
+    // A recurring request's current assignment has no report until it's submitted, so only
+    // the report for the assignment's own period counts as ready.
+    const latestReport = tracking.reports[0];
+    const assignmentPeriod = tracking.agentAssignment?.transactionId;
+    const currentReport =
+      latestReport && (!assignmentPeriod || latestReport.transactionId === assignmentPeriod)
+        ? latestReport
+        : undefined;
+
     let propertyAddress = "Address not provided";
     if (tracking.details && typeof tracking.details === "object" && !Array.isArray(tracking.details)) {
       propertyAddress = (tracking.details as any).propertyAddress || propertyAddress;
@@ -82,7 +91,7 @@ export const getVerificationRequestTracking = async (
         agentAssignedAt: tracking.agentAssignment?.createdAt.toISOString() || null,
         inspectionStartedAt: tracking.agentAssignment?.scheduledAt?.toISOString() || null,
         inspectionCompletedAt: tracking.agentAssignment?.completedAt?.toISOString() || null,
-        reportReadyAt: tracking.report?.generatedAt?.toISOString() || null,
+        reportReadyAt: currentReport?.generatedAt?.toISOString() || null,
       },
       agent: agentData,
       inspectionUploads,

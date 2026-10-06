@@ -126,6 +126,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await prismaClient.document.deleteMany({ where: { verificationRequestId } });
   await prismaClient.verificationReport.delete({ where: { id: reportId } });
+  // Checklist items no longer cascade with their assignment.
+  await prismaClient.verificationChecklistItem.deleteMany({ where: { agentAssignmentId: assignmentId } });
   await prismaClient.agentAssignment.delete({ where: { id: assignmentId } });
   await prismaClient.verificationRequest.delete({ where: { id: verificationRequestId } });
   await prismaClient.verificationAgent.delete({ where: { id: agentId } });

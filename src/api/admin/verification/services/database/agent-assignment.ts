@@ -1,7 +1,8 @@
-import { AgentAssignmentStatus, Prisma } from "@prisma/client";
+import { AgentAssignmentStatus, AgentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
+import { findUnreportedPaidTransaction } from "../../../../services/database/verification-lifecycle";
 
 export type AgentAssignmentInformation = Prisma.AgentAssignmentGetPayload<{
   select: {
@@ -74,8 +75,9 @@ export const createAgentAssignment = async ({
   agentId,
 }: CreateAgentAssignmentData) => {
   try {
+    const paidPeriod = await findUnreportedPaidTransaction(prismaClient, verificationRequestId);
     const assignment = await prismaClient.agentAssignment.create({
-      data: { verificationRequestId, agentId },
+      data: { verificationRequestId, agentId, transactionId: paidPeriod?.id ?? null },
     });
 
     appEvents.emit(AppEventTypes.AGENT_ASSIGNED, {
@@ -93,12 +95,114 @@ export const createAgentAssignment = async ({
   }
 };
 
+const assignedAgentSelect = {
+  id: true,
+  status: true,
+  createdAt: true,
+  agent: { select: { id: true, name: true } },
+} satisfies Prisma.AgentAssignmentSelect;
+
+export type AssignAgentResult =
+  | { kind: "REQUEST_NOT_FOUND" }
+  | { kind: "AGENT_NOT_FOUND" }
+  | { kind: "AGENT_INACTIVE" }
+  | { kind: "REQUEST_NOT_ASSIGNABLE"; status: VerificationStatus }
+  | { kind: "NO_PAID_PERIOD" }
+  | { kind: "ALREADY_ASSIGNED"; agentId: string }
+  | {
+      kind: "ASSIGNED";
+      assignment: Prisma.AgentAssignmentGetPayload<{ select: typeof assignedAgentSelect }>;
+    };
+
+/**
+ * Assign an agent to a paid verification request. Only SUBMITTED requests (paid
+ * and waiting for an agent) can be assigned; the request moves to IN_PROGRESS.
+ * The assignment covers the oldest paid period that has no report yet.
+ */
+export const assignAgentToVerificationRequest = async (
+  verificationRequestId: string,
+  agentId: string,
+): Promise<AssignAgentResult> => {
+  try {
+    const result = await prismaClient.$transaction(async (transaction) => {
+      const verificationRequest = await transaction.verificationRequest.findUnique({
+        where: { id: verificationRequestId },
+        select: { status: true, agentAssignment: { select: { agentId: true } } },
+      });
+      if (!verificationRequest) return { kind: "REQUEST_NOT_FOUND" as const };
+
+      if (verificationRequest.agentAssignment) {
+        return {
+          kind: "ALREADY_ASSIGNED" as const,
+          agentId: verificationRequest.agentAssignment.agentId,
+        };
+      }
+
+      if (verificationRequest.status !== VerificationStatus.SUBMITTED) {
+        return { kind: "REQUEST_NOT_ASSIGNABLE" as const, status: verificationRequest.status };
+      }
+
+      const agent = await transaction.verificationAgent.findUnique({
+        where: { id: agentId },
+        select: { status: true },
+      });
+      if (!agent) return { kind: "AGENT_NOT_FOUND" as const };
+      if (agent.status !== AgentStatus.ACTIVE) return { kind: "AGENT_INACTIVE" as const };
+
+      const paidPeriod = await findUnreportedPaidTransaction(transaction, verificationRequestId);
+      if (!paidPeriod) return { kind: "NO_PAID_PERIOD" as const };
+
+      // Guards against the status changing (e.g. a refund) since it was read.
+      const moved = await transaction.verificationRequest.updateMany({
+        where: { id: verificationRequestId, status: VerificationStatus.SUBMITTED },
+        data: { status: VerificationStatus.IN_PROGRESS },
+      });
+      if (moved.count === 0) {
+        return { kind: "REQUEST_NOT_ASSIGNABLE" as const, status: verificationRequest.status };
+      }
+
+      const assignment = await transaction.agentAssignment.create({
+        data: { verificationRequestId, agentId, transactionId: paidPeriod.id },
+        select: assignedAgentSelect,
+      });
+      return { kind: "ASSIGNED" as const, assignment };
+    });
+
+    if (result.kind === "ASSIGNED") {
+      appEvents.emit(AppEventTypes.AGENT_ASSIGNED, {
+        assignmentId: result.assignment.id,
+        verificationRequestId,
+        agentId,
+      });
+      logger.info(
+        `Agent assigned verificationRequestId=${verificationRequestId} agentId=${agentId} assignmentId=${result.assignment.id}`,
+      );
+    }
+
+    return result;
+  } catch (error) {
+    // Two admins assigning at once: the unique constraint on verificationRequestId wins.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await prismaClient.agentAssignment.findUnique({
+        where: { verificationRequestId },
+        select: { agentId: true },
+      });
+      return { kind: "ALREADY_ASSIGNED", agentId: existing?.agentId ?? agentId };
+    }
+    logger.error(
+      `Error assigning agent verificationRequestId=${verificationRequestId} agentId=${agentId} ${error}`,
+    );
+    throw error;
+  }
+};
+
 export type AgentAssignmentDetail = Prisma.AgentAssignmentGetPayload<{
   select: {
     id: true;
     status: true;
     scheduledAt: true;
     agentId: true;
+    transaction: { select: { status: true; amountInCents: true; currency: true } };
     verificationRequest: {
       select: {
         details: true;
@@ -126,6 +230,7 @@ export const getAgentAssignmentById = async (
         status: true,
         scheduledAt: true,
         agentId: true,
+        transaction: { select: { status: true, amountInCents: true, currency: true } },
         verificationRequest: {
           select: {
             details: true,
@@ -294,6 +399,7 @@ export const getAgentAssignmentChecklist = async (
       select: {
         id: true,
         additionalNotes: true,
+        transaction: { select: { status: true, amountInCents: true } },
         checklistItems: {
           select: {
             id: true,
@@ -330,7 +436,8 @@ export const getAgentAssignmentChecklist = async (
       ? Math.round((completedItems / assignment.checklistItems.length) * 100)
       : 0;
     const names = assignment.verificationRequest.user.fullName.trim().split(/\s+/);
-    const transaction = assignment.verificationRequest.transactions[0];
+    // The payment for this assignment's period; older assignments fall back to the latest.
+    const transaction = assignment.transaction ?? assignment.verificationRequest.transactions[0];
 
     return {
       checklistItems: assignment.checklistItems,
@@ -388,7 +495,8 @@ export const updateAgentChecklistItem = async (
         },
       });
 
-      if (!item) return null;
+      if (!item?.agentAssignment) return null;
+      const { verificationRequestId } = item.agentAssignment;
 
       await transaction.verificationChecklistItem.update({
         where: { id: item.id },
@@ -399,7 +507,7 @@ export const updateAgentChecklistItem = async (
         await transaction.document.createMany({
           data: media.map((file) => ({
             ...file,
-            verificationRequestId: item.agentAssignment.verificationRequestId,
+            verificationRequestId,
             checklistItemId: item.id,
           })),
         });
@@ -459,20 +567,14 @@ const activeAssignmentStatuses: AgentAssignmentStatus[] = [
   AgentAssignmentStatus.INSPECTION_SCHEDULED,
 ];
 
-const completedAssignmentStatuses: AgentAssignmentStatus[] = [
-  AgentAssignmentStatus.INSPECTION_COMPLETE,
-  AgentAssignmentStatus.REPORT_SUBMITTED,
-];
-
 export const getAgentStatsById = async (agentId: string): Promise<AgentSelfStats> => {
   try {
     const [activeCount, completedCount, rating] = await Promise.all([
       prismaClient.agentAssignment.count({
         where: { agentId, status: { in: activeAssignmentStatuses } },
       }),
-      prismaClient.agentAssignment.count({
-        where: { agentId, status: { in: completedAssignmentStatuses } },
-      }),
+      // Reports, not assignments: recurring assignments are deleted after each period.
+      prismaClient.verificationReport.count({ where: { submittedByAgentId: agentId } }),
       prismaClient.verificationReport.aggregate({
         where: { submittedByAgentId: agentId },
         _avg: { rating: true },

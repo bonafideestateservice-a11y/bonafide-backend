@@ -109,6 +109,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prismaClient.document.deleteMany({ where: { verificationRequestId } });
+  // Checklist items outlive their assignment (they move to the report), so delete them directly.
+  await prismaClient.verificationChecklistItem.deleteMany({
+    where: { id: { in: [completeItemId, pendingItemId] } },
+  });
   if (reportId) await prismaClient.verificationReport.delete({ where: { id: reportId } });
   await prismaClient.agentAssignment.delete({ where: { id: assignmentId } });
   await prismaClient.verificationRequest.delete({ where: { id: verificationRequestId } });
@@ -133,7 +137,7 @@ describe("Agent assignment report workflow", () => {
     });
   });
 
-  it("submits the report and completes the assignment", async () => {
+  it("submits the report and completes the one-time request", async () => {
     await prismaClient.verificationChecklistItem.update({
       where: { id: pendingItemId },
       data: { status: "COMPLETE" },
@@ -153,7 +157,21 @@ describe("Agent assignment report workflow", () => {
 
     await expect(
       prismaClient.agentAssignment.findUnique({ where: { id: assignmentId } }),
-    ).resolves.toEqual(expect.objectContaining({ status: "INSPECTION_COMPLETE" }));
+    ).resolves.toEqual(expect.objectContaining({ status: "REPORT_SUBMITTED" }));
+    await expect(
+      prismaClient.verificationRequest.findUnique({ where: { id: verificationRequestId } }),
+    ).resolves.toEqual(expect.objectContaining({ status: "COMPLETED" }));
+
+    // The report keeps the agent's notes and checklist.
+    const report = await prismaClient.verificationReport.findUniqueOrThrow({
+      where: { id: reportId },
+      include: { checklistItems: { select: { id: true } } },
+    });
+    expect(report.additionalNotes).toBe("Inspection completed.");
+    expect(report.submittedByAgentId).toBe(agentId);
+    expect(report.checklistItems.map((item) => item.id).sort()).toEqual(
+      [completeItemId, pendingItemId].sort(),
+    );
   });
 
   it("returns the read-only report with labeled photos", async () => {

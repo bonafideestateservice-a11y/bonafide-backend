@@ -18,7 +18,9 @@ export const getVerificationRequestFullReport = async (
       verificationRequestId,
     );
 
-    if (!fullReport || !fullReport.report) {
+    // Recurring requests have one report per paid period; show the latest.
+    const report = fullReport?.reports[0];
+    if (!fullReport || !report) {
       return next(new NotFoundError("Verification report not found."));
     }
 
@@ -42,10 +44,13 @@ export const getVerificationRequestFullReport = async (
       };
     }
 
+    // The report keeps its own agent, notes and checklist (recurring assignments are removed
+    // after each period); older reports fall back to the assignment.
+    const reportAgent = report.agent ?? fullReport.agentAssignment?.agent;
     let agentData = null;
     let agentNotes = "";
-    if (fullReport.agentAssignment?.agent) {
-      const agentNameParts = fullReport.agentAssignment.agent.name.split(" ");
+    if (reportAgent) {
+      const agentNameParts = reportAgent.name.split(" ");
       const firstName = agentNameParts[0] || "";
       const lastName = agentNameParts.slice(1).join(" ") || "";
       
@@ -53,12 +58,15 @@ export const getVerificationRequestFullReport = async (
         firstName,
         lastName,
       };
-      agentNotes = fullReport.agentAssignment.additionalNotes || "";
+      agentNotes = report.additionalNotes ?? fullReport.agentAssignment?.additionalNotes ?? "";
     }
 
     let photos: Array<{ url: string; label: string }> = [];
-    if (fullReport.agentAssignment?.checklistItems) {
-      for (const item of fullReport.agentAssignment.checklistItems) {
+    const checklistItems = report.checklistItems.length
+      ? report.checklistItems
+      : fullReport.agentAssignment?.checklistItems;
+    if (checklistItems) {
+      for (const item of checklistItems) {
         if (item.media) {
           item.media.forEach((m: any) => {
             photos.push({ url: m.url, label: item.label });
@@ -73,15 +81,15 @@ export const getVerificationRequestFullReport = async (
     // The prompt asks for: ownershipFindings: string. We will parse it from findings if possible, or return a default string.
     let ownershipFindings = "Verification completed.";
     const rawFindings: any[] = [];
-    if (fullReport.report.findings && Array.isArray(fullReport.report.findings)) {
-      const findingsArray = fullReport.report.findings as any[];
+    if (report.findings && Array.isArray(report.findings)) {
+      const findingsArray = report.findings as any[];
       findingsArray.forEach((f) => rawFindings.push(f));
 
       const ownershipItem = findingsArray.find((f) => f.label?.toLowerCase().includes("ownership"));
       if (ownershipItem && ownershipItem.value) {
         ownershipFindings = ownershipItem.value;
       } else {
-        ownershipFindings = JSON.stringify(fullReport.report.findings);
+        ownershipFindings = JSON.stringify(report.findings);
       }
       
       // Fallback for plotSize, builtYear, type from findings if they are missing in details
@@ -101,11 +109,11 @@ export const getVerificationRequestFullReport = async (
 
     const responsePayload = {
       id: fullReport.id,
-      reportId: fullReport.report.id,
-      generatedAt: fullReport.report.generatedAt?.toISOString() || null,
-      reviewStatus: fullReport.report.reviewStatus,
+      reportId: report.id,
+      generatedAt: report.generatedAt?.toISOString() || null,
+      reviewStatus: report.reviewStatus,
       property: propertyDetails,
-      summary: fullReport.report.summary || "",
+      summary: report.summary || "",
       ownershipFindings,
       findings: rawFindings, // Returning raw findings directly for frontend flexibility
       photos,

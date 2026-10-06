@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { ROLE } from "@prisma/client";
 import { checkJwt } from "../../../middlewares/check-jwt";
-import { checkRoles } from "../../../middlewares/check-roles";
+import { checkIsAdmin, checkRoles } from "../../../middlewares/check-roles";
 import { getAgentsAssignments } from "./handlers/get-agents-assignments";
 import { getAgentsStats } from "./handlers/get-agents-stats";
 import { getAgentsReports } from "./handlers/get-agents-reports";
@@ -13,11 +13,57 @@ import { updateAgentAssignmentChecklistItem } from "./handlers/update-agent-chec
 import { updateAgentAssignmentNotes } from "./handlers/update-agent-assignment-notes";
 import { submitAgentReport } from "./handlers/submit-agent-report";
 import { getAgentAssignmentReportHandler } from "./handlers/get-agent-assignment-report";
+import { assignVerificationRequestAgent } from "./handlers/assign-verification-request-agent";
 import multer from "multer";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification-requests/{id}/assign-agent:
+ *   post:
+ *     tags: [Admin Verification]
+ *     summary: Assign an agent to a paid verification request
+ *     description: >
+ *       Only requests in SUBMITTED status (paid and awaiting an agent) can be assigned.
+ *       The request moves to IN_PROGRESS and the client and agent are notified.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Verification request ID
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [agentId]
+ *             properties:
+ *               agentId: { type: string, description: Verification agent ID }
+ *     responses:
+ *       201: { description: Agent assigned }
+ *       400: { description: Missing agentId or the agent is inactive }
+ *       401: { description: Missing or invalid authentication token }
+ *       403: { description: Admin access required }
+ *       404: { description: Verification request or agent not found }
+ *       409: { description: Request already has an agent or is not awaiting assignment }
+ */
+router.post(
+  "/verification-requests/:id/assign-agent",
+  checkJwt,
+  checkIsAdmin,
+  assignVerificationRequestAgent,
+);
 
 /**
  * @swagger

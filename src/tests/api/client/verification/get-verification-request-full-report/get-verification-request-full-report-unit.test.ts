@@ -44,24 +44,27 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
         plotSize: "500sqm",
         builtYear: "2010"
       },
-      report: {
-        id: "rep-456",
-        generatedAt: new Date("2023-12-16T10:00:00Z"),
-        reviewStatus: "APPROVED",
-        summary: "This is a great property.",
-        findings: [
-          { label: "Ownership", value: "Fully Verified", status: "good" },
-          { label: "Physical Condition", value: "Needs paint", status: "warning" }
-        ]
-      },
-      agentAssignment: {
-        agent: { name: "Jane Smith" },
-        additionalNotes: "Agent noted some things.",
-        checklistItems: [
-          { label: "Front Door", media: [{ url: "http://example.com/photo1.jpg" }] },
-          { label: "Backyard", media: [{ url: "http://example.com/photo2.jpg" }] }
-        ]
-      },
+      reports: [
+        {
+          id: "rep-456",
+          generatedAt: new Date("2023-12-16T10:00:00Z"),
+          reviewStatus: "APPROVED",
+          summary: "This is a great property.",
+          findings: [
+            { label: "Ownership", value: "Fully Verified", status: "good" },
+            { label: "Physical Condition", value: "Needs paint", status: "warning" }
+          ],
+          // The report keeps its own agent, notes and checklist.
+          agent: { name: "Jane Smith" },
+          additionalNotes: "Agent noted some things.",
+          checklistItems: [
+            { label: "Front Door", media: [{ url: "http://example.com/photo1.jpg" }] },
+            { label: "Backyard", media: [{ url: "http://example.com/photo2.jpg" }] }
+          ]
+        }
+      ],
+      // Recurring assignments are deleted once their period is reported.
+      agentAssignment: null,
     };
 
     (databaseService.getVerificationRequestFullReportData as jest.Mock).mockResolvedValue(mockFullReport);
