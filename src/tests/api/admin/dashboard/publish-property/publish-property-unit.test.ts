@@ -1,54 +1,49 @@
-import { NextFunction, Request, Response } from "express";
-import publishProperty from "../../../../../api/admin/dashboard/handlers/publish-property";
-import { publishProperty as publishPropertyFromDatabase } from "../../../../../api/admin/dashboard/services/database/property";
-import { HttpStatusCode, NotFoundError } from "../../../../../exceptions";
+import { publishPropertyHandler } from "../../../../../api/admin/dashboard/handlers/publish-property";
+import { publishProperty } from "../../../../../api/admin/dashboard/services/database/property";
+import { callHandler, errorStatus } from "../../../../helpers/http";
 
 jest.mock("../../../../../api/admin/dashboard/services/database/property");
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
-const mockedPublishProperty = publishPropertyFromDatabase as jest.Mock;
+const mockedPublish = publishProperty as jest.Mock;
 
-function buildMockReqRes() {
-  const req = { params: { id: "property-1" } } as unknown as Request;
-  const res = { status: jest.fn().mockReturnThis(), json: jest.fn() } as unknown as Response;
-  const next = jest.fn() as NextFunction;
-  return { req, res, next };
-}
-
-describe("publishProperty handler (unit)", () => {
+describe("publishPropertyHandler (unit)", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("toggles and returns the property's publication state", async () => {
-    mockedPublishProperty.mockResolvedValue({
-      id: "property-1",
-      isPublished: true,
+  it.each([true, false])("sets isPublished to %s", async (isPublished) => {
+    mockedPublish.mockResolvedValue({
+      id: "p1",
+      isPublished,
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     });
-    const { req, res, next } = buildMockReqRes();
 
-    await publishProperty(req, res, next);
+    const { res } = await callHandler(publishPropertyHandler, {
+      params: { id: "p1" },
+      body: { isPublished },
+    });
 
-    expect(mockedPublishProperty).toHaveBeenCalledWith("property-1");
-    expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
+    expect(mockedPublish).toHaveBeenCalledWith("p1", isPublished);
     expect(res.json).toHaveBeenCalledWith({
-      id: "property-1",
-      isPublished: true,
+      id: "p1",
+      isPublished,
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
-    expect(next).not.toHaveBeenCalled();
   });
 
-  it("maps missing properties to not found", async () => {
-    mockedPublishProperty.mockRejectedValue(
-      Object.assign(new Error("Property not found"), { code: "P2025" }),
-    );
-    const { req, res, next } = buildMockReqRes();
+  it.each([[{}], [{ isPublished: "true" }]])("returns 400 for body %j", async (body) => {
+    const { next } = await callHandler(publishPropertyHandler, { params: { id: "p1" }, body });
+    expect(errorStatus(next)).toBe(400);
+    expect(mockedPublish).not.toHaveBeenCalled();
+  });
 
-    await publishProperty(req, res, next);
-
-    expect(next).toHaveBeenCalledWith(expect.any(NotFoundError));
-    expect(res.status).not.toHaveBeenCalled();
+  it("returns 404 for missing or deleted properties", async () => {
+    mockedPublish.mockRejectedValue(Object.assign(new Error("not found"), { code: "P2025" }));
+    const { next } = await callHandler(publishPropertyHandler, {
+      params: { id: "p1" },
+      body: { isPublished: true },
+    });
+    expect(errorStatus(next)).toBe(404);
   });
 });

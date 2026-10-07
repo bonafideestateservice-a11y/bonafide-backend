@@ -33,6 +33,7 @@ const getStringQuery = (value: unknown, name: string): string | undefined => {
 /** A property as the admin API returns it. The price is a BigInt in the database. */
 export const toPropertyResponse = (property: PropertyListItem) => ({
   id: property.id,
+  number: property.number,
   title: property.name,
   type: property.propertyType,
   address: property.address,

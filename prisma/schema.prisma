@@ -19,6 +19,8 @@ model User {
   provider              String?                @default("local")
   providerId            String?                @unique
   role                  ROLE                   @default(CLIENT)
+  // Suspended users can't log in or use their token.
+  status                UserStatus             @default(ACTIVE)
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   passwordResetTokens   PasswordResetToken[]
@@ -30,6 +32,8 @@ model User {
   notifications         Notification[]         @relation("UserNotifications")
   fcmTokens             FCMToken[]
   notificationSettings  NotificationSettings?
+  propertyInquiries     PropertyInquiry[]
+  propertyFavorites     PropertyFavorite[]
 
   @@index([role, createdAt])
   @@index([createdAt])
@@ -53,6 +57,11 @@ enum ROLE {
   CLIENT
   ADMIN
   AGENT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
 }
 
 enum AgentStatus {
@@ -249,6 +258,7 @@ model VerificationAgent {
 
   assignments AgentAssignment[]
   reports     VerificationReport[]
+  properties  Property[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -279,32 +289,42 @@ model AgentAssignment {
 }
 
 model Property {
-  id            String            @id @default(cuid())
+  id            String             @id @default(cuid())
+  // Short public ID shown as "#000001".
+  number        Int                @unique @default(autoincrement())
   name          String
   address       String
-  propertyType  PropertyType      @default(RESIDENTIAL)
+  propertyType  PropertyType       @default(RESIDENTIAL)
   area          String?
   city          String?
   country       String?
-  priceAmount   BigInt            @default(0)
-  priceCurrency String            @default("NGN")
-  viewCount     Int               @default(0)
+  priceAmount   BigInt             @default(0)
+  priceCurrency String             @default("NGN")
+  viewCount     Int                @default(0)
   coverImageUrl String?
-  isPublished   Boolean           @default(false)
-  status        PropertyStatus    @default(PENDING)
+  isPublished   Boolean            @default(false)
+  status        PropertyStatus     @default(PENDING)
   verifiedAt    DateTime?
   description   String?
   bedrooms      Int?
   bathrooms     Int?
   sizeSqm       Float?
   yearBuilt     Int?
-  amenities     PropertyAmenity[] @default([])
-  imageUrls     String[]          @default([])
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  amenities     PropertyAmenity[]  @default([])
+  imageUrls     String[]           @default([])
+  // Set by "Assign Property" on the Agent Profile page.
+  agentId       String?
+  agent         VerificationAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  // Set by "Delete Property": the row is kept but hidden everywhere.
+  deletedAt     DateTime?
+  inquiries     PropertyInquiry[]
+  favorites     PropertyFavorite[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   @@index([isPublished, createdAt])
   @@index([status])
+  @@index([agentId])
   @@index([createdAt])
 }
 
@@ -484,9 +504,10 @@ model Notification {
 model NotificationSettings {
   id        String   @id @default(uuid())
   userId    String   @unique
-  email     Boolean  @default(false)
+  // Email and push are on until the user turns them off.
+  email     Boolean  @default(true)
   sms       Boolean  @default(false)
-  push      Boolean  @default(false)
+  push      Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -544,4 +565,27 @@ enum PropertyAmenity {
   GYM
   AIR_CONDITIONING
   ELEVATOR
+}
+
+model PropertyInquiry {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message    String
+  createdAt  DateTime @default(now())
+
+  @@index([propertyId])
+}
+
+model PropertyFavorite {
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([userId, propertyId])
+  @@index([propertyId])
 }

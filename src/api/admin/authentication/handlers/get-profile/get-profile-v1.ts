@@ -16,7 +16,11 @@ export const getProfile = async (
     const profile = await getAdminProfile(userId);
     if (!profile) return next(new NotFoundError("Profile not found."));
 
-    res.status(HttpStatusCode.OK).json(profile);
+    // Admins who never saved their settings get email and push (see isNotificationChannelEnabled).
+    res.status(HttpStatusCode.OK).json({
+      ...profile,
+      notificationSettings: profile.notificationSettings ?? { email: true, sms: false, push: true },
+    });
   } catch (error) {
     logger.error(`Error getting admin profile: ${error}`);
     next(new ApiError(HttpStatusCode.INTERNAL_SERVER, "Internal server error."));

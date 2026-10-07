@@ -5,6 +5,8 @@ import { prismaClient } from "../utils/prisma";
 import { extractTokenFromHeaders, verifyToken, AuthTokenPayload } from "../utils/jwt";
 import type { User, ROLE } from "@prisma/client";
 
+export const SUSPENDED_MESSAGE = "Your account has been suspended.";
+
 // CustomRequest interface to provide JWTs to controllers
 export interface CustomRequest extends Request {
   token?: AuthTokenPayload;
@@ -43,6 +45,9 @@ export const checkJwt = async (req: Request, res: Response, next: NextFunction) 
 
     if (!user) {
       throw new UnauthorizedError("User not found");
+    }
+    if (user.status === "SUSPENDED") {
+      throw new ForbiddenError(SUSPENDED_MESSAGE);
     }
 
     // Explicitly cast req to CustomRequest and assign values

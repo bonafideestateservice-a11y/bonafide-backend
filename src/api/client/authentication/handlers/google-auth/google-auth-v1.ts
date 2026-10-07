@@ -9,13 +9,14 @@ import {
 import { verifyGoogleIdToken } from "../../../../../libs/google/google";
 import { generateToken } from "../../../../../utils/jwt";
 import { logger } from "../../../../../utils/logger";
+import { SUSPENDED_MESSAGE } from "../../../../../middlewares/check-jwt";
 import { signInWithSocialProfile } from "../../services/social-auth";
 
 /**
  * Google sign-in by token exchange: the frontend signs the user in with Google Identity
  * Services (web) or the Google Sign-In SDK (mobile) and posts the ID token here. We verify it
  * with Google and return our own JWT, in the same shape as /login.
-*/
+ */
 
 export const googleSignIn = async (
   req: Request,
@@ -49,6 +50,8 @@ export const googleSignIn = async (
       case "NOT_A_CLIENT":
         return next(new ForbiddenError("This account can't sign in with Google."));
     }
+
+    if (result.user.status === "SUSPENDED") return next(new ForbiddenError(SUSPENDED_MESSAGE));
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...user } = result.user;

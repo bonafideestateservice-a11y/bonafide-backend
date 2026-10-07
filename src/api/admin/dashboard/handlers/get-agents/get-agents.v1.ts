@@ -9,7 +9,7 @@ import {
 
 const tabs = ["all", "active", "busy"] as const;
 
-const displayStatusOf = (status: AgentStatus, activeAssignments: number) =>
+export const displayStatusOf = (status: AgentStatus, activeAssignments: number) =>
   status === AgentStatus.INACTIVE
     ? "SUSPENDED"
     : activeAssignments >= MAX_ACTIVE_ASSIGNMENTS

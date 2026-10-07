@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 
 import { findAdmin } from "../../services/database/admin";
-import { HttpStatusCode, NotFoundError, ApiError } from "../../../../../exceptions";
+import { HttpStatusCode, NotFoundError, ApiError, ForbiddenError } from "../../../../../exceptions";
+import { SUSPENDED_MESSAGE } from "../../../../../middlewares/check-jwt";
 import { logger } from "../../../../../utils/logger";
 import { verifyPassword } from "../../../../../utils/password";
 import { generateToken } from "../../../../../utils/jwt";
@@ -53,6 +54,8 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
       logger.warn(`Invalid password attempt for admin: ${email}`);
       return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Invalid credentials."));
     }
+
+    if (admin.status === "SUSPENDED") return next(new ForbiddenError(SUSPENDED_MESSAGE));
 
     // --- Generate access token ---
     const accessToken = generateToken({

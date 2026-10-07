@@ -1,5 +1,10 @@
 import { NextFunction, Request, Response } from "express";
-import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptions";
+import {
+  ApiError,
+  BadRequestError,
+  HttpStatusCode,
+  NotFoundError,
+} from "../../../../../exceptions";
 import { publishProperty } from "../../services/database/property";
 import { logger } from "../../../../../utils/logger";
 
@@ -9,7 +14,11 @@ export const publishPropertyHandler = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const property = await publishProperty(req.params.id);
+    const isPublished = req.body?.isPublished;
+    if (typeof isPublished !== "boolean") {
+      return next(new BadRequestError("isPublished must be true or false."));
+    }
+    const property = await publishProperty(req.params.id, isPublished);
     res.status(HttpStatusCode.OK).json({
       id: property.id,
       isPublished: property.isPublished,

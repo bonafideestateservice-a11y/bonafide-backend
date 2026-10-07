@@ -84,6 +84,7 @@ export const getVerificationRequestsHandler = async (
 
     const search = getStringQuery(req.query.search, "search") ?? "";
     const agentId = getStringQuery(req.query.agentId, "agentId");
+    const userId = getStringQuery(req.query.userId, "userId");
     const propertyType = getStringQuery(req.query.propertyType, "propertyType");
     const sortBy = getStringQuery(req.query.sortBy, "sortBy") ?? "createdAt";
     const sortOrder = getStringQuery(req.query.sortOrder, "sortOrder") ?? "desc";
@@ -102,6 +103,7 @@ export const getVerificationRequestsHandler = async (
       status: status as VerificationRequestListStatus,
       search,
       agentId,
+      userId,
       propertyType,
       page,
       limit,

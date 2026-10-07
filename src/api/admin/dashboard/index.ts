@@ -11,6 +11,15 @@ import { getAgentsHandler } from "./handlers/get-agents";
 import { updateAgentStatusHandler } from "./handlers/update-agent-status";
 import { createPropertyHandler, propertyImagesUpload } from "./handlers/create-property";
 import { getVerificationRequestHandler } from "./handlers/get-verification-request";
+import { getPropertyHandler } from "./handlers/get-property";
+import { updatePropertyHandler } from "./handlers/update-property";
+import { deletePropertyHandler } from "./handlers/delete-property";
+import { getUsersHandler } from "./handlers/get-users";
+import { getUserHandler } from "./handlers/get-user";
+import { updateUserStatusHandler } from "./handlers/update-user-status";
+import { getAgentHandler } from "./handlers/get-agent";
+import { assignPropertyAgentHandler } from "./handlers/assign-property-agent";
+import { unassignPropertyAgentHandler } from "./handlers/unassign-property-agent";
 import {
   getNotificationsHandler,
   markAllNotificationsReadHandler,
@@ -187,7 +196,7 @@ const router = Router();
  *           $ref: '#/components/schemas/AdminDashboardPaginationMeta'
  *         counts:
  *           type: object
- *           description: Per-tab totals. They honour search, agentId and propertyType but ignore the status filter.
+ *           description: Per-tab totals. They honour search, agentId, userId and propertyType but ignore the status filter.
  *           required: [all, pending, assigned, inProgress, completed]
  *           properties:
  *             all:
@@ -211,11 +220,12 @@ const router = Router();
  *               example: 20
  *     AdminDashboardProperty:
  *       type: object
- *       required: [id, title, type, location, price, viewCount, coverImageUrl, isPublished, createdAt]
+ *       required: [id, number, title, type, location, price, viewCount, coverImageUrl, isPublished, createdAt]
  *       properties:
  *         id:
  *           type: string
  *           example: cm1property0001
+ *         number: { type: integer, description: 'Short public ID; show it as "#000001"', example: 1 }
  *         title:
  *           type: string
  *           description: The property's title (stored in Property.name).
@@ -305,6 +315,17 @@ const router = Router();
  *             unpublished:
  *               type: integer
  *               example: 12
+ *     AdminDashboardPropertyAgent:
+ *       type: object
+ *       properties:
+ *         id: { type: string, description: Property ID }
+ *         agent:
+ *           type: object
+ *           nullable: true
+ *           properties:
+ *             id: { type: string }
+ *             name: { type: string, example: Kingsley Wilson }
+ *         updatedAt: { type: string, format: date-time }
  *     AdminDashboardPublishResult:
  *       type: object
  *       required: [id, isPublished, updatedAt]
@@ -429,6 +450,11 @@ router.get("/dashboard/activities", checkJwt, checkIsAdmin, getAllActivitiesHand
  *         name: agentId
  *         required: false
  *         description: Only requests assigned to this verification agent.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: userId
+ *         required: false
+ *         description: Only this client's requests (User Management "Request History").
  *         schema: { type: string }
  *       - in: query
  *         name: propertyType
@@ -574,11 +600,19 @@ router.get("/properties", checkJwt, checkIsAdmin, getAllPropertiesHandler);
  * /api/{version}/admin/properties/{id}/publish:
  *   patch:
  *     tags: [Properties]
- *     summary: Toggle a property's publication state
- *     description: Flips isPublished (published becomes unpublished and vice versa). Takes no request body. Admin only.
- *     x-no-body: true
+ *     summary: Publish or unpublish a property
+ *     description: Sets isPublished to the given value. Admin only.
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isPublished]
+ *             properties:
+ *               isPublished: { type: boolean, example: true }
  *     parameters:
  *       - in: path
  *         name: version
@@ -596,6 +630,7 @@ router.get("/properties", checkJwt, checkIsAdmin, getAllPropertiesHandler);
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/AdminDashboardPublishResult'
+ *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
  *       401:
  *         description: No token, an invalid, expired or malformed token, or the token's user no longer exists.
  *         content:
@@ -609,7 +644,7 @@ router.get("/properties", checkJwt, checkIsAdmin, getAllPropertiesHandler);
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *             example: { status: error, message: Insufficient permissions. Admin access required. }
  *       404:
- *         description: No property has this ID.
+ *         description: No property has this ID, or it was deleted.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -966,5 +1001,399 @@ router.patch("/agents/:id/status", checkJwt, checkIsAdmin, updateAgentStatusHand
  *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
  */
 router.post("/properties", checkJwt, checkIsAdmin, propertyImagesUpload, createPropertyHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/properties/{id}:
+ *   get:
+ *     tags: [Admin Dashboard]
+ *     summary: Property details
+ *     description: One property (not deleted) with its views, inquiries and favorites. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: The property.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/AdminDashboardProperty'
+ *                 - type: object
+ *                   properties:
+ *                     status: { type: string, enum: [PENDING, VERIFIED, REJECTED] }
+ *                     verifiedAt: { type: string, format: date-time, nullable: true }
+ *                     updatedAt: { type: string, format: date-time }
+ *                     agent:
+ *                       type: object
+ *                       nullable: true
+ *                       description: The agent assigned with "Assign Property".
+ *                       properties:
+ *                         id: { type: string }
+ *                         name: { type: string }
+ *                     stats:
+ *                       type: object
+ *                       properties:
+ *                         views: { type: integer, example: 1234 }
+ *                         inquiries: { type: integer, example: 12 }
+ *                         favorites: { type: integer, example: 45 }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ *   patch:
+ *     tags: [Admin Dashboard]
+ *     summary: Edit a property
+ *     description: >
+ *       Same fields as Add Property, all optional; only the fields sent are changed and a field
+ *       sent blank is cleared. New `images` are added to the existing ones (4 at most in total).
+ *       A new `coverImage` replaces the cover. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title: { type: string }
+ *               propertyType: { type: string, enum: [RESIDENTIAL, COMMERCIAL, LAND] }
+ *               priceAmount: { type: integer, description: Price in whole naira (commas allowed) }
+ *               location: { type: string, example: "Lekki Phase 1, Lagos" }
+ *               description: { type: string }
+ *               bedrooms: { type: integer }
+ *               bathrooms: { type: integer }
+ *               sizeSqm: { type: number }
+ *               yearBuilt: { type: integer }
+ *               amenities:
+ *                 type: array
+ *                 description: Replaces the list. Repeat once per amenity; send one blank value to clear it.
+ *                 items: { $ref: '#/components/schemas/AdminDashboardAmenity' }
+ *               isPublished: { type: boolean }
+ *               removeImageUrls:
+ *                 type: array
+ *                 description: URLs of current photos (cover or others) to remove. Repeat once per URL.
+ *                 items: { type: string }
+ *               coverImage: { type: string, format: binary }
+ *               images:
+ *                 type: array
+ *                 items: { type: string, format: binary }
+ *     responses:
+ *       200:
+ *         description: The updated property.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/AdminDashboardProperty' }
+ *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ *   delete:
+ *     tags: [Admin Dashboard]
+ *     summary: Delete a property
+ *     description: Hides the property everywhere (admin and client). The record is kept. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: The property was deleted.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id: { type: string }
+ *                 deleted: { type: boolean, example: true }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.get("/properties/:id", checkJwt, checkIsAdmin, getPropertyHandler);
+router.patch(
+  "/properties/:id",
+  checkJwt,
+  checkIsAdmin,
+  propertyImagesUpload,
+  updatePropertyHandler,
+);
+router.delete("/properties/:id", checkJwt, checkIsAdmin, deletePropertyHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/users:
+ *   get:
+ *     tags: [Admin Dashboard]
+ *     summary: User Management list (clients and agents)
+ *     description: Newest first. Admins are not listed. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: query, name: type, schema: { type: string, enum: [all, client, agent], default: all } }
+ *       - { in: query, name: search, description: Name, email or phone (case-insensitive), schema: { type: string } }
+ *       - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+ *     responses:
+ *       200:
+ *         description: One page of users, with per-tab totals (they honour search).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string }
+ *                       agentId: { type: string, nullable: true, description: "For agents: open their profile at /admin/agents/{agentId}" }
+ *                       name: { type: string, example: John Williams }
+ *                       email: { type: string, example: john@example.com }
+ *                       phone: { type: string, nullable: true, example: "+234 801 234 5678" }
+ *                       avatarUrl: { type: string, nullable: true }
+ *                       type: { type: string, enum: [CLIENT, AGENT] }
+ *                       status: { type: string, enum: [ACTIVE, SUSPENDED] }
+ *                       joinedAt: { type: string, format: date-time }
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     page: { type: integer }
+ *                     limit: { type: integer }
+ *                     totalItems: { type: integer }
+ *                     totalPages: { type: integer }
+ *                 counts:
+ *                   type: object
+ *                   properties:
+ *                     all: { type: integer }
+ *                     client: { type: integer }
+ *                     agent: { type: integer }
+ *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.get("/users", checkJwt, checkIsAdmin, getUsersHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/users/{id}:
+ *   get:
+ *     tags: [Admin Dashboard]
+ *     summary: A client's profile ("View Profile")
+ *     description: >
+ *       Clients only; agents' profiles are at /admin/agents/{agentId}. For "Request History", call
+ *       GET /admin/verification-requests?userId={id}. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, description: User ID, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: The client's profile.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id: { type: string }
+ *                 name: { type: string, example: Kingsley Wilson }
+ *                 email: { type: string }
+ *                 phone: { type: string, nullable: true }
+ *                 location: { type: string, nullable: true }
+ *                 avatarUrl: { type: string, nullable: true }
+ *                 status: { type: string, enum: [ACTIVE, SUSPENDED] }
+ *                 memberSince: { type: string, format: date-time }
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     paidRequests: { type: integer, description: Verification requests with at least one successful payment, example: 8 }
+ *                     totalSpent: { type: number, description: Sum of successful payments in naira, example: 125000 }
+ *                     averageResponseDays: { type: number, nullable: true, description: "Average days from an agent being assigned to the report being ready (1 decimal); null before any report", example: 3 }
+ *                 recentActivity:
+ *                   type: array
+ *                   description: The 10 newest activity entries on the client's requests.
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string }
+ *                       type: { type: string, example: VERIFICATION_REQUEST_CREATED }
+ *                       subjectName: { type: string, example: Ocean View Villa }
+ *                       verificationRequestId: { type: string, nullable: true }
+ *                       createdAt: { type: string, format: date-time }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.get("/users/:id", checkJwt, checkIsAdmin, getUserHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/users/{id}/status:
+ *   patch:
+ *     tags: [Admin Dashboard]
+ *     summary: Suspend or reactivate a client or agent
+ *     description: >
+ *       Suspended users can't log in, and their existing tokens stop working (403). Suspending an
+ *       agent also moves their open jobs, exactly like PATCH /admin/agents/{id}/status. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, description: User ID, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status: { type: string, enum: [ACTIVE, SUSPENDED] }
+ *     responses:
+ *       200:
+ *         description: The new status. reassigned and unassigned count the agent's moved jobs (0 for clients).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id: { type: string }
+ *                 status: { type: string, enum: [ACTIVE, SUSPENDED] }
+ *                 reassigned: { type: integer }
+ *                 unassigned: { type: integer }
+ *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.patch("/users/:id/status", checkJwt, checkIsAdmin, updateUserStatusHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/agents/{id}:
+ *   get:
+ *     tags: [Admin Dashboard]
+ *     summary: An agent's profile
+ *     description: >
+ *       The Agent Profile page. displayStatus and stats come from verification requests;
+ *       assignedProperties and the badge counts are the property listings assigned with "Assign Property". Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, description: Verification agent ID, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: The agent's profile.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id: { type: string }
+ *                 userId: { type: string }
+ *                 name: { type: string, example: Kingsley Wilson }
+ *                 email: { type: string }
+ *                 phone: { type: string, nullable: true }
+ *                 region: { type: string, nullable: true }
+ *                 avatarUrl: { type: string, nullable: true }
+ *                 displayStatus: { type: string, enum: [AVAILABLE, BUSY, SUSPENDED] }
+ *                 assignedPropertyCount: { type: integer, description: 'Properties assigned ("4/5 Properties Assigned")', example: 4 }
+ *                 maxAssignedProperties: { type: integer, example: 5 }
+ *                 memberSince: { type: string, format: date-time }
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     totalVerifications: { type: integer, description: Reports completed, example: 56 }
+ *                     successRate: { type: integer, nullable: true, description: "% of reviewed reports approved without a revision request; null before any review", example: 89 }
+ *                     averageResponseDays: { type: number, nullable: true, description: Average days from assignment to report ready (1 decimal), example: 3 }
+ *                 assignedProperties:
+ *                   type: array
+ *                   description: Properties assigned to the agent with POST /admin/properties/{id}/assign-agent, most recently changed first.
+ *                   items: { $ref: '#/components/schemas/AdminDashboardProperty' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.get("/agents/:id", checkJwt, checkIsAdmin, getAgentHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/properties/{id}/assign-agent:
+ *   post:
+ *     tags: [Admin Dashboard]
+ *     summary: Assign an agent to a property ("Assign Property")
+ *     description: >
+ *       Sets the property's agent, replacing any agent already on it. An agent can have at most
+ *       5 properties (409 when full); this is separate from their 5 verification jobs. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, description: Property ID, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [agentId]
+ *             properties:
+ *               agentId: { type: string, description: Verification agent ID }
+ *     responses:
+ *       200:
+ *         description: The property's agent.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/AdminDashboardPropertyAgent' }
+ *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       409:
+ *         description: The agent already has 5 properties.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             example: { status: error, message: Agent is fully booked. Agents can only handle 5 properties at a time. }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ *   delete:
+ *     tags: [Admin Dashboard]
+ *     summary: Remove a property's agent
+ *     description: Repeating it changes nothing. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, description: Property ID, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: The property, now with no agent.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/AdminDashboardPropertyAgent' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.post("/properties/:id/assign-agent", checkJwt, checkIsAdmin, assignPropertyAgentHandler);
+router.delete("/properties/:id/assign-agent", checkJwt, checkIsAdmin, unassignPropertyAgentHandler);
 
 export default router;

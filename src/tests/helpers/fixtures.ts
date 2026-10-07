@@ -1,4 +1,4 @@
-import { AgentStatus, ROLE, VerificationStatus } from "@prisma/client";
+import { AgentStatus, Prisma, ROLE, VerificationStatus } from "@prisma/client";
 import { generateToken } from "../../utils/jwt";
 import { prismaClient } from "../../utils/prisma";
 
@@ -81,6 +81,15 @@ export const createFixtures = (prefix: string) => {
 
   const trackProperty = (id: string) => propertyIds.push(id);
 
+  /** A published property; pass fields to override. */
+  const createProperty = async (data: Partial<Prisma.PropertyCreateInput> = {}) => {
+    const property = await prismaClient.property.create({
+      data: { name: `Property ${tag}`, address: "Lekki, Lagos", isPublished: true, ...data },
+    });
+    propertyIds.push(property.id);
+    return property;
+  };
+
   const cleanup = async () => {
     const byRequest = { verificationRequestId: { in: requestIds } };
     await prismaClient.activityLog.deleteMany({ where: byRequest });
@@ -99,5 +108,14 @@ export const createFixtures = (prefix: string) => {
     await prismaClient.user.deleteMany({ where: { id: { in: userIds } } });
   };
 
-  return { tag, createUser, createAgent, createPaidRequest, giveOpenJobs, trackProperty, cleanup };
+  return {
+    tag,
+    createUser,
+    createAgent,
+    createPaidRequest,
+    giveOpenJobs,
+    trackProperty,
+    createProperty,
+    cleanup,
+  };
 };

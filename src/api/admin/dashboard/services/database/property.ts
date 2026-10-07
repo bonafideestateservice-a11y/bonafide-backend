@@ -19,8 +19,9 @@ export interface GetPropertiesQuery {
   sortOrder?: PropertySortOrder;
 }
 
-const propertySelect = {
+export const propertySelect = {
   id: true,
+  number: true,
   name: true,
   propertyType: true,
   area: true,
@@ -92,6 +93,7 @@ export const getAllProperties = async ({
         `)
       : undefined;
     const baseWhere: Prisma.PropertyWhereInput = {
+      deletedAt: null,
       ...(type ? { propertyType: type } : {}),
       ...(matchingSearchIds ? { id: { in: matchingSearchIds.map(({ id }) => id) } } : {}),
     };
@@ -128,21 +130,38 @@ export const getAllProperties = async ({
 
 export const findProperty = async (id: string): Promise<Property | null> => {
   try {
-    return await prismaClient.property.findUnique({ where: { id } });
+    return await prismaClient.property.findFirst({ where: { id, deletedAt: null } });
   } catch (error) {
     logger.error(`Error finding property propertyId=${id} ${error}`);
     throw error;
   }
 };
 
-export const publishProperty = async (id: string): Promise<Property> => {
+/** A property that isn't deleted, with its agent and inquiry and favorite counts. */
+export const getPropertyDetail = async (id: string) => {
   try {
-    const currentProperty = await prismaClient.property.findUniqueOrThrow({ where: { id } });
-    const isPublished = !currentProperty.isPublished;
-    const property = await prismaClient.property.update({ where: { id }, data: { isPublished } });
-    logger.info(
-      `Property publication updated propertyId=${property.id} isPublished=${isPublished}`,
-    );
+    return await prismaClient.property.findFirst({
+      where: { id, deletedAt: null },
+      include: {
+        agent: { select: { id: true, name: true } },
+        _count: { select: { inquiries: true, favorites: true } },
+      },
+    });
+  } catch (error) {
+    logger.error(`Error getting property propertyId=${id} ${error}`);
+    throw error;
+  }
+};
+
+// The updates below throw P2025 when the property doesn't exist or is deleted.
+
+export const publishProperty = async (id: string, isPublished: boolean): Promise<Property> => {
+  try {
+    const property = await prismaClient.property.update({
+      where: { id, deletedAt: null },
+      data: { isPublished },
+    });
+    logger.info(`Property publication updated propertyId=${id} isPublished=${isPublished}`);
     return property;
   } catch (error) {
     logger.error(`Error updating property publication propertyId=${id} ${error}`);
@@ -152,7 +171,7 @@ export const publishProperty = async (id: string): Promise<Property> => {
 
 export const updateProperty = async (id: string, data: UpdatePropertyData): Promise<Property> => {
   try {
-    const property = await prismaClient.property.update({ where: { id }, data });
+    const property = await prismaClient.property.update({ where: { id, deletedAt: null }, data });
     logger.info(`Property updated propertyId=${property.id}`);
     return property;
   } catch (error) {
@@ -161,9 +180,13 @@ export const updateProperty = async (id: string, data: UpdatePropertyData): Prom
   }
 };
 
+/** Soft delete: the row is kept but hidden everywhere. */
 export const deleteProperty = async (id: string): Promise<Property> => {
   try {
-    const property = await prismaClient.property.delete({ where: { id } });
+    const property = await prismaClient.property.update({
+      where: { id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
     logger.info(`Property deleted propertyId=${property.id}`);
     return property;
   } catch (error) {
@@ -172,9 +195,37 @@ export const deleteProperty = async (id: string): Promise<Property> => {
   }
 };
 
+/** Sets or clears (null) the property's agent; throws P2025 when it doesn't exist or is deleted. */
+export const setPropertyAgent = async (id: string, agentId: string | null) => {
+  try {
+    const property = await prismaClient.property.update({
+      where: { id, deletedAt: null },
+      data: { agent: agentId ? { connect: { id: agentId } } : { disconnect: true } },
+      select: { id: true, updatedAt: true, agent: { select: { id: true, name: true } } },
+    });
+    logger.info(`Property agent updated propertyId=${id} agentId=${agentId}`);
+    return property;
+  } catch (error) {
+    logger.error(`Error updating property agent propertyId=${id} ${error}`);
+    throw error;
+  }
+};
+
+/** An agent can have at most this many properties assigned. */
+export const MAX_AGENT_PROPERTIES = 5;
+
+/** Properties (not deleted) assigned to the agent, other than `exceptPropertyId`. */
+export const countAgentProperties = (agentId: string, exceptPropertyId: string) =>
+  prismaClient.property.count({
+    where: { agentId, deletedAt: null, id: { not: exceptPropertyId } },
+  });
+
+export const findAgentStatus = (id: string) =>
+  prismaClient.verificationAgent.findUnique({ where: { id }, select: { status: true } });
+
 export const countPropertiesByStatus = async (status: PropertyStatus): Promise<number> => {
   try {
-    return await prismaClient.property.count({ where: { status } });
+    return await prismaClient.property.count({ where: { status, deletedAt: null } });
   } catch (error) {
     logger.error(`Error counting properties status=${status} ${error}`);
     throw error;

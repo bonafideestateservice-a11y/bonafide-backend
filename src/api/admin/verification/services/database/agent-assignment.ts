@@ -1,4 +1,10 @@
-import { AgentAssignmentStatus, AgentStatus, Prisma, VerificationStatus } from "@prisma/client";
+import {
+  AgentAssignmentStatus,
+  AgentStatus,
+  Prisma,
+  UserStatus,
+  VerificationStatus,
+} from "@prisma/client";
 import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
@@ -262,10 +268,18 @@ export const setAgentStatus = async (agentId: string, status: AgentStatus) => {
   const agent = await prismaClient.verificationAgent.findUnique({ where: { id: agentId } });
   if (!agent) return null;
 
-  await prismaClient.verificationAgent.update({
-    where: { id: agentId },
-    data: { status, deactivatedAt: status === AgentStatus.INACTIVE ? new Date() : null },
-  });
+  const suspended = status === AgentStatus.INACTIVE;
+  await prismaClient.$transaction([
+    prismaClient.verificationAgent.update({
+      where: { id: agentId },
+      data: { status, deactivatedAt: suspended ? new Date() : null },
+    }),
+    // A suspended agent can't log in either.
+    prismaClient.user.update({
+      where: { id: agent.userId },
+      data: { status: suspended ? UserStatus.SUSPENDED : UserStatus.ACTIVE },
+    }),
+  ]);
   const result = { id: agentId, status, reassigned: 0, unassigned: 0 };
   if (status === AgentStatus.ACTIVE) return result;
 

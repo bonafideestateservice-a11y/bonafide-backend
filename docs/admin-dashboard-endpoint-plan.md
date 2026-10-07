@@ -363,3 +363,108 @@ Decisions: "Active" tab = available agents only; when nobody has room, suspendin
 - `GET /admin/agents`: now `tab=all|active|busy`, adds `email`, `displayStatus` (`AVAILABLE`, `BUSY` at 5 open jobs, `SUSPENDED`) and `counts`.
 - `POST /admin/verification-requests/:id/assign-agent`: 409 "Agent is fully booked. Agents can only handle 5 properties at a time." when the agent has 5 open jobs.
 - `GET /admin/properties`: each item adds `address`, `description`, `bedrooms`, `bathrooms`, `sizeSqm`, `yearBuilt`, `amenities`, `imageUrls`; `title` now comes from `name`.
+
+## 7. Property Details page (implemented 10 Oct 2026)
+
+Decisions: inquiries and favorites are real tables; every call to the client property endpoint counts as a view (refreshes too); delete hides the property but keeps the row; sharing uses the frontend URL (no backend endpoint); the second date on the page is `verifiedAt`.
+
+**Schema** (migration `20261010090000_property_inquiries_favorites`):
+
+- `Property.number`: auto-incrementing short ID; existing properties are numbered when the migration runs. The frontend shows it as "#000001".
+- `Property.deletedAt`: set by Delete Property. Deleted properties are left out of every list, page, count and update.
+- `PropertyInquiry` (`propertyId`, `userId`, `message`, `createdAt`) and `PropertyFavorite` (`userId`, `propertyId`, `createdAt`; one per user and property).
+
+**New admin endpoints:**
+
+- `GET /admin/properties/:id`: everything in the list item plus `status`, `verifiedAt`, `updatedAt` and `stats { views, inquiries, favorites }`.
+- `PATCH /admin/properties/:id`: Edit Property (multipart form). Same fields as Add Property, all optional; only the fields sent change, and a field sent blank is cleared. `removeImageUrls` (repeat per URL) removes current photos, including the cover. New `images` are added to the kept ones (4 at most), and a new `coverImage` replaces the cover. Returns the property.
+- `DELETE /admin/properties/:id`: soft delete; returns `{ id, deleted: true }`. Deleting again is a 404.
+
+**New client endpoints:**
+
+- `GET /client/properties/:id`: public. Published, not deleted properties only (otherwise 404). Adds one view per call. Returns the property with `status`, `verifiedAt` and `isFavorite`, which is true only when a valid token is sent and that user saved it.
+- `POST /client/properties/:id/inquiries` with `{ "message" }` (max 2000 characters): logged in; returns 201 with the inquiry.
+- `POST /client/properties/:id/favorite` and `DELETE /client/properties/:id/favorite`: logged in; both return `{ propertyId, isFavorite }`, and repeating either changes nothing.
+
+**Changed endpoints:**
+
+- `PATCH /admin/properties/:id/publish` now takes `{ "isPublished": true | false }` and sets that state instead of toggling. A missing or non-boolean value is a 400.
+- `GET /admin/properties`: each item adds `number`; deleted properties are left out.
+- `GET /admin/dashboard/stats`: verified property counts leave out deleted properties.
+
+**Not done yet:** admins can't read inquiry messages.
+
+## 8. User Management, profiles and Settings (implemented 11 Oct 2026)
+
+Decisions: the ⋮ menu has View Profile, Request History and Suspend User; suspended users can't log in; the admin's role is display only.
+
+**Schema** (migration `20261011090000_user_status`):
+
+- `User.status` (`ACTIVE` or `SUSPENDED`). Agents who were already suspended are marked `SUSPENDED` by the migration.
+- `NotificationSettings`: `email` and `push` now default to on (they were off), so the first save of one toggle doesn't switch the others off.
+
+**Suspension:**
+
+- A suspended user's login fails with 403 "Your account has been suspended." This covers the client login, the admin/agent login, and Google and Facebook sign-in.
+- Their existing tokens also stop working: `checkJwt` returns the same 403.
+- "Suspend User" and "Suspend Agent" now do the same thing for agents. Both set the user to `SUSPENDED` and the agent to `INACTIVE`, and both move the agent's open jobs.
+
+**New endpoints:**
+
+- `GET /admin/users?type=all|client|agent&search&page&limit`: the User Management table.
+  - Each row has `id`, `agentId`, `name`, `email`, `phone`, `avatarUrl`, `type`, `status` and `joinedAt`.
+  - Also returns `counts { all, client, agent }`.
+  - Admins aren't listed.
+- `GET /admin/users/:id`: client profile (View Profile for a client).
+  - Returns `name`, `email`, `phone`, `avatarUrl`, `status`, `memberSince`.
+  - `stats`:
+    - `paidRequests`: requests with a successful payment
+    - `totalSpent`: in naira
+    - `averageResponseDays`
+  - `recentActivity`: the 10 newest entries.
+  - For agents, View Profile uses the row's `agentId` with `GET /admin/agents/:id`.
+- `GET /admin/agents/:id`: agent profile.
+  - Returns the contact details, `displayStatus`, `assignedPropertyCount` out of `maxAssignedProperties` (the "4/5 Properties Assigned" badge, see section 9) and `memberSince`.
+  - `stats`:
+    - `totalVerifications`: completed reports
+    - `successRate`: % of reviewed reports approved without a revision request
+    - `averageResponseDays`
+  - `assignedProperties`: the property listings assigned to the agent (see section 9).
+- `PATCH /admin/users/:id/status` with `{ "status": "ACTIVE" | "SUSPENDED" }`: Suspend User or reactivate. Returns `{ id, status, reassigned, unassigned }`.
+
+**Changed endpoints:**
+
+- `GET /admin/verification-requests` takes `userId`, for Request History.
+- `GET /admin/profile` returns `notificationSettings { email, sms, push }`. Admins who never saved their settings get email and push on.
+
+**How the stats are worked out:**
+
+- Average response time is the days from an agent being assigned to a paid period (`Transaction.assignedAt`) to its report being generated, rounded to 1 decimal. It is `null` until there's a completed report.
+- The stats use reports rather than assignments, because assignments are deleted after each recurring period.
+
+**Not available:**
+
+- There's no data for the "Real estate investor" or "Luxury property verification" taglines.
+
+## 9. Assign Property (implemented 12 Oct 2026)
+
+Verification requests and properties are separate and stay unlinked. A property listing can now have one agent.
+
+**Schema** (migration `20261012090000_property_agent`):
+
+- `Property.agentId`: optional. It is set to null if the agent record is deleted.
+
+**New endpoints:**
+
+- `POST /admin/properties/:id/assign-agent` with `{ "agentId" }`: "Assign Property" on Agent Profile.
+  - Replaces any agent already on the property and returns `{ id, agent { id, name }, updatedAt }`.
+  - 400 for a suspended agent; 404 for an unknown agent or a missing or deleted property.
+  - 409 "Agent is fully booked. Agents can only handle 5 properties at a time." when the agent already has 5 properties. Deleted properties don't count, and re-assigning one of the agent's own properties is allowed.
+- `DELETE /admin/properties/:id/assign-agent`: removes the agent and returns `agent: null`. Repeating it changes nothing.
+
+**Changed endpoints:**
+
+- `GET /admin/agents/:id`: `assignedProperties` is now the agent's property listings (deleted ones are left out), in the same shape as the Properties list: title, type, location, price, views and cover image.
+  - The "4/5 Properties Assigned" badge is `assignedPropertyCount` out of `maxAssignedProperties` (5), counting the assigned properties.
+  - `displayStatus` (Busy at 5 verification jobs) and `stats` still come from verification requests. The 5-property and 5-job limits are separate.
+- `GET /admin/properties/:id`: adds `agent { id, name }`, or null.

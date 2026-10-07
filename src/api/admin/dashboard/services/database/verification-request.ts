@@ -13,6 +13,8 @@ export interface GetVerificationRequestsQuery {
   search?: string;
   verificationTypeId?: string;
   agentId?: string;
+  /** Only this client's requests ("Request History"). */
+  userId?: string;
   page?: number;
   limit?: number;
   sortBy?: VerificationRequestSortBy;
@@ -111,6 +113,7 @@ export const getVerificationRequestsForAdmin = async ({
   search = "",
   verificationTypeId,
   agentId,
+  userId,
   page = 1,
   limit = 10,
   sortBy = "createdAt",
@@ -121,6 +124,7 @@ export const getVerificationRequestsForAdmin = async ({
   const baseWhere: Prisma.VerificationRequestWhereInput = {
     ...(verificationTypeId ? { verificationTypeId } : {}),
     ...(agentId ? { agentAssignment: { agentId } } : {}),
+    ...(userId ? { userId } : {}),
     ...(propertyType ? { details: { path: ["propertyType"], equals: propertyType } } : {}),
     ...(normalizedSearch
       ? {

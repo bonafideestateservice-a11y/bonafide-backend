@@ -4,7 +4,11 @@ import { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { ApiError, BadRequestError, HttpStatusCode } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
-import { createProperty } from "../../services/database/property";
+import {
+  createProperty,
+  CreatePropertyData,
+  UpdatePropertyData,
+} from "../../services/database/property";
 import { toPropertyResponse } from "../get-all-properties/get-all-properties.v1";
 
 cloudinary.config({
@@ -41,6 +45,16 @@ const uploadImage = async (file: Express.Multer.File) =>
     )
   ).secure_url;
 
+/** Uploads the form's photos; `cover` is undefined when no new cover was sent. */
+export const uploadPropertyImages = async (req: Request) => {
+  const files = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
+  const [cover, images] = await Promise.all([
+    files.coverImage ? uploadImage(files.coverImage[0]) : undefined,
+    Promise.all((files.images ?? []).map(uploadImage)),
+  ]);
+  return { cover, images };
+};
+
 /** Optional whole or decimal number from a form field; undefined when blank. */
 const numberField = (value: unknown, name: string, integer: boolean) => {
   if (value === undefined || value === "") return undefined;
@@ -51,6 +65,61 @@ const numberField = (value: unknown, name: string, integer: boolean) => {
   return parsed;
 };
 
+const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+/**
+ * Validates the Add/Edit Property form. On edit (`partial`), fields that aren't sent are
+ * left unchanged; a field sent blank clears it.
+ */
+
+export const parsePropertyForm = (body: Record<string, unknown>, partial: boolean) => {
+  const sent = (field: string) => body[field] !== undefined;
+  const required = (field: string) => !partial || sent(field);
+  const data: UpdatePropertyData = {};
+
+  if (required("title")) {
+    data.name = text(body.title);
+    if (!data.name) throw new BadRequestError("title is required.");
+  }
+  if (required("propertyType")) {
+    if (!Object.values(PropertyType).includes(body.propertyType as PropertyType)) {
+      throw new BadRequestError("propertyType must be RESIDENTIAL, COMMERCIAL or LAND.");
+    }
+    data.propertyType = body.propertyType as PropertyType;
+  }
+  if (required("priceAmount")) {
+    const price = numberField(body.priceAmount, "priceAmount", true);
+    if (price === undefined) throw new BadRequestError("priceAmount is required.");
+    data.priceAmount = BigInt(price);
+  }
+  if (required("location")) {
+    const location = text(body.location);
+    if (!location) throw new BadRequestError("location is required.");
+    // "Lekki Phase 1, Lagos": the part after the last comma is the city.
+    const comma = location.lastIndexOf(",");
+    data.address = location;
+    data.area = comma === -1 ? location : location.slice(0, comma).trim();
+    data.city = comma === -1 ? null : location.slice(comma + 1).trim();
+  }
+  if (sent("description")) data.description = text(body.description) || null;
+  if (sent("bedrooms")) data.bedrooms = numberField(body.bedrooms, "bedrooms", true) ?? null;
+  if (sent("bathrooms")) data.bathrooms = numberField(body.bathrooms, "bathrooms", true) ?? null;
+  if (sent("sizeSqm")) data.sizeSqm = numberField(body.sizeSqm, "sizeSqm", false) ?? null;
+  if (sent("yearBuilt")) data.yearBuilt = numberField(body.yearBuilt, "yearBuilt", true) ?? null;
+  if (sent("amenities")) {
+    // A single blank value clears the list.
+    const amenities = ([] as unknown[]).concat(body.amenities).filter((a) => a !== "");
+    const badAmenity = amenities.find(
+      (a) => !Object.values(PropertyAmenity).includes(a as PropertyAmenity),
+    );
+    if (badAmenity !== undefined) throw new BadRequestError(`Unknown amenity: ${badAmenity}.`);
+    data.amenities = amenities as PropertyAmenity[];
+  }
+  if (required("isPublished"))
+    data.isPublished = body.isPublished === true || body.isPublished === "true";
+  return data;
+};
+
 /** "Save as Draft" (isPublished false) or "Save & Publish" (true) on the Add Property form. */
 export const createPropertyHandler = async (
   req: Request,
@@ -58,45 +127,12 @@ export const createPropertyHandler = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const body = req.body ?? {};
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    const location = typeof body.location === "string" ? body.location.trim() : "";
-    const price = numberField(body.priceAmount, "priceAmount", true);
-    const amenities = ([] as unknown[]).concat(body.amenities ?? []);
-    if (!title) throw new BadRequestError("title is required.");
-    if (!Object.values(PropertyType).includes(body.propertyType)) {
-      throw new BadRequestError("propertyType must be RESIDENTIAL, COMMERCIAL or LAND.");
-    }
-    if (price === undefined) throw new BadRequestError("priceAmount is required.");
-    if (!location) throw new BadRequestError("location is required.");
-    const badAmenity = amenities.find(
-      (a) => !Object.values(PropertyAmenity).includes(a as PropertyAmenity),
-    );
-    if (badAmenity !== undefined) throw new BadRequestError(`Unknown amenity: ${badAmenity}.`);
-
-    // "Lekki Phase 1, Lagos": the part after the last comma is the city.
-    const comma = location.lastIndexOf(",");
-    const files = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
-    const [coverImageUrl, imageUrls] = await Promise.all([
-      files.coverImage ? uploadImage(files.coverImage[0]) : null,
-      Promise.all((files.images ?? []).map(uploadImage)),
-    ]);
+    const data = parsePropertyForm(req.body ?? {}, false);
+    const { cover, images } = await uploadPropertyImages(req);
     const property = await createProperty({
-      name: title,
-      address: location,
-      area: comma === -1 ? location : location.slice(0, comma).trim(),
-      city: comma === -1 ? null : location.slice(comma + 1).trim(),
-      propertyType: body.propertyType,
-      priceAmount: BigInt(price),
-      description: typeof body.description === "string" ? body.description.trim() || null : null,
-      bedrooms: numberField(body.bedrooms, "bedrooms", true),
-      bathrooms: numberField(body.bathrooms, "bathrooms", true),
-      sizeSqm: numberField(body.sizeSqm, "sizeSqm", false),
-      yearBuilt: numberField(body.yearBuilt, "yearBuilt", true),
-      amenities: amenities as PropertyAmenity[],
-      coverImageUrl,
-      imageUrls,
-      isPublished: body.isPublished === true || body.isPublished === "true",
+      ...(data as CreatePropertyData),
+      coverImageUrl: cover ?? null,
+      imageUrls: images,
     });
     res.status(HttpStatusCode.CREATED).json(toPropertyResponse(property));
   } catch (error) {

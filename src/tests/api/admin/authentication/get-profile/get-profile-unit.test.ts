@@ -37,8 +37,22 @@ describe("getProfile handler (unit)", () => {
 
     expect(mockedGetProfile).toHaveBeenCalledWith("user-1");
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
-    expect(res.json).toHaveBeenCalledWith(profile);
+    // Admins who never saved their settings get email and push.
+    expect(res.json).toHaveBeenCalledWith({
+      ...profile,
+      notificationSettings: { email: true, sms: false, push: true },
+    });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns the saved notification settings", async () => {
+    const notificationSettings = { email: false, sms: true, push: false };
+    mockedGetProfile.mockResolvedValue({ id: "user-1", notificationSettings });
+    const { req, res, next } = buildMockReqRes("user-1");
+
+    await getProfile(req, res, next);
+
+    expect(res.json).toHaveBeenCalledWith({ id: "user-1", notificationSettings });
   });
 
   it("returns 401 without authentication", async () => {

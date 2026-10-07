@@ -11,7 +11,7 @@ let agentId: string;
 let serviceId: string;
 let typeId: string;
 let requestIds: string[] = [];
-let assignmentIds: string[] = [];
+const assignmentIds: string[] = [];
 let adminToken: string;
 
 beforeAll(async () => {
@@ -188,6 +188,16 @@ describe("GET /api/v1/admin/verification-requests", () => {
         agent: { id: agentId, name: "Verification Requests Agent" },
       }),
     );
+  });
+
+  it("filters by client (Request History)", async () => {
+    const res = await request(app)
+      .get("/api/v1/admin/verification-requests")
+      .query({ userId: clientIds[3] })
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((item: { id: string }) => item.id)).toEqual([requestIds[3]]);
   });
 
   it("rejects invalid query parameters", async () => {

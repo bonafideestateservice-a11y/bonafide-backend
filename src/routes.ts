@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import clientAuthenticationRoutes from "./api/client/authentication";
 import clientVerificationRoutes from "./api/client/verification";
+import clientPropertyRoutes from "./api/client/properties";
 import adminAuthenticationRoutes from "./api/admin/authentication";
 import adminDashboardRoutes from "./api/admin/dashboard";
 import adminVerificationRoutes from "./api/admin/verification";
@@ -15,6 +16,7 @@ const healthCheckHandler = (_req: Request, res: Response) => {
 router.get("/healthcheck", healthCheckHandler);
 router.use("/:version/client", clientAuthenticationRoutes);
 router.use("/:version/client", clientVerificationRoutes);
+router.use("/:version/client", clientPropertyRoutes);
 router.use("/:version/admin", adminAuthenticationRoutes);
 router.use("/:version/admin", adminDashboardRoutes);
 router.use("/:version/admin", adminVerificationRoutes);

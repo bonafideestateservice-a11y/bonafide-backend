@@ -9,6 +9,7 @@ import {
 import { verifyFacebookAccessToken } from "../../../../../libs/facebook/facebook";
 import { generateToken } from "../../../../../utils/jwt";
 import { logger } from "../../../../../utils/logger";
+import { SUSPENDED_MESSAGE } from "../../../../../middlewares/check-jwt";
 import { signInWithSocialProfile } from "../../services/social-auth";
 
 /**
@@ -48,6 +49,8 @@ export const facebookSignIn = async (
       case "NOT_A_CLIENT":
         return next(new ForbiddenError("This account can't sign in with Facebook."));
     }
+
+    if (result.user.status === "SUSPENDED") return next(new ForbiddenError(SUSPENDED_MESSAGE));
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...user } = result.user;

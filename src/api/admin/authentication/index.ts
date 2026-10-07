@@ -106,6 +106,13 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *           example: https://res.cloudinary.com/demo/image/upload/v1/bonafide-services/profile-photos/abc.jpg
  *         role:
  *           $ref: '#/components/schemas/ROLE'
+ *         notificationSettings:
+ *           type: object
+ *           description: Only on GET /admin/profile. Email and push are on until changed.
+ *           properties:
+ *             email: { type: boolean, example: true }
+ *             sms: { type: boolean, example: false }
+ *             push: { type: boolean, example: true }
  *     AdminAuthNotificationSettings:
  *       type: object
  *       description: The user's NotificationSettings row (created on first update).

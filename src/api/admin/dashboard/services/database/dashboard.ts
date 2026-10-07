@@ -50,7 +50,7 @@ const activeAgentsAt = (at: Date) =>
   });
 
 const verifiedPropertiesAt = (at: Date) =>
-  prismaClient.property.count({ where: { verifiedAt: { lte: at } } });
+  prismaClient.property.count({ where: { verifiedAt: { lte: at }, deletedAt: null } });
 
 const change = (now: number, before: number) =>
   before === 0 ? null : Math.round(((now - before) / before) * 1000) / 10;
@@ -71,7 +71,7 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
     usersAt(now),
     prismaClient.verificationRequest.count({ where: { status: VerificationStatus.SUBMITTED } }),
     prismaClient.verificationAgent.count({ where: { status: AgentStatus.ACTIVE } }),
-    prismaClient.property.count({ where: { status: PropertyStatus.VERIFIED } }),
+    prismaClient.property.count({ where: { status: PropertyStatus.VERIFIED, deletedAt: null } }),
     pendingAt(now),
     activeAgentsAt(now),
     verifiedPropertiesAt(now),

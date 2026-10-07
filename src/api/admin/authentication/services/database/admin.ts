@@ -30,7 +30,7 @@ export interface FindAdminUnique {
 export type AdminProfile = Pick<
   User,
   "id" | "fullName" | "email" | "phone" | "location" | "profilePhoto" | "role"
->;
+> & { notificationSettings?: { email: boolean; sms: boolean; push: boolean } | null };
 
 export const createAdmin = async (data: CreateAdminData): Promise<User> => {
   try {
@@ -91,6 +91,7 @@ export const getAdminProfile = async (adminId: string): Promise<AdminProfile | n
         location: true,
         profilePhoto: true,
         role: true,
+        notificationSettings: { select: { email: true, sms: true, push: true } },
       },
     });
   } catch (error) {
