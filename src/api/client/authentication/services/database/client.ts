@@ -11,6 +11,7 @@ export interface CreateClientData {
   termsAndCondition?: boolean;
   provider?: string | null;
   providerId?: string | null;
+  profilePhoto?: string | null;
 }
 
 export interface UpdateClientData {
@@ -29,6 +30,7 @@ export interface UpdateClientData {
 export interface FindClientUnique {
   email?: string;
   id?: string;
+  providerId?: string;
 }
 
 export type ClientProfile = Pick<
@@ -47,6 +49,7 @@ export const createClient = async (data: CreateClientData): Promise<User> => {
         termsAndCondition: data.termsAndCondition ?? false,
         provider: data.provider ?? "local",
         providerId: data.providerId ?? null,
+        profilePhoto: data.profilePhoto ?? null,
       },
     });
     logger.info(`User created successfully userId=${user.id} email=${user.email}`);
@@ -74,7 +77,9 @@ export const findClient = async (unique: FindClientUnique): Promise<User | null>
   try {
     const where: Prisma.UserWhereUniqueInput = unique.id
       ? { id: unique.id }
-      : { email: unique.email! };
+      : unique.providerId
+        ? { providerId: unique.providerId }
+        : { email: unique.email! };
 
     const user = await prismaClient.user.findUnique({ where });
     logger.info(`User lookup criteria=${JSON.stringify(unique)} found=${!!user}`);
