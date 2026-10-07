@@ -3,6 +3,9 @@ const enqueueNotificationEvent = jest.fn();
 jest.mock("../../jobs/notifications/queue", () => ({
   enqueueNotificationEvent,
 }));
+jest.mock("../../api/services/database/activity-log", () => ({
+  recordActivity: jest.fn().mockResolvedValue(undefined),
+}));
 
 jest.mock("../../utils/logger", () => ({
   logger: {

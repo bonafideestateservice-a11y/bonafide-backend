@@ -1,5 +1,6 @@
 import { appEvents, AppEventPayloads, AppEventTypes, PayloadEventType } from "./index";
 import { enqueueNotificationEvent } from "../jobs/notifications/queue";
+import { recordActivity } from "../api/services/database/activity-log";
 import { logger } from "../utils/logger";
 
 /**
@@ -20,6 +21,11 @@ notificationEvents.forEach((eventType) => {
   appEvents.on(eventType, (payload: AppEventPayloads[typeof eventType]) => {
     enqueueNotificationEvent(eventType, payload).catch((error) => {
       logger.error(`[event] ${eventType} could not be queued`, {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+    recordActivity(eventType, payload).catch((error) => {
+      logger.error(`[event] ${eventType} activity could not be recorded`, {
         message: error instanceof Error ? error.message : String(error),
       });
     });

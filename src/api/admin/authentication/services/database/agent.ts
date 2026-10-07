@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { AgentAssignmentStatus, Prisma } from "@prisma/client";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 
@@ -62,3 +62,38 @@ export const getVerificationAgentByUserId = async (
     throw error;
   }
 };
+
+/** An agent with this many open assignments is fully booked. */
+export const MAX_ACTIVE_ASSIGNMENTS = 5;
+
+export const OPEN_ASSIGNMENT_STATUSES = [
+  AgentAssignmentStatus.ASSIGNED,
+  AgentAssignmentStatus.ACCEPTED,
+  AgentAssignmentStatus.INSPECTION_SCHEDULED,
+];
+
+/** Every agent matching the search, with their email and number of open assignments. */
+export const listVerificationAgents = (search = "") =>
+  prismaClient.verificationAgent.findMany({
+    where: search.trim()
+      ? {
+          OR: [
+            { name: { contains: search.trim(), mode: "insensitive" } },
+            { region: { contains: search.trim(), mode: "insensitive" } },
+            { user: { email: { contains: search.trim(), mode: "insensitive" } } },
+          ],
+        }
+      : {},
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      region: true,
+      status: true,
+      user: { select: { email: true, profilePhoto: true } },
+      _count: {
+        select: { assignments: { where: { status: { in: OPEN_ASSIGNMENT_STATUSES } } } },
+      },
+    },
+  });

@@ -82,7 +82,8 @@ export const isNotificationChannelEnabled = async (
       where: { userId },
       select: { email: true, push: true },
     });
-    return settings?.[channel] ?? false;
+    // Users who never saved their settings get email and push.
+    return settings?.[channel] ?? true;
   } catch (error) {
     logger.error(`Error reading notification settings userId=${userId} ${error}`);
     throw error;
@@ -307,3 +308,43 @@ export const deleteNotification = async (
     throw new Error("Failed to delete notification");
   }
 };
+
+const inAppFor = (userId: string): Prisma.NotificationWhereInput => ({
+  userId,
+  meta: { path: ["channel"], equals: "in_app" },
+});
+
+/** A user's in-app inbox (the bell), newest first, plus their unread count. */
+export const getInAppNotifications = async (
+  userId: string,
+  { page, limit, unreadOnly }: { page: number; limit: number; unreadOnly: boolean },
+) => {
+  const where = { ...inAppFor(userId), ...(unreadOnly ? { read: false } : {}) };
+  const [totalItems, unreadCount, data] = await Promise.all([
+    prismaClient.notification.count({ where }),
+    prismaClient.notification.count({ where: { ...inAppFor(userId), read: false } }),
+    prismaClient.notification.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        body: true,
+        read: true,
+        verificationRequestId: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+  return { data, unreadCount, meta: { page, limit, totalItems, totalPages: Math.ceil(totalItems / limit) } };
+};
+
+/** Mark one (or, without an id, every) in-app notification of the user as read. */
+export const markInAppNotificationsRead = (userId: string, id?: string) =>
+  prismaClient.notification.updateMany({
+    where: { ...inAppFor(userId), ...(id ? { id } : { read: false }) },
+    data: { read: true },
+  });

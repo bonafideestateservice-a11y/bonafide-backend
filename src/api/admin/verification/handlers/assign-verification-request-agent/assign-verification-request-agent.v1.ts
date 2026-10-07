@@ -29,6 +29,12 @@ export const assignVerificationRequestAgent = async (
         return next(new NotFoundError("Verification agent not found."));
       case "AGENT_INACTIVE":
         return next(new BadRequestError("Verification agent is inactive."));
+      case "AGENT_FULLY_BOOKED":
+        return next(
+          new ConflictError(
+            "Agent is fully booked. Agents can only handle 5 properties at a time.",
+          ),
+        );
       case "ALREADY_ASSIGNED":
         return next(new ConflictError("Verification request already has an assigned agent."));
       case "NO_PAID_PERIOD":

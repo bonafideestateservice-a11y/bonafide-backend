@@ -80,6 +80,11 @@ describe("assignVerificationRequestAgent handler (unit)", () => {
       "Verification request already has an assigned agent.",
     ],
     [
+      { kind: "AGENT_FULLY_BOOKED" },
+      HttpStatusCode.CONFLICT,
+      "Agent is fully booked. Agents can only handle 5 properties at a time.",
+    ],
+    [
       { kind: "NO_PAID_PERIOD" },
       HttpStatusCode.CONFLICT,
       "Verification request has no paid period awaiting an agent.",

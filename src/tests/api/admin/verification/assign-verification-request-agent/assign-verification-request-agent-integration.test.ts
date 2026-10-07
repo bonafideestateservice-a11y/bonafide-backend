@@ -216,6 +216,26 @@ describe("POST /api/v1/admin/verification-requests/:id/assign-agent", () => {
     ).resolves.toEqual(expect.objectContaining({ status: VerificationStatus.SUBMITTED }));
   });
 
+  it("returns 409 when the agent already has 5 open jobs", async () => {
+    const booked = (await createAgent("booked", "ACTIVE")).agent.id;
+    for (let i = 0; i < 5; i += 1) {
+      await prismaClient.agentAssignment.create({
+        data: {
+          verificationRequestId: await createRequest(VerificationStatus.IN_PROGRESS),
+          agentId: booked,
+        },
+      });
+    }
+    const verificationRequestId = await createRequest(VerificationStatus.SUBMITTED);
+
+    const response = await assign(verificationRequestId, { agentId: booked });
+
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBe(
+      "Agent is fully booked. Agents can only handle 5 properties at a time.",
+    );
+  });
+
   it("returns 409 when the request already has an agent", async () => {
     const verificationRequestId = await createRequest(VerificationStatus.SUBMITTED);
     await assign(verificationRequestId, { agentId: activeAgentId });

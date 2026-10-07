@@ -81,7 +81,9 @@ export const processNotificationDelivery = async (
   }
 
   const setting = delivery.channel === "email" ? "email" : "push";
-  if (!(await isNotificationChannelEnabled(recipient.id, setting))) {
+  const enabled = await isNotificationChannelEnabled(recipient.id, setting);
+  // In-app notifications always land in the inbox; the push setting only decides the phone push.
+  if (!enabled && delivery.channel === "email") {
     return { ok: true, skipped: "disabled" };
   }
 
@@ -106,7 +108,9 @@ export const processNotificationDelivery = async (
   }
 
   try {
-    const result = await send(delivery, notification);
+    const result = enabled
+      ? await send(delivery, notification)
+      : { ok: true, meta: { push: "disabled" } };
     await updateNotification(
       { id: notification.id },
       {

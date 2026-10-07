@@ -6,37 +6,8 @@ export type PropertyListStatus = "all" | "published" | "unpublished";
 export type PropertySortBy = "createdAt" | "price";
 export type PropertySortOrder = "asc" | "desc";
 
-export interface CreatePropertyData {
-  name: string;
-  address: string;
-  title?: string;
-  propertyType?: PropertyType;
-  area?: string | null;
-  city?: string | null;
-  country?: string | null;
-  priceAmount?: number;
-  priceCurrency?: string;
-  viewCount?: number;
-  coverImageUrl?: string | null;
-  isPublished?: boolean;
-  status?: PropertyStatus;
-}
-
-export interface UpdatePropertyData {
-  name?: string;
-  address?: string;
-  title?: string;
-  propertyType?: PropertyType;
-  area?: string | null;
-  city?: string | null;
-  country?: string | null;
-  priceAmount?: number;
-  priceCurrency?: string;
-  viewCount?: number;
-  coverImageUrl?: string | null;
-  isPublished?: boolean;
-  status?: PropertyStatus;
-}
+export type CreatePropertyData = Prisma.PropertyCreateInput;
+export type UpdatePropertyData = Prisma.PropertyUpdateInput;
 
 export interface GetPropertiesQuery {
   status?: PropertyListStatus;
@@ -50,7 +21,6 @@ export interface GetPropertiesQuery {
 
 const propertySelect = {
   id: true,
-  title: true,
   name: true,
   propertyType: true,
   area: true,
@@ -62,6 +32,13 @@ const propertySelect = {
   viewCount: true,
   coverImageUrl: true,
   isPublished: true,
+  description: true,
+  bedrooms: true,
+  bathrooms: true,
+  sizeSqm: true,
+  yearBuilt: true,
+  amenities: true,
+  imageUrls: true,
   createdAt: true,
 } satisfies Prisma.PropertySelect;
 
@@ -108,8 +85,7 @@ export const getAllProperties = async ({
       ? await prismaClient.$queryRaw<Array<{ id: string }>>(Prisma.sql`
           SELECT "id"
           FROM "Property"
-          WHERE LOWER(COALESCE("title", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
-             OR LOWER(COALESCE("name", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
+          WHERE LOWER(COALESCE("name", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
              OR LOWER(COALESCE("address", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
              OR LOWER(COALESCE("area", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}
              OR LOWER(COALESCE("city", '')) ~ ${`(^|[^[:alnum:]])${escapeRegularExpression(normalizedSearch.toLowerCase())}([^[:alnum:]]|$)`}

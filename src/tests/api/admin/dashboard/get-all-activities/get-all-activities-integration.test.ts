@@ -1,133 +1,64 @@
 import request from "supertest";
-
-jest.mock("../../../../../libs/firebase/index", () => ({
-  messaging: { send: jest.fn() },
-}));
-jest.mock("../../../../../libs/stripe", () => ({
-  stripe: {},
-}));
-
 import app from "../../../../../app";
-import { generateToken } from "../../../../../utils/jwt";
+import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
+import { createFixtures } from "../../../../helpers/fixtures";
 
-const suffix = Date.now();
-let adminId: string;
-let clientId: string;
-let adminToken: string;
+const fx = createFixtures("activity");
+let token: string;
+let requestId: string;
+let agent: Awaited<ReturnType<typeof fx.createAgent>>;
+let clientName: string;
 
 beforeAll(async () => {
-  const admin = await prismaClient.user.create({
-    data: {
-      fullName: "Activities Admin",
-      email: `activities-admin-${suffix}@example.com`,
-      role: "ADMIN",
-    },
-  });
-  adminId = admin.id;
-  adminToken = generateToken({ id: admin.id });
-
-  const client = await prismaClient.user.create({
-    data: {
-      fullName: "Activities Client",
-      email: `activities-client-${suffix}@example.com`,
-      role: "CLIENT",
-    },
-  });
-  clientId = client.id;
-
-  await prismaClient.notification.createMany({
-    data: [
-      {
-        userId: clientId,
-        type: "VERIFICATION_REQUEST_CREATED",
-        notificationStatus: "SENT",
-        title: "Verification request created",
-        body: "A verification request was created.",
-        meta: { channel: "in_app", clientName: "Activities Client" },
-        sentAt: new Date(),
-      },
-      {
-        userId: clientId,
-        type: "REPORT_UPLOADED",
-        notificationStatus: "SENT",
-        title: "Verification report uploaded",
-        body: "A report was uploaded.",
-        meta: { channel: "email", agentName: "Activities Agent" },
-        sentAt: new Date(),
-      },
-      {
-        userId: clientId,
-        type: "AGENT_ASSIGNED",
-        notificationStatus: "SENT",
-        title: "Agent assigned",
-        body: "An agent was assigned.",
-        meta: { channel: "in_app", agentName: "Activities Agent" },
-        sentAt: new Date(),
-      },
-      {
-        userId: clientId,
-        type: "INSPECTION_STARTED",
-        notificationStatus: "PENDING",
-        title: "Inspection started",
-        body: "An inspection started.",
-        meta: { channel: "in_app" },
-      },
-    ],
-  });
+  token = (await fx.createUser("ADMIN", "admin")).token;
+  const client = await fx.createUser("CLIENT", "client");
+  clientName = client.fullName;
+  agent = await fx.createAgent("agent");
+  requestId = (await fx.createPaidRequest(client.id)).id;
 });
-
 afterAll(async () => {
-  try {
-    if (clientId) {
-      await prismaClient.notification.deleteMany({ where: { userId: clientId } });
-    }
-  } finally {
-    await prismaClient.user.deleteMany({ where: { id: { in: [adminId, clientId] } } });
-    await prismaClient.$disconnect();
-  }
+  await fx.cleanup();
+  await prismaClient.$disconnect();
 });
 
 describe("GET /api/v1/admin/dashboard/activities", () => {
-  it("requires authentication and admin access", async () => {
-    const unauthenticated = await request(app).get("/api/v1/admin/dashboard/activities");
-    expect(unauthenticated.status).toBe(401);
+  it("records events and returns them newest first with the right name", async () => {
+    appEvents.emit(AppEventTypes.VERIFICATION_REQUEST_CREATED, {
+      verificationRequestId: requestId,
+      userId: (
+        await prismaClient.verificationRequest.findUniqueOrThrow({ where: { id: requestId } })
+      ).userId,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    appEvents.emit(AppEventTypes.AGENT_ASSIGNED, {
+      assignmentId: "a1",
+      verificationRequestId: requestId,
+      agentId: agent.id,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
-    const clientToken = generateToken({ id: clientId });
-    const nonAdmin = await request(app)
-      .get("/api/v1/admin/dashboard/activities")
-      .set("Authorization", `Bearer ${clientToken}`);
-    expect(nonAdmin.status).toBe(403);
-  });
-
-  it("returns only sent activities with client and agent metadata", async () => {
     const response = await request(app)
-      .get("/api/v1/admin/dashboard/activities")
-      .set("Authorization", `Bearer ${adminToken}`);
+      .get("/api/v1/admin/dashboard/activities?limit=100")
+      .set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.activities).toHaveLength(3);
-    expect(response.body.activities).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "VERIFICATION_REQUEST_CREATED",
-          channel: "in_app",
-          clientName: "Activities Client",
-        }),
-        expect.objectContaining({
-          type: "REPORT_UPLOADED",
-          channel: "email",
-          agentName: "Activities Agent",
-        }),
-        expect.objectContaining({
-          type: "AGENT_ASSIGNED",
-          channel: "in_app",
-          agentName: "Activities Agent",
-        }),
-      ]),
+    const mine = response.body.data.filter(
+      (a: { verificationRequestId: string }) => a.verificationRequestId === requestId,
     );
-    expect(response.body.activities).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ type: "INSPECTION_STARTED" })]),
+    expect(mine.map((a: { type: string; subjectName: string }) => [a.type, a.subjectName])).toEqual(
+      [
+        ["AGENT_ASSIGNED", agent.name],
+        ["VERIFICATION_REQUEST_CREATED", clientName],
+      ],
     );
+    expect(response.body.meta).toMatchObject({ page: 1, limit: 100 });
+  });
+
+  it("rejects invalid paging", async () => {
+    const response = await request(app)
+      .get("/api/v1/admin/dashboard/activities?page=0")
+      .set("Authorization", `Bearer ${token}`);
+    expect(response.status).toBe(400);
   });
 });

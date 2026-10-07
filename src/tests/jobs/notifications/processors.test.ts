@@ -102,7 +102,7 @@ describe("processNotificationDelivery", () => {
     });
   });
 
-  it("skips tracked deliveries when the recipient disabled that channel", async () => {
+  it("still records the inbox notification but sends no phone push when push is off", async () => {
     isNotificationChannelEnabled.mockResolvedValue(false);
 
     const result = await processNotificationDelivery(
@@ -110,9 +110,25 @@ describe("processNotificationDelivery", () => {
     );
 
     expect(isNotificationChannelEnabled).toHaveBeenCalledWith("user-1", "push");
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    expect(sendNotificationToUser).not.toHaveBeenCalled();
+    expect(updateNotification).toHaveBeenCalledWith(
+      { id: "notification-1" },
+      expect.objectContaining({ notificationStatus: NotificationStatus.SENT }),
+    );
+    expect(result).toEqual({ ok: true, meta: { push: "disabled" } });
+  });
+
+  it("skips tracked emails when email is off", async () => {
+    isNotificationChannelEnabled.mockResolvedValue(false);
+
+    const result = await processNotificationDelivery(
+      jobFor({ channel: "email", recipient, notification, email }),
+    );
+
     expect(result).toEqual({ ok: true, skipped: "disabled" });
     expect(createNotification).not.toHaveBeenCalled();
-    expect(sendNotificationToUser).not.toHaveBeenCalled();
+    expect(sendTemplateEmail).not.toHaveBeenCalled();
   });
 
   it("records a tracked email, stores the notification id on the job, and marks it sent", async () => {

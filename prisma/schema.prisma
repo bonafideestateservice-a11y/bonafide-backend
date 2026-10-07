@@ -196,6 +196,7 @@ model VerificationRequest {
   paystackSubscription PaystackSubscription?
   stripeSubscription   StripeSubscription?
   notifications        Notification[]
+  activityLogs         ActivityLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -237,13 +238,14 @@ model ChecklistTemplateItem {
 }
 
 model VerificationAgent {
-  id     String      @id @default(cuid())
-  userId String      @unique
-  user   User        @relation(fields: [userId], references: [id])
-  name   String
-  phone  String?
-  region String?
-  status AgentStatus @default(ACTIVE)
+  id            String      @id @default(cuid())
+  userId        String      @unique
+  user          User        @relation(fields: [userId], references: [id])
+  name          String
+  phone         String?
+  region        String?
+  status        AgentStatus @default(ACTIVE)
+  deactivatedAt DateTime?
 
   assignments AgentAssignment[]
   reports     VerificationReport[]
@@ -277,22 +279,29 @@ model AgentAssignment {
 }
 
 model Property {
-  id            String         @id @default(cuid())
+  id            String            @id @default(cuid())
   name          String
   address       String
-  title         String         @default("")
-  propertyType  PropertyType   @default(RESIDENTIAL)
+  propertyType  PropertyType      @default(RESIDENTIAL)
   area          String?
   city          String?
   country       String?
-  priceAmount   Int            @default(0)
-  priceCurrency String         @default("NGN")
-  viewCount     Int            @default(0)
+  priceAmount   BigInt            @default(0)
+  priceCurrency String            @default("NGN")
+  viewCount     Int               @default(0)
   coverImageUrl String?
-  isPublished   Boolean        @default(false)
-  status        PropertyStatus @default(PENDING)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  isPublished   Boolean           @default(false)
+  status        PropertyStatus    @default(PENDING)
+  verifiedAt    DateTime?
+  description   String?
+  bedrooms      Int?
+  bathrooms     Int?
+  sizeSqm       Float?
+  yearBuilt     Int?
+  amenities     PropertyAmenity[] @default([])
+  imageUrls     String[]          @default([])
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   @@index([isPublished, createdAt])
   @@index([status])
@@ -331,6 +340,8 @@ model Transaction {
   authorizationUrl      String?
   accessCode            String?
   paidAt                DateTime?
+  // When an agent was assigned to this paid period (for the pending-requests trend).
+  assignedAt            DateTime?
 
   agentAssignments AgentAssignment[]
   report           VerificationReport?
@@ -510,4 +521,27 @@ model FCMToken {
 
   @@index([token])
   @@index([userId])
+}
+
+// Admin dashboard "Recent activity" feed: one row per event.
+model ActivityLog {
+  id                    String               @id @default(cuid())
+  type                  NotificationType
+  verificationRequestId String?
+  verificationRequest   VerificationRequest? @relation(fields: [verificationRequestId], references: [id], onDelete: SetNull)
+  subjectName           String
+  createdAt             DateTime             @default(now())
+
+  @@index([createdAt])
+}
+
+enum PropertyAmenity {
+  SWIMMING_POOL
+  PARKING
+  SECURITY
+  GENERATOR
+  GARDEN
+  GYM
+  AIR_CONDITIONING
+  ELEVATOR
 }

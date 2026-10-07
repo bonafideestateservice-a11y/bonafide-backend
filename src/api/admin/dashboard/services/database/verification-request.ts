@@ -204,3 +204,32 @@ export const getVerificationRequestsForAdmin = async ({
     throw error;
   }
 };
+
+/** One request with everything the admin detail view shows. Never selects the password. */
+export const getVerificationRequestForAdmin = (id: string) =>
+  prismaClient.verificationRequest.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      details: true,
+      createdAt: true,
+      user: { select: { id: true, fullName: true, email: true, phone: true, profilePhoto: true } },
+      verificationType: { select: { name: true } },
+      verificationPlan: { select: { name: true, frequency: true } },
+      agentAssignment: { select: { status: true, agent: { select: { id: true, name: true } } } },
+      transactions: {
+        orderBy: { createdAt: "desc" },
+        select: { id: true, status: true, amountInCents: true, currency: true, paidAt: true },
+      },
+      reports: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          generatedAt: true,
+          reviewStatus: true,
+          agent: { select: { name: true } },
+        },
+      },
+    },
+  });

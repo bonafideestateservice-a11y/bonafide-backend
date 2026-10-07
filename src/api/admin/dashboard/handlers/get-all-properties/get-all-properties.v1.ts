@@ -3,6 +3,7 @@ import { PropertyType } from "@prisma/client";
 import { ApiError, BadRequestError, HttpStatusCode } from "../../../../../exceptions";
 import {
   getAllProperties,
+  PropertyListItem,
   PropertyListStatus,
   PropertySortBy,
   PropertySortOrder,
@@ -28,6 +29,27 @@ const getStringQuery = (value: unknown, name: string): string | undefined => {
   if (typeof value !== "string") throw new BadRequestError(`${name} must be a string.`);
   return value;
 };
+
+/** A property as the admin API returns it. The price is a BigInt in the database. */
+export const toPropertyResponse = (property: PropertyListItem) => ({
+  id: property.id,
+  title: property.name,
+  type: property.propertyType,
+  address: property.address,
+  location: { area: property.area, city: property.city, country: property.country },
+  price: { amount: Number(property.priceAmount), currency: property.priceCurrency },
+  description: property.description,
+  bedrooms: property.bedrooms,
+  bathrooms: property.bathrooms,
+  sizeSqm: property.sizeSqm,
+  yearBuilt: property.yearBuilt,
+  amenities: property.amenities,
+  coverImageUrl: property.coverImageUrl,
+  imageUrls: property.imageUrls,
+  viewCount: property.viewCount,
+  isPublished: property.isPublished,
+  createdAt: property.createdAt.toISOString(),
+});
 
 export const getAllPropertiesHandler = async (
   req: Request,
@@ -69,21 +91,7 @@ export const getAllPropertiesHandler = async (
 
     res.status(HttpStatusCode.OK).json({
       ...result,
-      data: result.data.map((property) => ({
-        id: property.id,
-        title: property.title || property.name,
-        type: property.propertyType,
-        location: {
-          area: property.area,
-          city: property.city,
-          country: property.country,
-        },
-        price: { amount: property.priceAmount, currency: property.priceCurrency },
-        viewCount: property.viewCount,
-        coverImageUrl: property.coverImageUrl,
-        isPublished: property.isPublished,
-        createdAt: property.createdAt.toISOString(),
-      })),
+      data: result.data.map(toPropertyResponse),
     });
   } catch (error) {
     if (error instanceof BadRequestError) return next(error);

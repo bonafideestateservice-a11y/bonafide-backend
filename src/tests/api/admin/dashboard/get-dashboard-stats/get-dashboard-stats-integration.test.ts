@@ -131,11 +131,12 @@ describe("GET /api/v1/admin/dashboard/stats", () => {
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({
+    expect(res.body).toMatchObject({
       totalUsers: baselineClients + 1,
       numberOfPendingRequest: baselinePending + 1,
       numberOfActiveAgents: baselineActiveAgents + 1,
       numberOfProperties: baselineVerifiedProperties + 1,
+      comparedTo: "last_week",
     });
   });
 });

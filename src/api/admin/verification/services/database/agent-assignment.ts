@@ -3,6 +3,10 @@ import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 import { findUnreportedPaidTransaction } from "../../../../services/database/verification-lifecycle";
+import {
+  MAX_ACTIVE_ASSIGNMENTS,
+  OPEN_ASSIGNMENT_STATUSES,
+} from "../../../authentication/services/database/agent";
 
 export type AgentAssignmentInformation = Prisma.AgentAssignmentGetPayload<{
   select: {
@@ -79,6 +83,12 @@ export const createAgentAssignment = async ({
     const assignment = await prismaClient.agentAssignment.create({
       data: { verificationRequestId, agentId, transactionId: paidPeriod?.id ?? null },
     });
+    if (paidPeriod) {
+      await prismaClient.transaction.update({
+        where: { id: paidPeriod.id },
+        data: { assignedAt: new Date() },
+      });
+    }
 
     appEvents.emit(AppEventTypes.AGENT_ASSIGNED, {
       assignmentId: assignment.id,
@@ -106,6 +116,7 @@ export type AssignAgentResult =
   | { kind: "REQUEST_NOT_FOUND" }
   | { kind: "AGENT_NOT_FOUND" }
   | { kind: "AGENT_INACTIVE" }
+  | { kind: "AGENT_FULLY_BOOKED" }
   | { kind: "REQUEST_NOT_ASSIGNABLE"; status: VerificationStatus }
   | { kind: "NO_PAID_PERIOD" }
   | { kind: "ALREADY_ASSIGNED"; agentId: string }
@@ -148,6 +159,10 @@ export const assignAgentToVerificationRequest = async (
       });
       if (!agent) return { kind: "AGENT_NOT_FOUND" as const };
       if (agent.status !== AgentStatus.ACTIVE) return { kind: "AGENT_INACTIVE" as const };
+      const openJobs = await transaction.agentAssignment.count({
+        where: { agentId, status: { in: OPEN_ASSIGNMENT_STATUSES } },
+      });
+      if (openJobs >= MAX_ACTIVE_ASSIGNMENTS) return { kind: "AGENT_FULLY_BOOKED" as const };
 
       const paidPeriod = await findUnreportedPaidTransaction(transaction, verificationRequestId);
       if (!paidPeriod) return { kind: "NO_PAID_PERIOD" as const };
@@ -164,6 +179,10 @@ export const assignAgentToVerificationRequest = async (
       const assignment = await transaction.agentAssignment.create({
         data: { verificationRequestId, agentId, transactionId: paidPeriod.id },
         select: assignedAgentSelect,
+      });
+      await transaction.transaction.update({
+        where: { id: paidPeriod.id },
+        data: { assignedAt: new Date() },
       });
       return { kind: "ASSIGNED" as const, assignment };
     });
@@ -194,6 +213,107 @@ export const assignAgentToVerificationRequest = async (
     );
     throw error;
   }
+};
+
+export type UnassignAgentResult = "UNASSIGNED" | "NOT_ASSIGNED" | "REPORT_SUBMITTED";
+
+/**
+ * Remove the agent from a request that hasn't been reported yet. The paid period goes back to
+ * waiting for an agent (request SUBMITTED, the payment's assignedAt cleared) and any checklist
+ * progress is discarded.
+ */
+export const unassignAgentFromVerificationRequest = (verificationRequestId: string) =>
+  prismaClient.$transaction(async (transaction): Promise<UnassignAgentResult> => {
+    const assignment = await transaction.agentAssignment.findUnique({
+      where: { verificationRequestId },
+      select: { id: true, status: true, transactionId: true },
+    });
+    if (!assignment) return "NOT_ASSIGNED";
+    if (
+      assignment.status === AgentAssignmentStatus.INSPECTION_COMPLETE ||
+      assignment.status === AgentAssignmentStatus.REPORT_SUBMITTED
+    ) {
+      return "REPORT_SUBMITTED";
+    }
+
+    await transaction.verificationChecklistItem.deleteMany({
+      where: { agentAssignmentId: assignment.id },
+    });
+    await transaction.agentAssignment.delete({ where: { id: assignment.id } });
+    if (assignment.transactionId) {
+      await transaction.transaction.update({
+        where: { id: assignment.transactionId },
+        data: { assignedAt: null },
+      });
+    }
+    await transaction.verificationRequest.updateMany({
+      where: { id: verificationRequestId, status: VerificationStatus.IN_PROGRESS },
+      data: { status: VerificationStatus.SUBMITTED },
+    });
+    return "UNASSIGNED";
+  });
+
+/**
+ * Suspend (INACTIVE) or reactivate (ACTIVE) an agent. Suspending moves each open assignment to
+ * the active agent with the fewest open jobs who still has room; when nobody has room, the job is
+ * unassigned so an admin can assign it later. Null when the agent doesn't exist.
+ */
+export const setAgentStatus = async (agentId: string, status: AgentStatus) => {
+  const agent = await prismaClient.verificationAgent.findUnique({ where: { id: agentId } });
+  if (!agent) return null;
+
+  await prismaClient.verificationAgent.update({
+    where: { id: agentId },
+    data: { status, deactivatedAt: status === AgentStatus.INACTIVE ? new Date() : null },
+  });
+  const result = { id: agentId, status, reassigned: 0, unassigned: 0 };
+  if (status === AgentStatus.ACTIVE) return result;
+
+  const [openAssignments, others] = await Promise.all([
+    prismaClient.agentAssignment.findMany({
+      where: { agentId, status: { in: OPEN_ASSIGNMENT_STATUSES } },
+      select: { id: true, verificationRequestId: true },
+    }),
+    prismaClient.verificationAgent.findMany({
+      where: { id: { not: agentId }, status: AgentStatus.ACTIVE },
+      select: {
+        id: true,
+        _count: {
+          select: { assignments: { where: { status: { in: OPEN_ASSIGNMENT_STATUSES } } } },
+        },
+      },
+    }),
+  ]);
+  const load = new Map(others.map((other) => [other.id, other._count.assignments]));
+
+  for (const assignment of openAssignments) {
+    const [next] = [...load]
+      .filter(([, jobs]) => jobs < MAX_ACTIVE_ASSIGNMENTS)
+      .sort((a, b) => a[1] - b[1]);
+    if (!next) {
+      await unassignAgentFromVerificationRequest(assignment.verificationRequestId);
+      result.unassigned += 1;
+      continue;
+    }
+    // The new agent starts the inspection afresh.
+    await prismaClient.$transaction([
+      prismaClient.verificationChecklistItem.deleteMany({
+        where: { agentAssignmentId: assignment.id },
+      }),
+      prismaClient.agentAssignment.update({
+        where: { id: assignment.id },
+        data: { agentId: next[0], status: AgentAssignmentStatus.ASSIGNED, progressPercent: null },
+      }),
+    ]);
+    load.set(next[0], next[1] + 1);
+    result.reassigned += 1;
+    appEvents.emit(AppEventTypes.AGENT_ASSIGNED, {
+      assignmentId: assignment.id,
+      verificationRequestId: assignment.verificationRequestId,
+      agentId: next[0],
+    });
+  }
+  return result;
 };
 
 export type AgentAssignmentDetail = Prisma.AgentAssignmentGetPayload<{

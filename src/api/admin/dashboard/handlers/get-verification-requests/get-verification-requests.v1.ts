@@ -55,9 +55,10 @@ const getAddressParts = (details: unknown) => {
   return { city: city?.trim() || null, country: country?.trim() || null };
 };
 
-const getDisplayStatus = (
-  request: Awaited<ReturnType<typeof getVerificationRequestsForAdmin>>["data"][number],
-) => {
+export const getDisplayStatus = (request: {
+  status: string;
+  agentAssignment?: { status: string } | null;
+}) => {
   if (request.agentAssignment?.status === "ASSIGNED") return "ASSIGNED";
   if (["DRAFT", "PENDING_PAYMENT", "SUBMITTED"].includes(request.status)) return "PENDING";
   if (

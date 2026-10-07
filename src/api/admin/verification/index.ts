@@ -14,6 +14,7 @@ import { updateAgentAssignmentNotes } from "./handlers/update-agent-assignment-n
 import { submitAgentReport } from "./handlers/submit-agent-report";
 import { getAgentAssignmentReportHandler } from "./handlers/get-agent-assignment-report";
 import { assignVerificationRequestAgent } from "./handlers/assign-verification-request-agent";
+import { unassignVerificationRequestAgent } from "./handlers/unassign-verification-request-agent";
 import { getAgentReport } from "./handlers/get-agent-report";
 import multer from "multer";
 
@@ -478,7 +479,8 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *         description: >
  *           The request already has an assignment (`Verification request already has an assigned agent.`),
  *           is not SUBMITTED (`Only paid verification requests awaiting an agent can be assigned (current status: X).`),
- *           or has no unreported paid period (`Verification request has no paid period awaiting an agent.`).
+ *           has no unreported paid period (`Verification request has no paid period awaiting an agent.`),
+ *           or the agent already has 5 open jobs (`Agent is fully booked. Agents can only handle 5 properties at a time.`).
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -493,6 +495,43 @@ router.post(
   checkJwt,
   checkIsAdmin,
   assignVerificationRequestAgent,
+);
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification-requests/{id}/assign-agent:
+ *   delete:
+ *     tags: [Admin Verification]
+ *     summary: Unassign the agent from a request
+ *     description: >
+ *       Only before the report is submitted. Discards checklist progress; the request goes back to
+ *       waiting for an agent (SUBMITTED). Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, description: Verification request ID, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: Agent removed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 verificationRequestId: { type: string }
+ *                 status: { type: string, enum: [PENDING] }
+ *       401: { description: Missing or invalid token, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+ *       403: { description: Not an ADMIN, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+ *       404: { description: The request has no assigned agent, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+ *       409: { description: The agent has already submitted the report, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+ *       500: { description: Unexpected server error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+ */
+router.delete(
+  "/verification-requests/:id/assign-agent",
+  checkJwt,
+  checkIsAdmin,
+  unassignVerificationRequestAgent,
 );
 
 /**
