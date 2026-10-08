@@ -7,6 +7,7 @@ import {
 import { createVerificationRequest } from "../../../../../api/client/verification/services/database/verification-request";
 import { createVerificationType } from "../../../../../api/client/verification/services/database/verification-type";
 import { createVerificationPlan } from "../../../../../api/client/verification/services/database/verification-plan";
+import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";
 
 const testSuffix = Date.now();
@@ -21,6 +22,10 @@ let agentUserId: string;
 let verificationReportId: string;
 
 const endpoint = () => `/api/v1/client/verification-requests/${verificationRequestId}/report/full`;
+const get = (url: string, userId = testUserId) =>
+  request(app)
+    .get(url)
+    .set("Authorization", `Bearer ${generateToken({ id: userId })}`);
 
 describe("GET /api/v1/client/verification-requests/:id/report/full (integration, real DB)", () => {
   beforeAll(async () => {
@@ -66,7 +71,7 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
         propertyAddress: "123 Full Report Ave",
         propertyType: "Residential",
         plotSize: "1000sqm",
-        builtYear: "2015"
+        builtYear: "2015",
       },
     });
     verificationRequestId = verificationRequest.id;
@@ -77,7 +82,7 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
         email: agentEmail,
         fullName: "Agent Full",
         role: "AGENT",
-      }
+      },
     });
     agentUserId = agentUser.id;
 
@@ -85,7 +90,7 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
       data: {
         userId: agentUserId,
         name: "Agent Full",
-      }
+      },
     });
 
     // Create AgentAssignment
@@ -96,8 +101,8 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
         status: "REPORT_SUBMITTED",
         completedAt: new Date(),
         progressPercent: 100,
-        additionalNotes: "The property is in great shape."
-      }
+        additionalNotes: "The property is in great shape.",
+      },
     });
 
     // Create ChecklistItems
@@ -113,10 +118,10 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
             url: "http://example.com/door-full.png",
             fileName: "door.png",
             fileType: "image/png",
-            fileSizeBytes: 1024
-          }
-        }
-      }
+            fileSizeBytes: 1024,
+          },
+        },
+      },
     });
 
     // Create VerificationReport
@@ -126,37 +131,34 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
         submittedByAgentId: agent.id,
         generatedAt: new Date(),
         summary: "Executive summary details here.",
-        findings: [
-          { label: "Ownership", value: "Verified and Clean", status: "good" }
-        ],
-        reviewStatus: "APPROVED"
-      }
+        findings: [{ label: "Ownership", value: "Verified and Clean", status: "good" }],
+        reviewStatus: "APPROVED",
+      },
     });
     verificationReportId = report.id;
-
   });
 
   afterAll(async () => {
     if (verificationReportId) {
       await prismaClient.verificationReport.delete({
-        where: { id: verificationReportId }
+        where: { id: verificationReportId },
       });
     }
     // Delete documents first
     await prismaClient.document.deleteMany({
-      where: { verificationRequestId }
+      where: { verificationRequestId },
     });
     // Delete checklist items
     await prismaClient.verificationChecklistItem.deleteMany({
-      where: { agentAssignment: { verificationRequestId } }
+      where: { agentAssignment: { verificationRequestId } },
     });
     // Delete assignments
     // Checklist items no longer cascade with their assignment.
     await prismaClient.verificationChecklistItem.deleteMany({
-      where: { agentAssignment: { verificationRequestId } }
+      where: { agentAssignment: { verificationRequestId } },
     });
     await prismaClient.agentAssignment.deleteMany({
-      where: { verificationRequestId }
+      where: { verificationRequestId },
     });
     if (verificationRequestId) {
       await prismaClient.verificationRequest.delete({
@@ -179,31 +181,58 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
     if (testUserId) {
       await deleteClient({ id: testUserId });
     }
-    
+
     // Clean up agent
     if (agentUserId) {
       await prismaClient.verificationAgent.deleteMany({
-        where: { userId: agentUserId }
+        where: { userId: agentUserId },
       });
-      await prismaClient.user.delete({ where: { id: agentUserId }});
+      await prismaClient.user.delete({ where: { id: agentUserId } });
     }
-    
+
     await prismaClient.$disconnect();
   });
 
-  it("returns 200 without authentication (public endpoint)", async () => {
+  it("returns 401 without a token", async () => {
     const res = await request(app).get(endpoint());
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("success");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 for another client's request", async () => {
+    const other = await createClient({
+      email: `full-report-other-${testSuffix}@example.com`,
+      fullName: "Other Client",
+    });
+    const res = await get(endpoint(), other.id);
+    await deleteClient({ id: other.id });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns the client's details and their feedback once left", async () => {
+    const before = await get(endpoint());
+    expect(before.body.data.client).toEqual({
+      name: "Full Report Test User",
+      phone: null,
+      email: testEmail,
+    });
+    expect(before.body.data.feedback).toBeNull();
+
+    await request(app)
+      .post(`/api/v1/client/verification-requests/${verificationRequestId}/report/comment`)
+      .set("Authorization", `Bearer ${generateToken({ id: testUserId })}`)
+      .send({ rating: 5, comment: "Great report" });
+
+    const after = await get(endpoint());
+    expect(after.body.data.feedback).toMatchObject({ rating: 5, comment: "Great report" });
   });
 
   it("returns 404 for a non-existent request id", async () => {
-    const res = await request(app).get(`/api/v1/client/verification-requests/req-99999/report/full`);
+    const res = await get(`/api/v1/client/verification-requests/req-99999/report/full`);
     expect(res.status).toBe(404);
   });
 
   it("returns full report details from DB correctly", async () => {
-    const res = await request(app).get(endpoint());
+    const res = await get(endpoint());
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("success");

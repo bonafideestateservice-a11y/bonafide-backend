@@ -449,7 +449,10 @@ model VerificationReport {
   viewedAt              DateTime?
   generatedAt           DateTime?
   reviewStatus          ReportReviewStatus          @default(PENDING)
+  // The client's 1-5 star rating ("Leave a Comment"); resubmitting overwrites it.
   rating                Float?
+  clientComment         String?
+  ratedAt               DateTime?
   revisionNote          String?
   // Copied from the assignment, which is deleted after each recurring period.
   additionalNotes       String?

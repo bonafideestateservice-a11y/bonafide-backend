@@ -419,7 +419,9 @@ export const getVerificationRequestReportSummaryForUser = async (
 export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload<{
   select: {
     id: true;
+    userId: true;
     details: true;
+    user: { select: { fullName: true; phone: true; email: true } };
     reports: {
       select: {
         id: true;
@@ -428,6 +430,9 @@ export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload
         summary: true;
         findings: true;
         additionalNotes: true;
+        rating: true;
+        clientComment: true;
+        ratedAt: true;
         agent: { select: { name: true } };
         checklistItems: { select: { label: true; media: { select: { url: true } } } };
       };
@@ -467,7 +472,9 @@ export const getVerificationRequestFullReportData = async (
       },
       select: {
         id: true,
+        userId: true,
         details: true,
+        user: { select: { fullName: true, phone: true, email: true } },
         reports: {
           select: {
             id: true,
@@ -476,6 +483,9 @@ export const getVerificationRequestFullReportData = async (
             summary: true,
             findings: true,
             additionalNotes: true,
+            rating: true,
+            clientComment: true,
+            ratedAt: true,
             agent: { select: { name: true } },
             checklistItems: { select: { label: true, media: { select: { url: true } } } },
           },
@@ -510,6 +520,24 @@ export const getVerificationRequestFullReportData = async (
     throw error;
   }
 };
+
+/** The request's owner and its latest report: the one the full report shows. */
+export const findLatestReport = (verificationRequestId: string) =>
+  prismaClient.verificationRequest.findUnique({
+    where: { id: verificationRequestId },
+    select: {
+      userId: true,
+      reports: { select: { id: true }, orderBy: { generatedAt: "desc" }, take: 1 },
+    },
+  });
+
+/** "Leave a Comment": saves (or overwrites) the client's rating and comment on a report. */
+export const saveReportFeedback = (reportId: string, rating: number, comment: string | null) =>
+  prismaClient.verificationReport.update({
+    where: { id: reportId },
+    data: { rating, clientComment: comment, ratedAt: new Date() },
+    select: { id: true, rating: true, clientComment: true, ratedAt: true },
+  });
 
 export type VerificationRequestReportHistoryItem = Prisma.VerificationReportGetPayload<{
   select: {

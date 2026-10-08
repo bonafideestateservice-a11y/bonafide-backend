@@ -14,6 +14,7 @@ import { getVerificationRequestTracking } from "./handlers/get-verification-requ
 import { patchVerificationRequestNotificationPreferences } from "./handlers/patch-verification-request-notification-preferences";
 import { getVerificationRequestReportSummary } from "./handlers/get-verification-request-report-summary";
 import { getVerificationRequestFullReport } from "./handlers/get-verification-request-full-report";
+import { postVerificationRequestReportComment } from "./handlers/post-verification-request-report-comment";
 import { getVerificationRequestReports } from "./handlers/get-verification-request-reports";
 import { initializeVerificationPaymentPaystack } from "./handlers/initialize-verification-payment-paystack";
 import { initializeVerificationPaymentStripe } from "./handlers/initialize-verification-payment-stripe";
@@ -360,12 +361,20 @@ const upload = multer({ storage: multer.memoryStorage() });
  *               url: { type: string, example: "https://res.cloudinary.com/demo/image/upload/front.jpg" }
  *     ClientVerificationFullReport:
  *       type: object
- *       required: [id, reportId, generatedAt, reviewStatus, property, summary, ownershipFindings, findings, photos, agentNotes, agent]
+ *       required: [id, reportId, generatedAt, reviewStatus, client, property, summary, ownershipFindings, findings, photos, agentNotes, agent, feedback]
  *       properties:
  *         id: { type: string, description: The verification request id., example: cm1vreq0001 }
  *         reportId: { type: string, description: The latest report's id., example: cm1vrep0001 }
  *         generatedAt: { type: string, format: date-time, nullable: true, example: "2026-10-05T12:00:00.000Z" }
  *         reviewStatus: { $ref: '#/components/schemas/ClientVerificationReportReviewStatus' }
+ *         client:
+ *           type: object
+ *           description: The Client Information card.
+ *           required: [name, phone, email]
+ *           properties:
+ *             name: { type: string, example: John Anderson }
+ *             phone: { type: string, nullable: true, example: "+234 801 234 5678" }
+ *             email: { type: string, example: john.anderson@email.com }
  *         property:
  *           type: object
  *           description: >
@@ -408,6 +417,18 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           allOf:
  *             - $ref: '#/components/schemas/ClientVerificationAgentName'
  *           nullable: true
+ *         feedback:
+ *           nullable: true
+ *           description: The client's "Leave a Comment" feedback; null until they leave some.
+ *           allOf:
+ *             - $ref: '#/components/schemas/ClientVerificationReportFeedback'
+ *     ClientVerificationReportFeedback:
+ *       type: object
+ *       required: [rating, comment, ratedAt]
+ *       properties:
+ *         rating: { type: integer, minimum: 1, maximum: 5, example: 4 }
+ *         comment: { type: string, nullable: true, example: Thorough inspection, thanks. }
+ *         ratedAt: { type: string, format: date-time, example: "2026-10-08T14:02:11.000Z" }
  *     ClientVerificationReportHistoryItem:
  *       type: object
  *       required: [id, generatedAt, reviewStatus, viewed, agent, payment]
@@ -1255,10 +1276,10 @@ router.get(
  *     summary: Get the full latest report for a verification request
  *     description: >
  *       Returns the most recently generated report (recurring requests have one report per paid
- *       period). WARNING - this route has no authentication and does not check ownership: anyone
- *       with a request id can read its report. The report's review status is not checked and the
- *       report is not marked as viewed.
- *     security: []
+ *       period), for the client who owns the request. The report's review status is not checked
+ *       and the report is not marked as viewed. The frontend builds the downloadable PDF from this.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: version
@@ -1281,6 +1302,16 @@ router.get(
  *                 status: { type: string, enum: [success], example: success }
  *                 message: { type: string, example: Full report retrieved successfully }
  *                 data: { $ref: '#/components/schemas/ClientVerificationFullReport' }
+ *       401:
+ *         description: Missing, invalid or expired token, or the token's user no longer exists
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: The request belongs to another user ("You cannot view this report.")
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       404:
  *         description: The request does not exist or has no report yet ("Verification report not found.")
  *         content:
@@ -1292,7 +1323,75 @@ router.get(
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.get("/verification-requests/:id/report/full", getVerificationRequestFullReport);
+router.get("/verification-requests/:id/report/full", checkJwt, getVerificationRequestFullReport);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/report/comment:
+ *   post:
+ *     tags: [Verification]
+ *     summary: Rate and comment on the latest report ("Leave a Comment")
+ *     description: >
+ *       Saves the client's rating and comment on the request's latest report (the one the full
+ *       report shows). Sending it again overwrites both. The agent is not notified.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, description: Verification request id, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rating]
+ *             properties:
+ *               rating: { type: integer, minimum: 1, maximum: 5, example: 4 }
+ *               comment: { type: string, maxLength: 1000, description: Optional; blank clears it., example: Thorough inspection, thanks. }
+ *     responses:
+ *       200:
+ *         description: The saved feedback.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 reportId: { type: string, example: cm1vrep0001 }
+ *                 rating: { type: integer, example: 4 }
+ *                 comment: { type: string, nullable: true, example: Thorough inspection, thanks. }
+ *                 ratedAt: { type: string, format: date-time }
+ *       400:
+ *         description: rating is not a whole number from 1 to 5, or comment is not a string or is too long
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401:
+ *         description: Missing, invalid or expired token, or the token's user no longer exists
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       403:
+ *         description: The request belongs to another user ("You cannot comment on this report.")
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: The request does not exist or has no report yet
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500:
+ *         description: Database error ("Internal server error.")
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.post(
+  "/verification-requests/:id/report/comment",
+  checkJwt,
+  postVerificationRequestReportComment,
+);
 
 /**
  * @swagger

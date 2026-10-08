@@ -1,6 +1,6 @@
 # Known Issues
 
-Issues found during the Swagger documentation review and the recurring-verification work (October 2026). None are fixed yet. Line numbers are approximate; search for the named function if they've moved.
+Issues found during the Swagger documentation review and the recurring-verification work (October 2026). Fixed issues are marked **Fixed** with the date. Line numbers are approximate; search for the named function if they've moved.
 
 Severity:
 
@@ -16,7 +16,7 @@ Severity:
 | 1   | Critical | Forgot-password returns the reset OTP, so any account can be taken over    |
 | 2   | Critical | Client sign-up accepts `role` from the body, so anyone can become an admin |
 | 3   | Critical | An agent report endpoint returns clients' password hashes                  |
-| 4   | Critical | The full report endpoint has no authentication or ownership check          |
+| 4   | Critical | **Fixed 14 Oct 2026.** The full report endpoint had no authentication or ownership check |
 | 5   | High     | Login and forgot-password reveal which emails have accounts                |
 | 6   | High     | Admin password reset works for client accounts                             |
 | 7   | High     | verify-otp accepts any user's OTP                                          |
@@ -69,6 +69,7 @@ Severity:
 - **Where:** `GET /api/v1/client/verification-requests/{id}/report/full` in `src/api/client/verification/index.ts` (no `checkJwt`); `getVerificationRequestFullReportData` looks the request up by ID only.
 - **Impact:** anyone with a request ID can read the full report: the address, findings, photos and agent notes.
 - **Fix:** add `checkJwt` and look the request up by `{ id, userId }`, like `/report-summary` does.
+- **Status:** fixed 14 Oct 2026. The route now uses `checkJwt`, and the handler returns 403 "You cannot view this report." when the request belongs to another client. Callers must send the client's token.
 
 ---
 
