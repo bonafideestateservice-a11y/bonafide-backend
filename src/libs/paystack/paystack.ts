@@ -120,8 +120,24 @@ export async function createPaystackCustomer(email: string) {
   return paystackRequest<PaystackCustomer>("POST", "/customer", { email });
 }
 
-export async function listPaystackPlans() {
-  return paystackRequest("GET", "/plan");
+export type PaystackPlan = { plan_code: string; description?: string | null };
+
+export async function listPaystackPlans(page = 1, perPage = 100) {
+  return paystackRequest<PaystackPlan[]>("GET", "/plan", undefined, { page, perPage });
+}
+
+export async function createPaystackPlan(plan: {
+  name: string;
+  amount: number;
+  interval: string;
+  currency: string;
+  description: string;
+}) {
+  return paystackRequest<PaystackPlan>("POST", "/plan", {
+    ...plan,
+    send_invoices: false,
+    send_sms: false,
+  });
 }
 
 export async function listPaystackSubscriptions(customer: string) {
