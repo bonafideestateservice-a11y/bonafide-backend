@@ -86,20 +86,39 @@ const router = Router();
  *         comparedTo: { type: string, enum: [last_week], example: last_week }
  *     AdminDashboardActivity:
  *       type: object
- *       description: One event in the Recent activity feed.
+ *       description: >
+ *         One event in the Recent activity feed. The frontend builds the title and description
+ *         from type and the fields below. Rows recorded before 13 Oct 2026 have no clientName,
+ *         agentName or amount.
  *       required: [id, type, subjectName, verificationRequestId, createdAt]
  *       properties:
  *         id: { type: string, example: cmg6act01 }
  *         type:
  *           type: string
- *           description: The event; the frontend maps it to a title.
- *           enum: [VERIFICATION_REQUEST_CREATED, PAYMENT_RECEIVED, AGENT_ASSIGNED, INSPECTION_STARTED, REPORT_UPLOADED]
+ *           enum: [VERIFICATION_REQUEST_CREATED, PAYMENT_RECEIVED, AGENT_ASSIGNED, INSPECTION_STARTED, REPORT_UPLOADED, PROPERTY_ADDED]
  *           example: AGENT_ASSIGNED
  *         subjectName:
  *           type: string
- *           description: The client (new request, payment) or the agent (assignment, inspection, report).
- *           example: Kingsley Ikeh
+ *           description: The agent (assignment, inspection, report), the client (new request, payment) or the property title (PROPERTY_ADDED).
+ *           example: Emma Wilson
+ *         clientName: { type: string, nullable: true, description: "The name shown under the row: the client, or for PROPERTY_ADDED the admin who added it", example: Michael Brown }
+ *         agentName: { type: string, nullable: true, description: Assignment, inspection and report rows, example: Emma Wilson }
+ *         amount: { type: number, nullable: true, description: PAYMENT_RECEIVED only, in naira, example: 75000 }
+ *         verificationType: { type: string, nullable: true, example: Land Verification }
+ *         status:
+ *           type: string
+ *           nullable: true
+ *           description: The request's current status, as on the verification requests list; null for PROPERTY_ADDED.
+ *           enum: [PENDING, ASSIGNED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED, PAYMENT_FAILED]
+ *           example: IN_PROGRESS
  *         verificationRequestId: { type: string, nullable: true, example: cmg4x2k1p0001 }
+ *         property:
+ *           type: object
+ *           nullable: true
+ *           description: PROPERTY_ADDED only.
+ *           properties:
+ *             id: { type: string }
+ *             title: { type: string, example: 4 Bedroom Duplex }
  *         createdAt: { type: string, format: date-time }
  *     AdminDashboardPaginationMeta:
  *       type: object
@@ -222,6 +241,13 @@ const router = Router();
  *       type: object
  *       required: [id, number, title, type, location, price, viewCount, coverImageUrl, isPublished, createdAt]
  *       properties:
+ *         agent:
+ *           type: object
+ *           nullable: true
+ *           description: The agent assigned with "Assign Property". Only on GET /admin/properties and GET /admin/properties/{id}.
+ *           properties:
+ *             id: { type: string }
+ *             name: { type: string, example: Kingsley Wilson }
  *         id:
  *           type: string
  *           example: cm1property0001
@@ -391,7 +417,7 @@ router.get("/dashboard/stats", checkJwt, checkIsAdmin, getDashboardStatsHandler)
  *   get:
  *     tags: [Admin Dashboard]
  *     summary: Recent activity feed
- *     description: Events (new requests, payments, assignments, inspections, reports), newest first. Admin only.
+ *     description: Events (new requests, payments, assignments, inspections, reports, properties added), newest first. Admin only.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -824,6 +850,7 @@ router.patch("/notifications/:id/read", checkJwt, checkIsAdmin, markNotification
  *                         description: SUSPENDED when INACTIVE; BUSY at 5 open jobs; else AVAILABLE
  *                       avatarUrl: { type: string, nullable: true }
  *                       activeAssignments: { type: integer, description: "Open jobs (shown as N Properties)", example: 3 }
+ *                       assignedPropertyCount: { type: integer, description: 'Properties assigned with "Assign Property" (5 at most)', example: 2 }
  *                 counts:
  *                   type: object
  *                   properties:
@@ -1027,13 +1054,6 @@ router.post("/properties", checkJwt, checkIsAdmin, propertyImagesUpload, createP
  *                     status: { type: string, enum: [PENDING, VERIFIED, REJECTED] }
  *                     verifiedAt: { type: string, format: date-time, nullable: true }
  *                     updatedAt: { type: string, format: date-time }
- *                     agent:
- *                       type: object
- *                       nullable: true
- *                       description: The agent assigned with "Assign Property".
- *                       properties:
- *                         id: { type: string }
- *                         name: { type: string }
  *                     stats:
  *                       type: object
  *                       properties:
@@ -1225,14 +1245,7 @@ router.get("/users", checkJwt, checkIsAdmin, getUsersHandler);
  *                 recentActivity:
  *                   type: array
  *                   description: The 10 newest activity entries on the client's requests.
- *                   items:
- *                     type: object
- *                     properties:
- *                       id: { type: string }
- *                       type: { type: string, example: VERIFICATION_REQUEST_CREATED }
- *                       subjectName: { type: string, example: Ocean View Villa }
- *                       verificationRequestId: { type: string, nullable: true }
- *                       createdAt: { type: string, format: date-time }
+ *                   items: { $ref: '#/components/schemas/AdminDashboardActivity' }
  *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
  *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
  *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }

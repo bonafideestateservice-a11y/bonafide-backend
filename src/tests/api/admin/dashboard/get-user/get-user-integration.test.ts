@@ -53,7 +53,13 @@ describe("GET /api/v1/admin/users/:id", () => {
       name: client.fullName,
       status: "ACTIVE",
       stats: { paidRequests: 2, totalSpent: 10000, averageResponseDays: 3 },
-      recentActivity: [{ subjectName: "Ocean View Villa", verificationRequestId: first.id }],
+      recentActivity: [
+        {
+          subjectName: "Ocean View Villa",
+          verificationRequestId: first.id,
+          verificationType: "Land Verification",
+        },
+      ],
     });
   });
 

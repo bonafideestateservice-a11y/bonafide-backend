@@ -3,10 +3,14 @@ jest.mock("cloudinary", () => ({ v2: { config: jest.fn(), uploader: { upload } }
 jest.mock("../../../../../api/admin/dashboard/services/database/property", () => ({
   createProperty: jest.fn(),
 }));
+jest.mock("../../../../../api/services/database/activity-log", () => ({
+  recordPropertyAdded: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock("../../../../../utils/logger", () => ({ logger: { error: jest.fn(), info: jest.fn() } }));
 
 import { createPropertyHandler } from "../../../../../api/admin/dashboard/handlers/create-property";
 import { createProperty } from "../../../../../api/admin/dashboard/services/database/property";
+import { recordPropertyAdded } from "../../../../../api/services/database/activity-log";
 import { callHandler, errorStatus } from "../../../../helpers/http";
 
 const create = createProperty as jest.Mock;
@@ -32,6 +36,23 @@ describe("createPropertyHandler (unit)", () => {
       createdAt: new Date("2026-10-09T00:00:00Z"),
       ...data,
     }));
+  });
+
+  it("records a Property Added activity with the admin's name", async () => {
+    await callHandler(createPropertyHandler, {
+      body: validBody,
+      user: { fullName: "Sarah Wilson" },
+    });
+    expect(recordPropertyAdded).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "p1", name: "Ocean View Villa" }),
+      "Sarah Wilson",
+    );
+  });
+
+  it("still returns the property when recording the activity fails", async () => {
+    (recordPropertyAdded as jest.Mock).mockRejectedValueOnce(new Error("db down"));
+    const { res } = await callHandler(createPropertyHandler, { body: validBody });
+    expect(res.status).toHaveBeenCalledWith(201);
   });
 
   it("creates the property from the form and returns it", async () => {

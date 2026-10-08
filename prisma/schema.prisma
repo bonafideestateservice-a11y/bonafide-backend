@@ -318,6 +318,7 @@ model Property {
   // Set by "Delete Property": the row is kept but hidden everywhere.
   deletedAt     DateTime?
   inquiries     PropertyInquiry[]
+  activityLogs  ActivityLog[]
   favorites     PropertyFavorite[]
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
@@ -523,6 +524,8 @@ enum NotificationType {
   REPORT_UPLOADED
   AGENT_ASSIGNED
   INSPECTION_STARTED
+  // Activity feed only; nobody is notified.
+  PROPERTY_ADDED
 }
 
 enum NotificationStatus {
@@ -551,6 +554,13 @@ model ActivityLog {
   verificationRequestId String?
   verificationRequest   VerificationRequest? @relation(fields: [verificationRequestId], references: [id], onDelete: SetNull)
   subjectName           String
+  // The client shown on the row (for PROPERTY_ADDED, the admin who added it).
+  clientName            String?
+  agentName             String?
+  // PAYMENT_RECEIVED only, in kobo.
+  amount                Int?
+  propertyId            String?
+  property              Property?            @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   createdAt             DateTime             @default(now())
 
   @@index([createdAt])

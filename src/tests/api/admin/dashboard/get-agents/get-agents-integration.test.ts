@@ -15,6 +15,8 @@ beforeAll(async () => {
   ids.suspended = (await fx.createAgent("suspended", "INACTIVE")).id;
   await fx.giveOpenJobs(ids.available, client.id, 2);
   await fx.giveOpenJobs(ids.busy, client.id, 5);
+  await fx.createProperty({ agent: { connect: { id: ids.available } } });
+  await fx.createProperty({ agent: { connect: { id: ids.available } }, deletedAt: new Date() });
 });
 afterAll(async () => {
   await fx.cleanup();
@@ -34,6 +36,7 @@ describe("GET /api/v1/admin/agents", () => {
     expect(byId[ids.available]).toMatchObject({
       displayStatus: "AVAILABLE",
       activeAssignments: 2,
+      assignedPropertyCount: 1, // the deleted property doesn't count
       email: expect.stringContaining("available-"),
     });
     expect(byId[ids.busy]).toMatchObject({ displayStatus: "BUSY", activeAssignments: 5 });

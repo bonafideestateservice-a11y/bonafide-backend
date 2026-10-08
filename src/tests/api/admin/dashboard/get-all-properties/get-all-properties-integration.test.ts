@@ -60,7 +60,31 @@ describe("GET /api/v1/admin/properties", () => {
         title: "Published Dashboard Property",
         isPublished: true,
         location: { area: null, city: "Lagos", country: "Nigeria" },
+        agent: null,
       }),
     ]);
+  });
+
+  it("shows the agent assigned to each property", async () => {
+    const agentUser = await prismaClient.user.create({
+      data: { fullName: "Card Agent", email: `card-agent-${suffix}@example.com`, role: "AGENT" },
+    });
+    const agent = await prismaClient.verificationAgent.create({
+      data: { userId: agentUser.id, name: "Card Agent" },
+    });
+    await prismaClient.property.update({
+      where: { id: propertyIds[1] },
+      data: { agentId: agent.id },
+    });
+
+    const response = await request(app)
+      .get("/api/v1/admin/properties")
+      .query({ search: "Unpublished Dashboard" })
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(response.body.data[0].agent).toEqual({ id: agent.id, name: "Card Agent" });
+    await prismaClient.property.update({ where: { id: propertyIds[1] }, data: { agentId: null } });
+    await prismaClient.verificationAgent.delete({ where: { id: agent.id } });
+    await prismaClient.user.delete({ where: { id: agentUser.id } });
   });
 });

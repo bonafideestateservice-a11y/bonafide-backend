@@ -37,6 +37,18 @@ describe("GET /api/v1/admin/dashboard/activities", () => {
       agentId: agent.id,
     });
     await new Promise((resolve) => setTimeout(resolve, 200));
+    appEvents.emit(AppEventTypes.PAYMENT_RECEIVED, {
+      userId: "u1",
+      email: "x@example.com",
+      firstName: "Ignored",
+      amount: 7500000,
+      reference: "ref",
+      payment_receipt: "ref",
+      booking_ref: requestId,
+      receipt_id: "r1",
+      currency: "NGN",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     const response = await request(app)
       .get("/api/v1/admin/dashboard/activities?limit=100")
@@ -48,10 +60,21 @@ describe("GET /api/v1/admin/dashboard/activities", () => {
     );
     expect(mine.map((a: { type: string; subjectName: string }) => [a.type, a.subjectName])).toEqual(
       [
+        ["PAYMENT_RECEIVED", clientName],
         ["AGENT_ASSIGNED", agent.name],
         ["VERIFICATION_REQUEST_CREATED", clientName],
       ],
     );
+    // Every row names the client; agent rows also name the agent.
+    expect(mine[0]).toMatchObject({ clientName, agentName: null, amount: 75000 });
+    expect(mine[1]).toMatchObject({
+      clientName,
+      agentName: agent.name,
+      amount: null,
+      verificationType: "Land Verification",
+      status: "PENDING",
+      property: null,
+    });
     expect(response.body.meta).toMatchObject({ page: 1, limit: 100 });
   });
 

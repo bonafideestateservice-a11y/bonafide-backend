@@ -92,7 +92,10 @@ export const getAllPropertiesHandler = async (
 
     res.status(HttpStatusCode.OK).json({
       ...result,
-      data: result.data.map(toPropertyResponse),
+      data: result.data.map((property) => ({
+        ...toPropertyResponse(property),
+        agent: property.agent,
+      })),
     });
   } catch (error) {
     if (error instanceof BadRequestError) return next(error);

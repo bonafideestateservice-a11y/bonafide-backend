@@ -4,6 +4,8 @@ import { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { ApiError, BadRequestError, HttpStatusCode } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
+import { CustomRequest } from "../../../../../middlewares/check-jwt";
+import { recordPropertyAdded } from "../../../../services/database/activity-log";
 import {
   createProperty,
   CreatePropertyData,
@@ -134,6 +136,9 @@ export const createPropertyHandler = async (
       coverImageUrl: cover ?? null,
       imageUrls: images,
     });
+    await recordPropertyAdded(property, (req as CustomRequest).user?.fullName ?? "Admin").catch(
+      (error) => logger.error(`Error recording property activity: ${error}`),
+    );
     res.status(HttpStatusCode.CREATED).json(toPropertyResponse(property));
   } catch (error) {
     if (error instanceof BadRequestError) return next(error);

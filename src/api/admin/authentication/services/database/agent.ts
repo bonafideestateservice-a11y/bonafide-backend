@@ -93,7 +93,10 @@ export const listVerificationAgents = (search = "") =>
       status: true,
       user: { select: { email: true, profilePhoto: true } },
       _count: {
-        select: { assignments: { where: { status: { in: OPEN_ASSIGNMENT_STATUSES } } } },
+        select: {
+          assignments: { where: { status: { in: OPEN_ASSIGNMENT_STATUSES } } },
+          properties: { where: { deletedAt: null } },
+        },
       },
     },
   });

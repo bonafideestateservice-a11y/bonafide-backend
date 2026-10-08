@@ -45,11 +45,16 @@ export const propertySelect = {
 
 export type PropertyListItem = Prisma.PropertyGetPayload<{ select: typeof propertySelect }>;
 
+const propertyListSelect = {
+  ...propertySelect,
+  agent: { select: { id: true, name: true } },
+} satisfies Prisma.PropertySelect;
+
 const escapeRegularExpression = (value: string): string =>
   value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 
 export interface PropertyListResult {
-  data: PropertyListItem[];
+  data: Prisma.PropertyGetPayload<{ select: typeof propertyListSelect }>[];
   meta: { page: number; limit: number; totalItems: number; totalPages: number };
   counts: { all: number; published: number; unpublished: number };
 }
@@ -109,7 +114,7 @@ export const getAllProperties = async ({
         orderBy: { [sortBy === "price" ? "priceAmount" : "createdAt"]: sortOrder },
         skip: (page - 1) * limit,
         take: limit,
-        select: propertySelect,
+        select: propertyListSelect,
       }),
       prismaClient.property.count({ where: countWhere() }),
       prismaClient.property.count({ where: countWhere(true) }),

@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import { prismaClient } from "../../../../../utils/prisma";
 import { OPEN_ASSIGNMENT_STATUSES } from "../../../authentication/services/database/agent";
+import { activitySelect, toActivityResponse } from "./activities";
 import { propertySelect } from "./property";
 
 export type UserListType = "all" | "client" | "agent";
@@ -109,13 +110,7 @@ export const getClientProfile = async (id: string) => {
       where: { verificationRequest: { userId: id } },
       orderBy: { createdAt: "desc" },
       take: 10,
-      select: {
-        id: true,
-        type: true,
-        subjectName: true,
-        verificationRequestId: true,
-        createdAt: true,
-      },
+      select: activitySelect,
     }),
   ]);
   return {
@@ -125,7 +120,7 @@ export const getClientProfile = async (id: string) => {
       totalSpent: (spent._sum.amountInCents ?? 0) / 100,
       averageResponseDays: reports.averageDays,
     },
-    recentActivity: activity,
+    recentActivity: activity.map(toActivityResponse),
   };
 };
 

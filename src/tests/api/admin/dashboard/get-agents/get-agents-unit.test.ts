@@ -16,7 +16,7 @@ const agent = (id: string, status: string, open: number) => ({
   region: "Lagos",
   status,
   user: { email: `${id}@example.com`, profilePhoto: null },
-  _count: { assignments: open },
+  _count: { assignments: open, properties: 2 },
 });
 
 describe("getAgentsHandler (unit)", () => {
@@ -37,7 +37,11 @@ describe("getAgentsHandler (unit)", () => {
       "BUSY",
       "SUSPENDED",
     ]);
-    expect(body.data[0]).toMatchObject({ email: "available@example.com", activeAssignments: 3 });
+    expect(body.data[0]).toMatchObject({
+      email: "available@example.com",
+      activeAssignments: 3,
+      assignedPropertyCount: 2,
+    });
     expect(body.counts).toEqual({ all: 3, active: 1, busy: 1, suspended: 1 });
   });
 

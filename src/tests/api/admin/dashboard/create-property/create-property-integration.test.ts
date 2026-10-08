@@ -59,6 +59,16 @@ describe("POST /api/v1/admin/properties", () => {
       .get(`/api/v1/admin/properties?search=${encodeURIComponent(fx.tag)}`)
       .set("Authorization", `Bearer ${token}`);
     expect(list.body.data.map((p: { id: string }) => p.id)).toContain(response.body.id);
+
+    // It's in the activity feed as "Property Added".
+    const activity = await prismaClient.activityLog.findFirst({
+      where: { propertyId: response.body.id },
+    });
+    expect(activity).toMatchObject({
+      type: "PROPERTY_ADDED",
+      subjectName: `Ocean View Villa ${fx.tag}`,
+      clientName: `admin ${fx.tag}`,
+    });
   });
 
   it("saves a draft without photos", async () => {
@@ -78,12 +88,10 @@ describe("POST /api/v1/admin/properties", () => {
 
   it("rejects missing fields, non-image files and too many photos", async () => {
     expect((await post().field("propertyType", "LAND")).status).toBe(400);
-    const pdf = await post()
-      .field("title", "x")
-      .attach("coverImage", Buffer.from("%PDF"), {
-        filename: "a.pdf",
-        contentType: "application/pdf",
-      });
+    const pdf = await post().field("title", "x").attach("coverImage", Buffer.from("%PDF"), {
+      filename: "a.pdf",
+      contentType: "application/pdf",
+    });
     expect(pdf.status).toBe(400);
     let tooMany = post().field("title", "x");
     for (let i = 0; i < 5; i += 1) {

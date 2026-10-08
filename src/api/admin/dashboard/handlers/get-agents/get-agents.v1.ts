@@ -31,6 +31,8 @@ export const getAgentsHandler = async (
         email: user.email,
         avatarUrl: user.profilePhoto,
         activeAssignments: _count.assignments,
+        // Properties assigned with "Assign Property" (5 at most).
+        assignedPropertyCount: _count.properties,
         displayStatus: displayStatusOf(agent.status, _count.assignments),
       }),
     );

@@ -42,6 +42,7 @@ describe("getAllProperties handler (unit)", () => {
       coverImageUrl: "https://example.com/duplex.jpg",
       isPublished: true,
       createdAt: new Date("2026-01-02T00:00:00.000Z"),
+      agent: { id: "agent-1", name: "Kingsley Wilson" },
     };
     const result = {
       data: [property],
@@ -91,6 +92,7 @@ describe("getAllProperties handler (unit)", () => {
           coverImageUrl: "https://example.com/duplex.jpg",
           isPublished: true,
           createdAt: "2026-01-02T00:00:00.000Z",
+          agent: { id: "agent-1", name: "Kingsley Wilson" },
         },
       ],
       meta: result.meta,
