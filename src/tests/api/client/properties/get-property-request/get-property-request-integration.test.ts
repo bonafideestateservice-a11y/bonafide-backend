@@ -39,11 +39,17 @@ describe("GET /api/v1/client/property-requests/:id", () => {
         current: true,
         reachedAt: expect.any(String),
       }),
+      expect.objectContaining({ status: "OWNERSHIP_TRANSFER", done: false, reachedAt: null }),
       expect.objectContaining({ status: "COMPLETED", done: false, reachedAt: null }),
     ]);
-    expect(response.body.updates.map((u: { status: string }) => u.status)).toEqual([
-      "SUBMITTED",
-      "IN_PROGRESS",
+    expect(response.body.updates).toEqual([
+      expect.objectContaining({ status: "SUBMITTED", kind: "MILESTONE" }),
+      expect.objectContaining({
+        status: "IN_PROGRESS",
+        kind: "PROGRESS",
+        title: "Purchase in progress",
+        message: expect.stringMatching(/^Bonafide is facilitating your purchase of /),
+      }),
     ]);
   });
 

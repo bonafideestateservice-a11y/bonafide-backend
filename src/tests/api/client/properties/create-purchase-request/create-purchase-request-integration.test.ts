@@ -41,8 +41,18 @@ describe("POST /api/v1/client/properties/:id/purchase-requests", () => {
       "SUBMITTED",
       "CONSULTATION",
       "IN_PROGRESS",
+      "OWNERSHIP_TRANSFER",
       "COMPLETED",
     ]);
+    expect(response.body.updates).toEqual([
+      expect.objectContaining({
+        status: "SUBMITTED",
+        kind: "MILESTONE",
+        title: "Request submitted",
+        message: `Your purchase request for Lekki Apartment ${fx.tag} was received.`,
+      }),
+    ]);
+    expect(response.body.documentCount).toBe(0);
     expect(response.body.steps[0]).toMatchObject({ current: true, reachedAt: expect.any(String) });
   });
 

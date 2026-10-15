@@ -24,6 +24,10 @@ import { unassignPropertyAgentHandler } from "./handlers/unassign-property-agent
 import { getAdminPropertyRequestsHandler } from "./handlers/get-property-requests";
 import { getAdminPropertyRequestHandler } from "./handlers/get-property-request-detail";
 import { updatePropertyRequestStatusHandler } from "./handlers/update-property-request-status";
+import { getPropertyRequestDocumentsHandler } from "./handlers/get-property-request-documents";
+import { sharePropertyDocumentHandler } from "./handlers/share-property-document";
+import { createPropertyRequestNoticeHandler } from "./handlers/create-property-request-notice";
+import { documentUpload } from "../../../middlewares/document-upload";
 import {
   getNotificationsHandler,
   markAllNotificationsReadHandler,
@@ -1464,7 +1468,7 @@ router.delete("/properties/:id/assign-agent", checkJwt, checkIsAdmin, unassignPr
  *     parameters:
  *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
  *       - { in: query, name: type, schema: { type: string, enum: [PURCHASE, CONSULTATION] } }
- *       - { in: query, name: status, schema: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED] } }
+ *       - { in: query, name: status, schema: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, OWNERSHIP_TRANSFER, COMPLETED, CANCELLED] } }
  *       - { in: query, name: search, description: "Reference, client name or email, or property title", schema: { type: string } }
  *       - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
  *       - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
@@ -1482,7 +1486,7 @@ router.delete("/properties/:id/assign-agent", checkJwt, checkIsAdmin, unassignPr
  *         description: >
  *           A bad query value: `page and limit must be positive integers (limit ≤ 100).`,
  *           `type must be PURCHASE or CONSULTATION.` or
- *           `status must be one of SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED.`
+ *           `status must be one of SUBMITTED, CONSULTATION, IN_PROGRESS, OWNERSHIP_TRANSFER, COMPLETED, CANCELLED.`
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -1538,10 +1542,11 @@ router.get("/property-requests/:id", checkJwt, checkIsAdmin, getAdminPropertyReq
  *     tags: [Property Purchases]
  *     summary: Move a request to its next step
  *     description: >
- *       Adds the change (and note) to the request's updates. A purchase moved to IN_PROGRESS
- *       gets its one payment, for the property's listed price, which the client can then pay.
- *       Consultations can't be IN_PROGRESS. COMPLETED and CANCELLED requests can't change.
- *       Admin only.
+ *       Adds the change to the request's updates (as a "Progress update" or "Milestone
+ *       notification" card titled with the step, showing the note or a standard message) and
+ *       sends the client an in-app notification. A purchase moved to IN_PROGRESS gets its one
+ *       payment, for the property's listed price. IN_PROGRESS and OWNERSHIP_TRANSFER are for
+ *       purchases only. COMPLETED and CANCELLED requests can't change. Admin only.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1555,15 +1560,15 @@ router.get("/property-requests/:id", checkJwt, checkIsAdmin, getAdminPropertyReq
  *             type: object
  *             required: [status]
  *             properties:
- *               status: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED] }
+ *               status: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, OWNERSHIP_TRANSFER, COMPLETED, CANCELLED] }
  *               note: { type: string, maxLength: 1000, example: Consultation call held with the client. }
  *     responses:
  *       200: { description: The updated request (IN_PROGRESS purchases now include the READY payment), content: { application/json: { schema: { $ref: '#/components/schemas/AdminPropertyRequest' } } } }
  *       400:
  *         description: >
- *           status is missing or unknown (`status must be one of SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED.`),
+ *           status is missing or unknown (`status must be one of SUBMITTED, CONSULTATION, IN_PROGRESS, OWNERSHIP_TRANSFER, COMPLETED, CANCELLED.`),
  *           note isn't a string (`note must be a string.`) or is too long (`note must be at most 1000 characters.`),
- *           or a consultation was set to IN_PROGRESS (`Only purchase requests can be IN_PROGRESS.`).
+ *           or a consultation was set to IN_PROGRESS or OWNERSHIP_TRANSFER (`Only purchase requests can be IN_PROGRESS or OWNERSHIP_TRANSFER.`).
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -1587,6 +1592,133 @@ router.patch(
   checkJwt,
   checkIsAdmin,
   updatePropertyRequestStatusHandler,
+);
+
+/**
+ * @swagger
+ * /api/{version}/admin/property-requests/{id}/documents:
+ *   get:
+ *     tags: [Property Purchases]
+ *     summary: A request's documents
+ *     description: Documents shared with the client and documents the client uploaded, with View and Download links signed for 15 minutes. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: The documents; both lists can be empty.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyDocuments' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404:
+ *         description: "No request has this ID (`Property request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ *   post:
+ *     tags: [Property Purchases]
+ *     summary: Share a document with the client
+ *     description: >
+ *       Adds a document to the client's "Available documents" (e.g. the property purchase
+ *       document). Stored privately in Cloudinary. Documents can't be deleted. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema: { $ref: '#/components/schemas/PropertyDocumentUpload' }
+ *     responses:
+ *       201:
+ *         description: The shared document, with signed links.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyDocument' }
+ *       400: { $ref: '#/components/responses/PropertyDocumentUploadInvalid' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404:
+ *         description: "No request has this ID (`Property request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500:
+ *         description: "Cloudinary or the database failed (`Unable to upload the document.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.get(
+  "/property-requests/:id/documents",
+  checkJwt,
+  checkIsAdmin,
+  getPropertyRequestDocumentsHandler,
+);
+router.post(
+  "/property-requests/:id/documents",
+  checkJwt,
+  checkIsAdmin,
+  documentUpload,
+  sharePropertyDocumentHandler,
+);
+
+/**
+ * @swagger
+ * /api/{version}/admin/property-requests/{id}/notices:
+ *   post:
+ *     tags: [Property Purchases]
+ *     summary: Post a purchase notice
+ *     description: >
+ *       Adds an "Important notice" card (kind NOTICE) to the request's updates without changing
+ *       its status, e.g. asking the client for documents. No notification is sent. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [title, message]
+ *             properties:
+ *               title: { type: string, maxLength: 120, example: Purchase notice }
+ *               message: { type: string, maxLength: 1000, example: Bonafide will communicate any requested documents for this purchase. }
+ *     responses:
+ *       201:
+ *         description: The request, with the notice as its newest update.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/AdminPropertyRequest' }
+ *       400:
+ *         description: "title or message is missing or blank (`title and message are required.`), or too long (`title must be at most 120 characters.` / `message must be at most 1000 characters.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404:
+ *         description: "No request has this ID (`Property request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.post(
+  "/property-requests/:id/notices",
+  checkJwt,
+  checkIsAdmin,
+  createPropertyRequestNoticeHandler,
 );
 
 export default router;

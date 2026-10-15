@@ -72,6 +72,7 @@ describe("toClientUpdate (unit)", () => {
       verificationType: { name: "Property Verification", slug: "property-verification" },
       subjectName: "Lekki Phase 1 Apartment",
       verificationRequestId: "r1",
+      propertyRequestId: null,
       reportId: null,
       read: false,
       createdAt,

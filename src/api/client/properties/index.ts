@@ -14,6 +14,9 @@ import { getPropertyRequestHandler } from "./handlers/get-property-request";
 import { getPropertyPaymentHandler } from "./handlers/get-property-payment";
 import { payPropertyPaystackHandler } from "./handlers/pay-property-paystack";
 import { payPropertyStripeHandler } from "./handlers/pay-property-stripe";
+import { getPropertyDocumentsHandler } from "./handlers/get-property-documents";
+import { uploadPropertyDocumentHandler } from "./handlers/upload-property-document";
+import { documentUpload } from "../../../middlewares/document-upload";
 
 const router = Router();
 
@@ -418,7 +421,50 @@ router.delete("/properties/:id/favorite", checkJwt, removePropertyFavoriteHandle
  *             limit: { type: integer, example: 20 }
  *             totalItems: { type: integer, example: 1 }
  *             totalPages: { type: integer, example: 1 }
+ *     PropertyDocument:
+ *       type: object
+ *       description: A purchase document, stored privately; open it only through the signed links.
+ *       required: [id, name, source, status, fileName, fileType, fileSizeBytes, viewUrl, downloadUrl, linksExpireAt, createdAt]
+ *       properties:
+ *         id: { type: string, example: cmvb1doc0001 }
+ *         name: { type: string, example: Property purchase document }
+ *         source: { type: string, enum: [BONAFIDE, CLIENT], description: BONAFIDE is shared by an admin; CLIENT was uploaded by the client }
+ *         status: { type: string, enum: [Available, Submitted], description: The label under the name }
+ *         fileName: { type: string, example: deed-of-assignment.pdf }
+ *         fileType: { type: string, enum: [PDF, JPG, PNG], example: PDF }
+ *         fileSizeBytes: { type: integer, example: 245760 }
+ *         viewUrl: { type: string, description: '"View": opens the file. Signed; expires at linksExpireAt.' }
+ *         downloadUrl: { type: string, description: '"Download": saves the file. Signed; expires at linksExpireAt.' }
+ *         linksExpireAt: { type: string, format: date-time, description: 15 minutes after the response; fetch the documents again for new links }
+ *         createdAt: { type: string, format: date-time }
+ *     PropertyDocuments:
+ *       type: object
+ *       required: [available, submitted]
+ *       properties:
+ *         available:
+ *           type: array
+ *           description: '"Available documents": shared by Bonafide, oldest first.'
+ *           items: { $ref: '#/components/schemas/PropertyDocument' }
+ *         submitted:
+ *           type: array
+ *           description: '"Submitted documents": uploaded by the client, oldest first.'
+ *           items: { $ref: '#/components/schemas/PropertyDocument' }
+ *     PropertyDocumentUpload:
+ *       type: object
+ *       required: [file]
+ *       properties:
+ *         file: { type: string, format: binary, description: "PDF, JPG or PNG, up to 10 MB" }
+ *         name: { type: string, maxLength: 120, description: Shown as the document's title; defaults to the file name without its extension, example: Signed offer letter }
  *   responses:
+ *     PropertyDocumentUploadInvalid:
+ *       description: >
+ *         No file (`Attach the document in the file field.`), a file that isn't PDF, JPG or PNG
+ *         (`Documents must be PDF, JPG or PNG.`), over 10 MB (`Documents must be at most 10 MB.`),
+ *         or a bad name (`name must be a string.` / `name must be at most 120 characters.`).
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *           example: { status: error, message: "Documents must be PDF, JPG or PNG." }
  *     PropertyRequestUnauthorized:
  *       description: "No token (`No token provided`), or the token is invalid (`Invalid token`), expired (`Token expired`), malformed (`Malformed token`) or for a user that no longer exists (`User not found`)."
  *       content:
@@ -778,6 +824,79 @@ router.post(
   checkJwt,
   idempotent,
   payPropertyStripeHandler,
+);
+
+/**
+ * @swagger
+ * /api/{version}/client/property-requests/{id}/documents:
+ *   get:
+ *     tags: [Property Purchases]
+ *     summary: Purchase documents ("Legal Documentation", "View purchase documents")
+ *     description: >
+ *       Documents Bonafide shared ("Available documents") and documents the client uploaded
+ *       ("Submitted documents"). Files are private in Cloudinary: each comes with View and
+ *       Download links signed for 15 minutes, so fetch this again rather than storing the links.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, description: Purchase or consultation request ID, schema: { type: string } }
+ *     responses:
+ *       200:
+ *         description: The documents; both lists can be empty.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyDocuments' }
+ *       401: { $ref: '#/components/responses/PropertyRequestUnauthorized' }
+ *       403: { $ref: '#/components/responses/PropertyRequestSuspended' }
+ *       404:
+ *         description: "No request with this ID belongs to the client (`Purchase request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500: { $ref: '#/components/responses/PropertyRequestServerError' }
+ *   post:
+ *     tags: [Property Purchases]
+ *     summary: Upload a purchase document ("Choose document to upload")
+ *     description: >
+ *       Adds a document to "Submitted documents". Clients can upload at any time, whatever the
+ *       request's status. Stored privately in Cloudinary. Documents can't be deleted.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, description: Purchase or consultation request ID, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema: { $ref: '#/components/schemas/PropertyDocumentUpload' }
+ *     responses:
+ *       201:
+ *         description: The uploaded document, with signed links.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyDocument' }
+ *       400: { $ref: '#/components/responses/PropertyDocumentUploadInvalid' }
+ *       401: { $ref: '#/components/responses/PropertyRequestUnauthorized' }
+ *       403: { $ref: '#/components/responses/PropertyRequestSuspended' }
+ *       404:
+ *         description: "No request with this ID belongs to the client (`Purchase request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500:
+ *         description: "Cloudinary or the database failed (`Unable to upload the document.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.get("/property-requests/:id/documents", checkJwt, getPropertyDocumentsHandler);
+router.post(
+  "/property-requests/:id/documents",
+  checkJwt,
+  documentUpload,
+  uploadPropertyDocumentHandler,
 );
 
 export default router;
