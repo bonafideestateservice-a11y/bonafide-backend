@@ -533,6 +533,8 @@ enum NotificationType {
   INSPECTION_STARTED
   // Activity feed only; nobody is notified.
   PROPERTY_ADDED
+  // A purchase or consultation request changed status (client in-app notification).
+  PROPERTY_REQUEST_UPDATED
 }
 
 enum NotificationStatus {
@@ -618,6 +620,7 @@ enum PropertyRequestStatus {
   SUBMITTED
   CONSULTATION
   IN_PROGRESS
+  OWNERSHIP_TRANSFER
   COMPLETED
   CANCELLED
 }
@@ -654,20 +657,32 @@ model PropertyRequest {
   createdAt  DateTime              @default(now())
   updatedAt  DateTime              @updatedAt
 
-  updates PropertyRequestUpdate[]
-  payment PropertyPayment?
+  updates   PropertyRequestUpdate[]
+  payment   PropertyPayment?
+  documents PropertyRequestDocument[]
 
   @@index([userId])
   @@index([propertyId])
   @@index([status])
 }
 
-// "Purchase Updates": every status change and payment result, newest last.
+// What a "Purchase Updates" card is labelled as.
+enum PropertyUpdateKind {
+  PROGRESS
+  MILESTONE
+  NOTICE
+}
+
+// "Purchase Updates": every status change, payment result and admin notice, newest last.
 model PropertyRequestUpdate {
   id        String                @id @default(cuid())
   requestId String
   request   PropertyRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
   status    PropertyRequestStatus
+  kind      PropertyUpdateKind    @default(PROGRESS)
+  // The card title; status changes use the status label.
+  title     String?
+  // The admin's note, a notice's message or a payment result.
   note      String?
   createdAt DateTime              @default(now())
 
@@ -712,4 +727,31 @@ model IdempotencyKey {
 
   @@unique([userId, route, key])
   @@index([createdAt])
+}
+
+enum PropertyDocumentSource {
+  // Shared with the client by an admin ("Available documents").
+  BONAFIDE
+  // Uploaded by the client ("Submitted documents").
+  CLIENT
+}
+
+// A purchase document, stored privately in Cloudinary and opened with short-lived signed links.
+model PropertyRequestDocument {
+  id            String                 @id @default(cuid())
+  requestId     String
+  request       PropertyRequest        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  name          String
+  source        PropertyDocumentSource
+  fileName      String
+  // The MIME type, e.g. "application/pdf".
+  fileType      String
+  fileSizeBytes Int
+  // Cloudinary's identifiers for the private file; needed to sign links.
+  publicId      String
+  resourceType  String
+  format        String
+  createdAt     DateTime               @default(now())
+
+  @@index([requestId])
 }

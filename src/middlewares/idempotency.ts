@@ -13,7 +13,8 @@ const MAX_KEY_LENGTH = 255;
  * response instead of running again (so a retried "Confirm payment" can't start a second
  * checkout). A repeat while the first is still running gets 409. Server errors (5xx) aren't
  * saved, so the client can retry with the same key.
- */
+*/
+
 export const idempotent = async (req: Request, res: Response, next: NextFunction) => {
   const key = req.header("Idempotency-Key")?.trim();
   if (!key) return next();

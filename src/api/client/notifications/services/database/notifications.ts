@@ -42,7 +42,7 @@ export const toClientUpdate = ({
 }: UpdateRow) => {
   const m = (meta ?? {}) as Record<string, unknown>;
   const typeName = verificationType?.name ?? "Verification";
-  const subject = subjectOf(verificationRequest?.details);
+  const subject = subjectOf(verificationRequest?.details) ?? text(m.propertyName);
   const yourRequest = subject ? `your ${subject}` : `your ${typeName.toLowerCase()}`;
   const agentName = text(m.agentName);
 
@@ -74,6 +74,8 @@ export const toClientUpdate = ({
     verificationType,
     subjectName: subject,
     verificationRequestId: row.verificationRequestId,
+    // PROPERTY_REQUEST_UPDATED only: the purchase or consultation to open.
+    propertyRequestId: text(m.propertyRequestId),
     reportId: text(m.reportId),
     read: row.read,
     createdAt: row.createdAt,

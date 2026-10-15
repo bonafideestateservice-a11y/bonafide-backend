@@ -419,6 +419,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *             - $ref: '#/components/schemas/ClientVerificationAgentName'
  *           nullable: true
  *         feedback:
+ *           type: object
  *           nullable: true
  *           description: The client's "Leave a Comment" feedback; null until they leave some.
  *           allOf:
@@ -428,7 +429,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *       required: [rating, comment, ratedAt]
  *       properties:
  *         rating: { type: integer, minimum: 1, maximum: 5, example: 4 }
- *         comment: { type: string, nullable: true, example: Thorough inspection, thanks. }
+ *         comment: { type: string, nullable: true, example: "Thorough inspection, thanks." }
  *         ratedAt: { type: string, format: date-time, example: "2026-10-08T14:02:11.000Z" }
  *     ClientVerificationReportHistoryItem:
  *       type: object
@@ -1353,7 +1354,7 @@ router.get("/verification-requests/:id/report/full", checkJwt, getVerificationRe
  *             required: [rating]
  *             properties:
  *               rating: { type: integer, minimum: 1, maximum: 5, example: 4 }
- *               comment: { type: string, maxLength: 1000, description: Optional; blank clears it., example: Thorough inspection, thanks. }
+ *               comment: { type: string, maxLength: 1000, description: Optional; blank clears it., example: "Thorough inspection, thanks." }
  *     responses:
  *       200:
  *         description: The saved feedback.
@@ -1364,7 +1365,7 @@ router.get("/verification-requests/:id/report/full", checkJwt, getVerificationRe
  *               properties:
  *                 reportId: { type: string, example: cm1vrep0001 }
  *                 rating: { type: integer, example: 4 }
- *                 comment: { type: string, nullable: true, example: Thorough inspection, thanks. }
+ *                 comment: { type: string, nullable: true, example: "Thorough inspection, thanks." }
  *                 ratedAt: { type: string, format: date-time }
  *       400:
  *         description: rating is not a whole number from 1 to 5, or comment is not a string or is too long

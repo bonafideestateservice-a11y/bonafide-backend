@@ -4,8 +4,10 @@ import {
   Prisma,
   PropertyPaymentMethod,
   PropertyPaymentStatus,
+  NotificationType,
   PropertyRequestStatus,
   PropertyRequestType,
+  PropertyUpdateKind,
 } from "@prisma/client";
 import { prismaClient } from "../../../utils/prisma";
 import { logger } from "../../../utils/logger";
@@ -14,6 +16,13 @@ const OPEN_STATUSES: PropertyRequestStatus[] = [
   PropertyRequestStatus.SUBMITTED,
   PropertyRequestStatus.CONSULTATION,
   PropertyRequestStatus.IN_PROGRESS,
+  PropertyRequestStatus.OWNERSHIP_TRANSFER,
+];
+
+/** Statuses only a purchase can have. */
+const PURCHASE_ONLY: PropertyRequestStatus[] = [
+  PropertyRequestStatus.IN_PROGRESS,
+  PropertyRequestStatus.OWNERSHIP_TRANSFER,
 ];
 
 const REFERENCE_PREFIX: Record<PropertyRequestType, string> = {
@@ -25,13 +34,49 @@ const STATUS_LABELS: Record<PropertyRequestStatus, string> = {
   SUBMITTED: "Request submitted",
   CONSULTATION: "Consultation",
   IN_PROGRESS: "Purchase in progress",
+  OWNERSHIP_TRANSFER: "Ownership transfer",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
 };
 
+/** Ongoing stages are "Progress updates"; reaching a stage boundary is a "Milestone". */
+const KIND_OF: Record<PropertyRequestStatus, PropertyUpdateKind> = {
+  SUBMITTED: "MILESTONE",
+  CONSULTATION: "MILESTONE",
+  IN_PROGRESS: "PROGRESS",
+  OWNERSHIP_TRANSFER: "PROGRESS",
+  COMPLETED: "MILESTONE",
+  CANCELLED: "MILESTONE",
+};
+
+/** The card text for a status change that has no note of its own. */
+const defaultMessage = (
+  status: PropertyRequestStatus,
+  type: PropertyRequestType,
+  property: string,
+) => {
+  const what = type === PropertyRequestType.PURCHASE ? "purchase" : "consultation";
+  switch (status) {
+    case "SUBMITTED":
+      return `Your ${what} request for ${property} was received.`;
+    case "CONSULTATION":
+      return `Bonafide is assisting with your consultation about ${property}.`;
+    case "IN_PROGRESS":
+      return `Bonafide is facilitating your purchase of ${property}.`;
+    case "OWNERSHIP_TRANSFER":
+      return `Bonafide is handling the ownership transfer and legal documentation for ${property}.`;
+    case "COMPLETED":
+      return type === PropertyRequestType.PURCHASE
+        ? `Your purchase of ${property} has been completed with Bonafide's assistance.`
+        : `Your consultation about ${property} is complete.`;
+    default:
+      return `Your ${what} request for ${property} was cancelled.`;
+  }
+};
+
 /** The progress steps each request type goes through (CANCELLED can end any of them). */
 const STEPS: Record<PropertyRequestType, PropertyRequestStatus[]> = {
-  PURCHASE: ["SUBMITTED", "CONSULTATION", "IN_PROGRESS", "COMPLETED"],
+  PURCHASE: ["SUBMITTED", "CONSULTATION", "IN_PROGRESS", "OWNERSHIP_TRANSFER", "COMPLETED"],
   CONSULTATION: ["SUBMITTED", "CONSULTATION", "COMPLETED"],
 };
 
@@ -45,8 +90,9 @@ export const requestSelect = {
   user: { select: { id: true, fullName: true, email: true, phone: true } },
   updates: {
     orderBy: { createdAt: "asc" },
-    select: { status: true, note: true, createdAt: true },
+    select: { status: true, kind: true, title: true, note: true, createdAt: true },
   },
+  _count: { select: { documents: true } },
   payment: {
     select: {
       id: true,
@@ -119,9 +165,12 @@ export const toRequestResponse = (request: RequestRow) => {
     })),
     updates: request.updates.map((update) => ({
       status: update.status,
-      note: update.note,
+      kind: update.kind,
+      title: update.title ?? STATUS_LABELS[update.status],
+      message: update.note ?? defaultMessage(update.status, request.type, request.property.name),
       createdAt: update.createdAt.toISOString(),
     })),
+    documentCount: request._count.documents,
     payment: request.payment ? toPaymentResponse(request.payment) : null,
     property: {
       id: request.property.id,
@@ -176,7 +225,13 @@ export const createPropertyRequest = async (
           type,
           userId,
           propertyId,
-          updates: { create: { status: PropertyRequestStatus.SUBMITTED } },
+          updates: {
+            create: {
+              status: PropertyRequestStatus.SUBMITTED,
+              kind: KIND_OF.SUBMITTED,
+              title: STATUS_LABELS.SUBMITTED,
+            },
+          },
         },
         select: requestSelect,
       });
@@ -223,7 +278,7 @@ export type StatusChangeResult =
 
 /**
  * An admin moves a request to a new status. A purchase reaching IN_PROGRESS gets its one
- * payment, for the property's listed price.
+ * payment, for the property's listed price. The client gets an in-app notification.
  */
 export const setPropertyRequestStatus = async (
   id: string,
@@ -236,16 +291,14 @@ export const setPropertyRequestStatus = async (
       type: true,
       status: true,
       reference: true,
+      userId: true,
       payment: { select: { id: true } },
-      property: { select: { priceAmount: true, priceCurrency: true } },
+      property: { select: { name: true, priceAmount: true, priceCurrency: true } },
     },
   });
   if (!request) return { kind: "NOT_FOUND" };
   if (!OPEN_STATUSES.includes(request.status)) return { kind: "FINISHED", status: request.status };
-  if (
-    status === PropertyRequestStatus.IN_PROGRESS &&
-    request.type !== PropertyRequestType.PURCHASE
-  ) {
+  if (PURCHASE_ONLY.includes(status) && request.type !== PropertyRequestType.PURCHASE) {
     return { kind: "NOT_A_PURCHASE" };
   }
 
@@ -254,7 +307,7 @@ export const setPropertyRequestStatus = async (
     where: { id },
     data: {
       status,
-      updates: { create: { status, note } },
+      updates: { create: { status, note, kind: KIND_OF[status], title: STATUS_LABELS[status] } },
       ...(needsPayment
         ? {
             payment: {
@@ -270,6 +323,29 @@ export const setPropertyRequestStatus = async (
     select: requestSelect,
   });
   logger.info(`Property request ${updated.reference} moved to ${status}`);
+
+  // The client's Updates screen. A failed notification doesn't undo the status change.
+  await prismaClient.notification
+    .create({
+      data: {
+        userId: request.userId,
+        type: NotificationType.PROPERTY_REQUEST_UPDATED,
+        title: STATUS_LABELS[status],
+        body: note ?? defaultMessage(status, request.type, request.property.name),
+        notificationStatus: "SENT",
+        sentAt: new Date(),
+        meta: {
+          channel: "in_app",
+          propertyRequestId: id,
+          propertyName: request.property.name,
+          reference: request.reference,
+          status,
+        },
+      },
+    })
+    .catch((error) =>
+      logger.error(`Could not notify the client about ${request.reference}: ${error}`),
+    );
   return { kind: "UPDATED", request: updated };
 };
 
@@ -339,6 +415,8 @@ export const markPropertyPaymentSuccessful = async (
           updates: {
             create: {
               status: payment.request.status,
+              kind: PropertyUpdateKind.PROGRESS,
+              title: "Payment received",
               note: `Payment of ${naira(payment.amountInKobo, payment.currency)} received`,
             },
           },
@@ -366,7 +444,12 @@ export const markPropertyPaymentFailed = async (paymentId: string, providerRef: 
       request: {
         update: {
           updates: {
-            create: { status: payment.request.status, note: "Payment was not successful" },
+            create: {
+              status: payment.request.status,
+              kind: PropertyUpdateKind.PROGRESS,
+              title: "Payment not successful",
+              note: "Payment was not successful",
+            },
           },
         },
       },
@@ -423,3 +506,54 @@ export const toAdminRequestResponse = (request: RequestRow) => ({
     phone: request.user.phone,
   },
 });
+
+/** An admin's "Purchase notice": a titled message on the request, without a status change. */
+export const addPropertyRequestNotice = async (id: string, title: string, message: string) => {
+  const request = await prismaClient.propertyRequest.findUnique({
+    where: { id },
+    select: { status: true },
+  });
+  if (!request) return null;
+  return prismaClient.propertyRequest.update({
+    where: { id },
+    data: {
+      updates: {
+        create: { status: request.status, kind: PropertyUpdateKind.NOTICE, title, note: message },
+      },
+    },
+    select: requestSelect,
+  });
+};
+
+const documentSelect = {
+  id: true,
+  name: true,
+  source: true,
+  fileName: true,
+  fileType: true,
+  fileSizeBytes: true,
+  publicId: true,
+  resourceType: true,
+  format: true,
+  createdAt: true,
+} satisfies Prisma.PropertyRequestDocumentSelect;
+
+export type DocumentRow = Prisma.PropertyRequestDocumentGetPayload<{
+  select: typeof documentSelect;
+}>;
+
+/** A request's documents, oldest first. */
+export const listPropertyRequestDocuments = (requestId: string) =>
+  prismaClient.propertyRequestDocument.findMany({
+    where: { requestId },
+    orderBy: { createdAt: "asc" },
+    select: documentSelect,
+  });
+
+export const addPropertyRequestDocument = (
+  data: Omit<Prisma.PropertyRequestDocumentUncheckedCreateInput, "id" | "createdAt">,
+) => prismaClient.propertyRequestDocument.create({ data, select: documentSelect });
+
+/** Whether a request exists (and, for a client, is theirs). */
+export const propertyRequestExists = async (id: string, userId?: string) =>
+  (await prismaClient.propertyRequest.count({ where: { id, ...(userId ? { userId } : {}) } })) > 0;

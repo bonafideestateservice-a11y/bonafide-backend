@@ -106,8 +106,8 @@ const router = Router();
  *           description: The agent (assignment, inspection, report), the client (new request, payment) or the property title (PROPERTY_ADDED).
  *           example: Emma Wilson
  *         clientName: { type: string, nullable: true, description: "The name shown under the row: the client, or for PROPERTY_ADDED the admin who added it", example: Michael Brown }
- *         agentName: { type: string, nullable: true, description: Assignment, inspection and report rows, example: Emma Wilson }
- *         amount: { type: number, nullable: true, description: PAYMENT_RECEIVED only, in naira, example: 75000 }
+ *         agentName: { type: string, nullable: true, description: "Assignment, inspection and report rows", example: Emma Wilson }
+ *         amount: { type: number, nullable: true, description: "PAYMENT_RECEIVED only, in naira", example: 75000 }
  *         verificationType: { type: string, nullable: true, example: Land Verification }
  *         status:
  *           type: string
@@ -828,7 +828,7 @@ router.patch("/notifications/:id/read", checkJwt, checkIsAdmin, markNotification
  *         name: tab
  *         description: all, active (available, under 5 open jobs) or busy (5 open jobs, fully booked)
  *         schema: { type: string, enum: [all, active, busy], default: all }
- *       - { in: query, name: search, description: Name, email or region, schema: { type: string } }
+ *       - { in: query, name: search, description: "Name, email or region", schema: { type: string } }
  *     responses:
  *       200:
  *         description: Agents sorted by name. Send `id` as agentId to assign-agent.
@@ -962,7 +962,7 @@ router.get("/verification-requests/:id", checkJwt, checkIsAdmin, getVerification
  *             type: object
  *             required: [status]
  *             properties:
- *               status: { type: string, enum: [INACTIVE, ACTIVE], description: INACTIVE suspends, ACTIVE reactivates }
+ *               status: { type: string, enum: [INACTIVE, ACTIVE], description: "INACTIVE suspends, ACTIVE reactivates" }
  *     responses:
  *       200:
  *         description: Status changed.
@@ -1014,7 +1014,7 @@ router.patch("/agents/:id/status", checkJwt, checkIsAdmin, updateAgentStatusHand
  *                 type: array
  *                 description: Repeat the field once per amenity
  *                 items: { $ref: '#/components/schemas/AdminDashboardAmenity' }
- *               isPublished: { type: boolean, description: true for "Save & Publish", false for "Save as Draft", default: false }
+ *               isPublished: { type: boolean, description: 'true for "Save & Publish", false for "Save as Draft"', default: false }
  *               coverImage: { type: string, format: binary, description: "One PNG or JPEG, max 5 MB" }
  *               images:
  *                 type: array
@@ -1204,7 +1204,7 @@ router.delete("/properties/:id", checkJwt, checkIsAdmin, deletePropertyHandler);
  *     parameters:
  *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
  *       - { in: query, name: type, schema: { type: string, enum: [all, client, agent], default: all } }
- *       - { in: query, name: search, description: Name, email or phone (case-insensitive), schema: { type: string } }
+ *       - { in: query, name: search, description: "Name, email or phone (case-insensitive)", schema: { type: string } }
  *       - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
  *       - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
  *     responses:
@@ -1465,7 +1465,7 @@ router.delete("/properties/:id/assign-agent", checkJwt, checkIsAdmin, unassignPr
  *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
  *       - { in: query, name: type, schema: { type: string, enum: [PURCHASE, CONSULTATION] } }
  *       - { in: query, name: status, schema: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED] } }
- *       - { in: query, name: search, description: Reference, client name or email, or property title, schema: { type: string } }
+ *       - { in: query, name: search, description: "Reference, client name or email, or property title", schema: { type: string } }
  *       - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
  *       - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
  *     responses:
@@ -1477,8 +1477,15 @@ router.delete("/properties/:id/assign-agent", checkJwt, checkIsAdmin, unassignPr
  *               type: object
  *               properties:
  *                 data: { type: array, items: { $ref: '#/components/schemas/AdminPropertyRequest' } }
- *                 meta: { type: object, properties: { page: { type: integer }, limit: { type: integer }, totalItems: { type: integer }, totalPages: { type: integer } } }
- *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
+ *                 meta: { type: object, properties: { page: { type: integer, example: 1 }, limit: { type: integer, example: 20 }, totalItems: { type: integer, example: 1 }, totalPages: { type: integer, example: 1 } } }
+ *       400:
+ *         description: >
+ *           A bad query value: `page and limit must be positive integers (limit ≤ 100).`,
+ *           `type must be PURCHASE or CONSULTATION.` or
+ *           `status must be one of SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED.`
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
  *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
  *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
@@ -1514,7 +1521,12 @@ router.get("/property-requests", checkJwt, checkIsAdmin, getAdminPropertyRequest
  *       200: { description: The request, content: { application/json: { schema: { $ref: '#/components/schemas/AdminPropertyRequest' } } } }
  *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
  *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
- *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       404:
+ *         description: "No request has this ID (`Property request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             example: { status: error, message: Property request not found. }
  *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
  */
 router.get("/property-requests/:id", checkJwt, checkIsAdmin, getAdminPropertyRequestHandler);
@@ -1546,13 +1558,25 @@ router.get("/property-requests/:id", checkJwt, checkIsAdmin, getAdminPropertyReq
  *               status: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED] }
  *               note: { type: string, maxLength: 1000, example: Consultation call held with the client. }
  *     responses:
- *       200: { description: The updated request, content: { application/json: { schema: { $ref: '#/components/schemas/AdminPropertyRequest' } } } }
- *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
+ *       200: { description: The updated request (IN_PROGRESS purchases now include the READY payment), content: { application/json: { schema: { $ref: '#/components/schemas/AdminPropertyRequest' } } } }
+ *       400:
+ *         description: >
+ *           status is missing or unknown (`status must be one of SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED.`),
+ *           note isn't a string (`note must be a string.`) or is too long (`note must be at most 1000 characters.`),
+ *           or a consultation was set to IN_PROGRESS (`Only purchase requests can be IN_PROGRESS.`).
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
  *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
- *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       404:
+ *         description: "No request has this ID (`Property request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             example: { status: error, message: Property request not found. }
  *       409:
- *         description: The request is already COMPLETED or CANCELLED.
+ *         description: "The request is finished and can't change (`This request is already completed and can't change.` / `This request is already cancelled and can't change.`)."
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }

@@ -59,10 +59,10 @@ const router = Router();
  *     security: []
  *     parameters:
  *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
- *       - { in: query, name: search, description: Title, address, area or city, schema: { type: string, example: Lekki } }
+ *       - { in: query, name: search, description: "Title, address, area or city", schema: { type: string, example: Lekki } }
  *       - { in: query, name: type, description: The Houses / Apartments / Land / Commercial chips, schema: { type: string, enum: [HOUSE, APARTMENT, LAND, COMMERCIAL] } }
- *       - { in: query, name: minPrice, description: Whole naira, inclusive, schema: { type: integer, example: 50000000 } }
- *       - { in: query, name: maxPrice, description: Whole naira, inclusive, schema: { type: integer, example: 100000000 } }
+ *       - { in: query, name: minPrice, description: "Whole naira, inclusive", schema: { type: integer, example: 50000000 } }
+ *       - { in: query, name: maxPrice, description: "Whole naira, inclusive", schema: { type: integer, example: 100000000 } }
  *       - { in: query, name: area, description: From GET /client/properties/locations (case-insensitive), schema: { type: string, example: Lekki } }
  *       - { in: query, name: city, description: From GET /client/properties/locations (case-insensitive), schema: { type: string, example: Lagos } }
  *       - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
@@ -253,77 +253,190 @@ router.delete("/properties/:id/favorite", checkJwt, removePropertyFavoriteHandle
  *       name: Idempotency-Key
  *       required: false
  *       description: >
- *         Any unique string (e.g. a UUID) per user action. Repeating it on the same route returns
- *         the first response (with header `Idempotent-Replayed: true`) instead of running again;
- *         a repeat while the first is still running gets 409. Responses with a 5xx aren't saved.
- *       schema: { type: string, maxLength: 255 }
+ *         Optional. Any unique string per user action, e.g. a UUID generated when the button is
+ *         tapped. Repeating the key on the same route returns the first response (with the
+ *         `Idempotent-Replayed: true` header) instead of running the action again. A repeat
+ *         while the first is still running gets 409. 5xx responses aren't saved, so the same
+ *         key can be retried after a server error. At most 255 characters.
+ *       schema: { type: string, maxLength: 255, example: 7f9c2ba4-e88f-4a1b-9c3d-2b7a1f0e5d11 }
  *   schemas:
  *     PropertyPayment:
  *       type: object
+ *       description: The one payment for a purchase, for the property's listed price.
+ *       required: [id, reference, amount, currency, status, provider, method, checkoutUrl, paidAt]
  *       properties:
- *         id: { type: string }
- *         reference: { type: string, example: BF-PAY-203948 }
- *         amount: { type: number, description: The property's listed price, example: 85000000 }
+ *         id: { type: string, example: cmvb1pay0001 }
+ *         reference: { type: string, description: The purchase reference with PAY instead of PUR, example: BF-PAY-203948 }
+ *         amount: { type: number, description: In whole naira (the property's listed price), example: 85000000 }
  *         currency: { type: string, example: NGN }
- *         status: { type: string, enum: [READY, PROCESSING, SUCCESSFUL, FAILED], description: 'READY is "Ready to confirm"' }
- *         provider: { type: string, nullable: true, enum: [PAYSTACK, STRIPE] }
- *         method: { type: string, nullable: true, enum: [CARD, BANK_TRANSFER] }
- *         checkoutUrl: { type: string, nullable: true, description: The open checkout to send the client to; only while PROCESSING }
- *         paidAt: { type: string, format: date-time, nullable: true }
+ *         status:
+ *           type: string
+ *           enum: [READY, PROCESSING, SUCCESSFUL, FAILED]
+ *           description: >
+ *             READY is "Ready to confirm" (not started); PROCESSING after "Confirm payment", until
+ *             the provider's webhook makes it SUCCESSFUL or FAILED. FAILED can be paid again.
+ *           example: READY
+ *         provider: { type: string, nullable: true, enum: [PAYSTACK, STRIPE], description: Null until the first checkout, example: PAYSTACK }
+ *         method: { type: string, nullable: true, enum: [CARD, BANK_TRANSFER], example: CARD }
+ *         checkoutUrl:
+ *           type: string
+ *           nullable: true
+ *           description: The open checkout to send the client to; only set while PROCESSING.
+ *           example: https://checkout.paystack.com/7h3k2l9xq1
+ *         paidAt: { type: string, format: date-time, nullable: true, example: null }
+ *     PropertyRequestStep:
+ *       type: object
+ *       required: [status, label, done, current, reachedAt]
+ *       properties:
+ *         status: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, OWNERSHIP_TRANSFER, COMPLETED, CANCELLED], example: CONSULTATION }
+ *         label: { type: string, example: Consultation }
+ *         done: { type: boolean, description: The step is behind the current one (all are done once COMPLETED) }
+ *         current: { type: boolean }
+ *         reachedAt:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *           description: When the request moved to this step; null if it hasn't, or if an admin skipped it.
+ *     PropertyRequestUpdate:
+ *       type: object
+ *       description: One "Purchase Update Status" card.
+ *       required: [status, kind, title, message, createdAt]
+ *       properties:
+ *         status: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, OWNERSHIP_TRANSFER, COMPLETED, CANCELLED], description: The request's status at the time }
+ *         kind:
+ *           type: string
+ *           enum: [PROGRESS, MILESTONE, NOTICE]
+ *           description: >
+ *             The card's label: PROGRESS "Progress update" (IN_PROGRESS, OWNERSHIP_TRANSFER, payment
+ *             results), MILESTONE "Milestone notification" (SUBMITTED, CONSULTATION, COMPLETED,
+ *             CANCELLED), NOTICE "Important notice" (posted by an admin).
+ *           example: PROGRESS
+ *         title: { type: string, example: Purchase in progress }
+ *         message:
+ *           type: string
+ *           description: The admin's note or notice, a payment result, or a standard message for the status.
+ *           example: Bonafide is facilitating your purchase of Lekki Phase 1 Apartment.
+ *         createdAt: { type: string, format: date-time }
  *     PropertyRequest:
  *       type: object
+ *       description: A purchase or consultation request, with everything the status screens show.
+ *       required: [id, reference, type, status, statusLabel, steps, updates, payment, property, createdAt, updatedAt]
  *       properties:
- *         id: { type: string }
- *         reference: { type: string, example: BF-PUR-203948 }
+ *         id: { type: string, example: cmvb1req0001 }
+ *         reference: { type: string, description: "BF-PUR-… for purchases, BF-CON-… for consultations", example: BF-PUR-203948 }
  *         type: { type: string, enum: [PURCHASE, CONSULTATION] }
- *         status: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED] }
- *         statusLabel: { type: string, example: Purchase in progress }
+ *         status:
+ *           type: string
+ *           enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, OWNERSHIP_TRANSFER, COMPLETED, CANCELLED]
+ *           description: Set to SUBMITTED by the client, then moved only by an admin. Consultations skip IN_PROGRESS and OWNERSHIP_TRANSFER.
+ *         statusLabel: { type: string, description: The badge text, example: Purchase in progress }
  *         steps:
  *           type: array
- *           description: The "Purchase progress" list.
- *           items:
- *             type: object
- *             properties:
- *               status: { type: string, example: CONSULTATION }
- *               label: { type: string, example: Consultation }
- *               done: { type: boolean }
- *               current: { type: boolean }
- *               reachedAt: { type: string, format: date-time, nullable: true }
+ *           description: >
+ *             The "Purchase progress" list: SUBMITTED, CONSULTATION, IN_PROGRESS,
+ *             OWNERSHIP_TRANSFER, COMPLETED for a purchase (SUBMITTED, CONSULTATION, COMPLETED for a
+ *             consultation); CANCELLED replaces COMPLETED when cancelled.
+ *           items: { $ref: '#/components/schemas/PropertyRequestStep' }
  *         updates:
  *           type: array
- *           description: '"Purchase Updates": each status change and payment result, oldest first.'
- *           items:
- *             type: object
- *             properties:
- *               status: { type: string }
- *               note: { type: string, nullable: true, example: "Payment of NGN 85,000,000.00 received" }
- *               createdAt: { type: string, format: date-time }
+ *           description: '"Purchase Updates": every status change, payment result and admin notice, oldest first (show them newest first).'
+ *           items: { $ref: '#/components/schemas/PropertyRequestUpdate' }
+ *         documentCount: { type: integer, description: Documents on the request (shared and submitted), example: 2 }
  *         payment:
+ *           type: object
  *           nullable: true
- *           description: Created when the purchase moves to IN_PROGRESS; null before that and for consultations.
+ *           description: Created when an admin moves a purchase to IN_PROGRESS; null before that and always for consultations.
  *           allOf: [{ $ref: '#/components/schemas/PropertyPayment' }]
  *         property:
  *           type: object
  *           description: The "Selected property" card.
+ *           required: [id, title, type, address, location, price, bedrooms, bathrooms, amenities, coverImageUrl]
  *           properties:
  *             id: { type: string }
  *             title: { type: string, example: Lekki Phase 1 Apartment }
  *             type: { type: string, enum: [HOUSE, APARTMENT, LAND, COMMERCIAL] }
- *             address: { type: string, nullable: true }
- *             location: { type: object, properties: { area: { type: string, nullable: true }, city: { type: string, nullable: true } } }
- *             price: { type: object, properties: { amount: { type: number }, currency: { type: string } } }
- *             bedrooms: { type: integer, nullable: true }
- *             bathrooms: { type: integer, nullable: true }
- *             amenities: { type: array, items: { type: string } }
+ *             address: { type: string, nullable: true, example: "Lekki Phase 1, Lagos" }
+ *             location:
+ *               type: object
+ *               properties:
+ *                 area: { type: string, nullable: true, example: Lekki Phase 1 }
+ *                 city: { type: string, nullable: true, example: Lagos }
+ *             price:
+ *               type: object
+ *               properties:
+ *                 amount: { type: number, example: 85000000 }
+ *                 currency: { type: string, example: NGN }
+ *             bedrooms: { type: integer, nullable: true, example: 3 }
+ *             bathrooms: { type: integer, nullable: true, example: 3 }
+ *             amenities: { type: array, items: { type: string }, example: [PARKING] }
  *             coverImageUrl: { type: string, nullable: true }
  *         createdAt: { type: string, format: date-time }
  *         updatedAt: { type: string, format: date-time }
+ *       example:
+ *         id: cmvb1req0001
+ *         reference: BF-PUR-203948
+ *         type: PURCHASE
+ *         status: IN_PROGRESS
+ *         statusLabel: Purchase in progress
+ *         steps:
+ *           - { status: SUBMITTED, label: Request submitted, done: true, current: false, reachedAt: "2026-10-16T09:00:00.000Z" }
+ *           - { status: CONSULTATION, label: Consultation, done: true, current: false, reachedAt: "2026-10-16T11:30:00.000Z" }
+ *           - { status: IN_PROGRESS, label: Purchase in progress, done: false, current: true, reachedAt: "2026-10-17T10:00:00.000Z" }
+ *           - { status: OWNERSHIP_TRANSFER, label: Ownership transfer, done: false, current: false, reachedAt: null }
+ *           - { status: COMPLETED, label: Completed, done: false, current: false, reachedAt: null }
+ *         updates:
+ *           - { status: SUBMITTED, kind: MILESTONE, title: Request submitted, message: Your purchase request for Lekki Phase 1 Apartment was received., createdAt: "2026-10-16T09:00:00.000Z" }
+ *           - { status: CONSULTATION, kind: MILESTONE, title: Consultation, message: Consultation call booked, createdAt: "2026-10-16T11:30:00.000Z" }
+ *           - { status: IN_PROGRESS, kind: PROGRESS, title: Purchase in progress, message: Bonafide is facilitating your purchase of Lekki Phase 1 Apartment., createdAt: "2026-10-17T10:00:00.000Z" }
+ *           - { status: IN_PROGRESS, kind: NOTICE, title: Purchase notice, message: Bonafide will communicate any requested documents for this purchase., createdAt: "2026-10-17T12:00:00.000Z" }
+ *         documentCount: 1
+ *         payment:
+ *           { id: cmvb1pay0001, reference: BF-PAY-203948, amount: 85000000, currency: NGN, status: READY, provider: null, method: null, checkoutUrl: null, paidAt: null }
+ *         property:
+ *           id: cmv1prop0001
+ *           title: Lekki Phase 1 Apartment
+ *           type: APARTMENT
+ *           address: "Lekki Phase 1, Lagos"
+ *           location: { area: Lekki Phase 1, city: Lagos }
+ *           price: { amount: 85000000, currency: NGN }
+ *           bedrooms: 3
+ *           bathrooms: 3
+ *           amenities: [PARKING]
+ *           coverImageUrl: https://res.cloudinary.com/demo/image/upload/lekki.jpg
+ *         createdAt: "2026-10-16T09:00:00.000Z"
+ *         updatedAt: "2026-10-17T10:00:00.000Z"
+ *     PropertyRequestPage:
+ *       type: object
+ *       required: [data, meta]
+ *       properties:
+ *         data: { type: array, items: { $ref: '#/components/schemas/PropertyRequest' } }
+ *         meta:
+ *           type: object
+ *           required: [page, limit, totalItems, totalPages]
+ *           properties:
+ *             page: { type: integer, example: 1 }
+ *             limit: { type: integer, example: 20 }
+ *             totalItems: { type: integer, example: 1 }
+ *             totalPages: { type: integer, example: 1 }
  *   responses:
- *     PropertyRequestError:
- *       description: See the message.
+ *     PropertyRequestUnauthorized:
+ *       description: "No token (`No token provided`), or the token is invalid (`Invalid token`), expired (`Token expired`), malformed (`Malformed token`) or for a user that no longer exists (`User not found`)."
  *       content:
  *         application/json:
  *           schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *           example: { status: error, message: Invalid token }
+ *     PropertyRequestSuspended:
+ *       description: "The client's account is suspended (`Your account has been suspended.`)."
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *           example: { status: error, message: Your account has been suspended. }
+ *     PropertyRequestServerError:
+ *       description: "Unexpected database error (`Internal server error.`)."
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *           example: { status: error, message: Internal server error. }
  */
 
 /**
@@ -333,21 +446,47 @@ router.delete("/properties/:id/favorite", checkJwt, removePropertyFavoriteHandle
  *     tags: [Property Purchases]
  *     summary: Submit a purchase request ("Purchase Property")
  *     description: >
- *       No payment is taken. If the client already has an open purchase request for this
- *       property, it's returned with 200 instead of creating another.
+ *       Asks Bonafide to help buy the property; no payment is taken. The request starts as
+ *       SUBMITTED with no payment. A client has one open (not COMPLETED or CANCELLED) purchase
+ *       request per property: submitting again returns that request with 200 instead of
+ *       creating another.
  *     x-no-body: true
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
- *       - { in: path, name: id, required: true, description: Property ID, schema: { type: string } }
+ *       - { in: path, name: id, required: true, description: Property ID (a published property), schema: { type: string } }
  *       - $ref: '#/components/parameters/IdempotencyKey'
  *     responses:
- *       201: { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/PropertyRequest' } } } }
- *       200: { description: The open request that already exists, content: { application/json: { schema: { $ref: '#/components/schemas/PropertyRequest' } } } }
- *       401: { $ref: '#/components/responses/PropertyRequestError' }
- *       404: { $ref: '#/components/responses/PropertyRequestError' }
- *       409: { $ref: '#/components/responses/PropertyRequestError' }
+ *       201:
+ *         description: The new purchase request (status SUBMITTED, payment null).
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyRequest' }
+ *       200:
+ *         description: The client already has an open purchase request for this property; it's returned unchanged.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyRequest' }
+ *       400:
+ *         description: "The Idempotency-Key header is over 255 characters (`Idempotency-Key must be at most 255 characters.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401: { $ref: '#/components/responses/PropertyRequestUnauthorized' }
+ *       403: { $ref: '#/components/responses/PropertyRequestSuspended' }
+ *       404:
+ *         description: "No published, undeleted property has this ID (`Property not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             example: { status: error, message: Property not found. }
+ *       409:
+ *         description: "The same Idempotency-Key is still being processed (`A request with this Idempotency-Key is still being processed.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500: { $ref: '#/components/responses/PropertyRequestServerError' }
  */
 router.post(
   "/properties/:id/purchase-requests",
@@ -363,21 +502,47 @@ router.post(
  *     tags: [Property Purchases]
  *     summary: Request a consultation ("Request Consultation")
  *     description: >
- *       Bonafide contacts the client using their account details. Returns the open
- *       consultation request for this property with 200 if there is one.
+ *       Asks a Bonafide real estate professional to contact the client about the property,
+ *       using the contact details on their account; there's no body. Works alongside a purchase
+ *       request. One open consultation per property: requesting again returns it with 200.
+ *       Consultations go SUBMITTED → CONSULTATION → COMPLETED and never have a payment.
  *     x-no-body: true
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
- *       - { in: path, name: id, required: true, description: Property ID, schema: { type: string } }
+ *       - { in: path, name: id, required: true, description: Property ID (a published property), schema: { type: string } }
  *       - $ref: '#/components/parameters/IdempotencyKey'
  *     responses:
- *       201: { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/PropertyRequest' } } } }
- *       200: { description: The open request that already exists, content: { application/json: { schema: { $ref: '#/components/schemas/PropertyRequest' } } } }
- *       401: { $ref: '#/components/responses/PropertyRequestError' }
- *       404: { $ref: '#/components/responses/PropertyRequestError' }
- *       409: { $ref: '#/components/responses/PropertyRequestError' }
+ *       201:
+ *         description: The new consultation request (reference BF-CON-…, status SUBMITTED).
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyRequest' }
+ *       200:
+ *         description: The client already has an open consultation for this property; it's returned unchanged.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyRequest' }
+ *       400:
+ *         description: "The Idempotency-Key header is over 255 characters (`Idempotency-Key must be at most 255 characters.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401: { $ref: '#/components/responses/PropertyRequestUnauthorized' }
+ *       403: { $ref: '#/components/responses/PropertyRequestSuspended' }
+ *       404:
+ *         description: "No published, undeleted property has this ID (`Property not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             example: { status: error, message: Property not found. }
+ *       409:
+ *         description: "The same Idempotency-Key is still being processed (`A request with this Idempotency-Key is still being processed.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500: { $ref: '#/components/responses/PropertyRequestServerError' }
  */
 router.post(
   "/properties/:id/consultations",
@@ -392,26 +557,32 @@ router.post(
  *   get:
  *     tags: [Property Purchases]
  *     summary: The client's purchase and consultation requests
+ *     description: Only the signed-in client's own requests, newest first.
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
- *       - { in: query, name: type, schema: { type: string, enum: [PURCHASE, CONSULTATION] } }
- *       - { in: query, name: status, schema: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED] } }
- *       - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
- *       - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+ *       - { in: query, name: type, required: false, description: Only purchases or only consultations, schema: { type: string, enum: [PURCHASE, CONSULTATION] } }
+ *       - { in: query, name: status, required: false, schema: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, OWNERSHIP_TRANSFER, COMPLETED, CANCELLED] } }
+ *       - { in: query, name: page, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+ *       - { in: query, name: limit, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
  *     responses:
  *       200:
- *         description: Newest first.
+ *         description: A page of requests; data is empty when there are none.
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 data: { type: array, items: { $ref: '#/components/schemas/PropertyRequest' } }
- *                 meta: { type: object, properties: { page: { type: integer }, limit: { type: integer }, totalItems: { type: integer }, totalPages: { type: integer } } }
- *       400: { $ref: '#/components/responses/PropertyRequestError' }
- *       401: { $ref: '#/components/responses/PropertyRequestError' }
+ *             schema: { $ref: '#/components/schemas/PropertyRequestPage' }
+ *       400:
+ *         description: >
+ *           A bad query value: `page and limit must be positive integers (limit ≤ 100).`,
+ *           `type must be PURCHASE or CONSULTATION.` or
+ *           `status must be one of SUBMITTED, CONSULTATION, IN_PROGRESS, OWNERSHIP_TRANSFER, COMPLETED, CANCELLED.`
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401: { $ref: '#/components/responses/PropertyRequestUnauthorized' }
+ *       403: { $ref: '#/components/responses/PropertyRequestSuspended' }
+ *       500: { $ref: '#/components/responses/PropertyRequestServerError' }
  */
 router.get("/property-requests", checkJwt, getPropertyRequestsHandler);
 
@@ -421,15 +592,29 @@ router.get("/property-requests", checkJwt, getPropertyRequestsHandler);
  *   get:
  *     tags: [Property Purchases]
  *     summary: Purchase status ("View purchase status")
+ *     description: >
+ *       The status screen: badge, progress steps, "Purchase Updates", the payment (once the
+ *       purchase is IN_PROGRESS) and the selected property. Only the client's own requests.
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
- *       - { in: path, name: id, required: true, schema: { type: string } }
+ *       - { in: path, name: id, required: true, description: Purchase or consultation request ID, schema: { type: string } }
  *     responses:
- *       200: { description: The request, content: { application/json: { schema: { $ref: '#/components/schemas/PropertyRequest' } } } }
- *       401: { $ref: '#/components/responses/PropertyRequestError' }
- *       404: { $ref: '#/components/responses/PropertyRequestError' }
+ *       200:
+ *         description: The request.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyRequest' }
+ *       401: { $ref: '#/components/responses/PropertyRequestUnauthorized' }
+ *       403: { $ref: '#/components/responses/PropertyRequestSuspended' }
+ *       404:
+ *         description: "No request with this ID belongs to the client (`Purchase request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *             example: { status: error, message: Purchase request not found. }
+ *       500: { $ref: '#/components/responses/PropertyRequestServerError' }
  */
 router.get("/property-requests/:id", checkJwt, getPropertyRequestHandler);
 
@@ -438,16 +623,33 @@ router.get("/property-requests/:id", checkJwt, getPropertyRequestHandler);
  * /api/{version}/client/property-requests/{id}/payment:
  *   get:
  *     tags: [Property Purchases]
- *     summary: The purchase payment ("View payment / deposit"); poll it while PROCESSING
+ *     summary: The purchase payment ("View payment / deposit")
+ *     description: >
+ *       The Payment screens: "Ready to confirm" (READY), "processing" (PROCESSING), "confirmed"
+ *       (SUCCESSFUL) or "not successful" (FAILED). Poll it after sending the client to the
+ *       checkout; the provider's webhook updates it.
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
  *       - { in: path, name: id, required: true, description: Purchase request ID, schema: { type: string } }
  *     responses:
- *       200: { description: The payment, content: { application/json: { schema: { $ref: '#/components/schemas/PropertyPayment' } } } }
- *       401: { $ref: '#/components/responses/PropertyRequestError' }
- *       404: { $ref: '#/components/responses/PropertyRequestError' }
+ *       200:
+ *         description: The payment.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyPayment' }
+ *       401: { $ref: '#/components/responses/PropertyRequestUnauthorized' }
+ *       403: { $ref: '#/components/responses/PropertyRequestSuspended' }
+ *       404:
+ *         description: >
+ *           No request with this ID belongs to the client (`Purchase request not found.`), or it
+ *           has no payment yet because it isn't IN_PROGRESS or is a consultation
+ *           (`No payment is ready for this purchase yet.`).
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500: { $ref: '#/components/responses/PropertyRequestServerError' }
  */
 router.get("/property-requests/:id/payment", checkJwt, getPropertyPaymentHandler);
 
@@ -456,13 +658,16 @@ router.get("/property-requests/:id/payment", checkJwt, getPropertyPaymentHandler
  * /api/{version}/client/property-requests/{id}/payment/paystack:
  *   post:
  *     tags: [Property Purchases]
- *     summary: Pay with Paystack, by card or bank transfer ("Confirm payment", "Retry payment")
+ *     summary: Pay with Paystack by card or bank transfer ("Confirm payment", "Retry payment")
  *     description: >
- *       Starts a Paystack checkout for the property's listed price and returns its checkoutUrl;
- *       the payment becomes PROCESSING until Paystack's webhook marks it SUCCESSFUL or FAILED.
- *       Calling it again with the same method while the checkout is open returns that checkout.
- *       A new method (or a retry after FAILED) starts a new checkout. Paying doesn't complete
- *       the purchase.
+ *       Starts a Paystack checkout for the property's listed price and returns the payment with
+ *       its checkoutUrl; send the client there. The payment becomes PROCESSING until Paystack's
+ *       webhook makes it SUCCESSFUL or FAILED. A successful payment doesn't complete the
+ *       purchase: it stays IN_PROGRESS and an update records the payment.
+ *
+ *       While the checkout is open, calling again with the same method returns the same
+ *       checkout. A different method ("Change payment method") or a retry after FAILED starts a
+ *       new checkout. Send an Idempotency-Key so a double-tapped "Confirm payment" can't start two.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -477,18 +682,42 @@ router.get("/property-requests/:id/payment", checkJwt, getPropertyPaymentHandler
  *             type: object
  *             required: [method]
  *             properties:
- *               method: { type: string, enum: [CARD, BANK_TRANSFER] }
+ *               method: { type: string, enum: [CARD, BANK_TRANSFER], description: BANK_TRANSFER shows a Paystack account to pay into }
+ *           example: { method: CARD }
  *     responses:
- *       200: { description: The payment with its checkoutUrl, content: { application/json: { schema: { $ref: '#/components/schemas/PropertyPayment' } } } }
- *       400: { $ref: '#/components/responses/PropertyRequestError' }
- *       401: { $ref: '#/components/responses/PropertyRequestError' }
- *       404: { $ref: '#/components/responses/PropertyRequestError' }
- *       409:
- *         description: No payment yet (the purchase isn't in progress), already paid, the request is completed or cancelled, or the same Idempotency-Key is still running.
+ *       200:
+ *         description: The payment, PROCESSING, with its checkoutUrl.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyPayment' }
+ *             example: { id: cmvb1pay0001, reference: BF-PAY-203948, amount: 85000000, currency: NGN, status: PROCESSING, provider: PAYSTACK, method: CARD, checkoutUrl: "https://checkout.paystack.com/7h3k2l9xq1", paidAt: null }
+ *       400:
+ *         description: "method is missing or not CARD or BANK_TRANSFER (`method must be CARD or BANK_TRANSFER.`), or the Idempotency-Key is over 255 characters."
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *       500: { $ref: '#/components/responses/PropertyRequestError' }
+ *       401: { $ref: '#/components/responses/PropertyRequestUnauthorized' }
+ *       403: { $ref: '#/components/responses/PropertyRequestSuspended' }
+ *       404:
+ *         description: "No purchase request with this ID belongs to the client (`Purchase request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: >
+ *           The payment can't be made now: it isn't open yet
+ *           (`No payment is ready yet. Bonafide opens the payment once your purchase is in progress.`),
+ *           it's already paid (`This purchase has already been paid for.`), the request is finished
+ *           (`This purchase is completed.` / `This purchase is cancelled.`), or the same
+ *           Idempotency-Key is still being processed.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500:
+ *         description: "Paystack or the database failed (`Unable to start the payment.`); the reason is in the server log."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post(
   "/property-requests/:id/payment/paystack",
@@ -504,8 +733,9 @@ router.post(
  *     tags: [Property Purchases]
  *     summary: Pay by card with Stripe ("Confirm payment", "Retry payment")
  *     description: >
- *       Like the Paystack endpoint, card only. Stripe caps one payment at 99,999,999 in the
- *       smallest currency unit (₦999,999.99), so larger prices get 400; use Paystack for them.
+ *       Like the Paystack endpoint, card only and with no body. Stripe caps a single payment at
+ *       99,999,999 in the currency's smallest unit (₦999,999.99), so larger prices get 400 and
+ *       must be paid with Paystack. While the Stripe checkout is open, calling again returns it.
  *     x-no-body: true
  *     security:
  *       - bearerAuth: []
@@ -514,12 +744,34 @@ router.post(
  *       - { in: path, name: id, required: true, description: Purchase request ID, schema: { type: string } }
  *       - $ref: '#/components/parameters/IdempotencyKey'
  *     responses:
- *       200: { description: The payment with its checkoutUrl, content: { application/json: { schema: { $ref: '#/components/schemas/PropertyPayment' } } } }
- *       400: { $ref: '#/components/responses/PropertyRequestError' }
- *       401: { $ref: '#/components/responses/PropertyRequestError' }
- *       404: { $ref: '#/components/responses/PropertyRequestError' }
- *       409: { $ref: '#/components/responses/PropertyRequestError' }
- *       500: { $ref: '#/components/responses/PropertyRequestError' }
+ *       200:
+ *         description: The payment, PROCESSING, with its Stripe checkoutUrl.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/PropertyPayment' }
+ *             example: { id: cmvb1pay0001, reference: BF-PAY-203948, amount: 500000, currency: NGN, status: PROCESSING, provider: STRIPE, method: CARD, checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_a1b2", paidAt: null }
+ *       400:
+ *         description: "The price is above Stripe's limit (`This amount is above Stripe's limit for a single payment. Pay with Paystack instead.`), or the Idempotency-Key is over 255 characters."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       401: { $ref: '#/components/responses/PropertyRequestUnauthorized' }
+ *       403: { $ref: '#/components/responses/PropertyRequestSuspended' }
+ *       404:
+ *         description: "No purchase request with this ID belongs to the client (`Purchase request not found.`)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: "The payment isn't open yet, is already paid, the request is completed or cancelled, or the same Idempotency-Key is still being processed (same messages as the Paystack endpoint)."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500:
+ *         description: "Stripe or the database failed (`Unable to start the payment.`); the reason is in the server log."
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.post(
   "/property-requests/:id/payment/stripe",

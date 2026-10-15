@@ -51,7 +51,7 @@ export const updatePropertyRequestStatusHandler = async (
           ),
         );
       case "NOT_A_PURCHASE":
-        return next(new BadRequestError("Only purchase requests can be IN_PROGRESS."));
+        return next(new BadRequestError("Only purchase requests can be IN_PROGRESS or OWNERSHIP_TRANSFER."));
       default:
         res.status(HttpStatusCode.OK).json(toAdminRequestResponse(result.request));
     }
