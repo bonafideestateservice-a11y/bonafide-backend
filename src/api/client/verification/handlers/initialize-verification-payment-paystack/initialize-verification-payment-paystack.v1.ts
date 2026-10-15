@@ -18,6 +18,7 @@ import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import {
   createPaystackCustomer,
   createPaystackSession,
+  paystackPriceOf,
 } from "../../../../../libs/paystack/paystack";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
@@ -64,6 +65,7 @@ export const initializeVerificationPaymentPaystack = async (
       return next(new BadRequestError("Select a verification plan before payment."));
     }
     const verificationPlan = verificationRequest.verificationPlan;
+    const price = paystackPriceOf(verificationPlan);
 
     const planCode = verificationPlan.paystackPlanCode;
     if (verificationPlan.frequency !== VERIFICATION_FREQUENCY.ONE_TIME && !planCode) {
@@ -98,6 +100,8 @@ export const initializeVerificationPaymentPaystack = async (
               return tx.transaction.update({
                 where: { id: existingTransaction.id },
                 data: {
+                  amountInCents: price.amount,
+                  currency: price.currency,
                   status: PaymentStatus.PENDING,
                   providerRef: null,
                   authorizationUrl: null,
@@ -110,8 +114,8 @@ export const initializeVerificationPaymentPaystack = async (
             return tx.transaction.create({
               data: {
                 verificationRequestId,
-                amountInCents: verificationPlan.priceInCents,
-                currency: verificationPlan.currency,
+                amountInCents: price.amount,
+                currency: price.currency,
                 method: PaymentMethod.CARD,
                 status: PaymentStatus.PENDING,
               },
@@ -170,8 +174,8 @@ export const initializeVerificationPaymentPaystack = async (
       email: verificationRequest.user.email,
       customer: customerCode,
       plan: planCode || undefined,
-      amount: verificationPlan.priceInCents,
-      currency: verificationPlan.currency,
+      amount: price.amount,
+      currency: price.currency,
       paymentMethod: PaymentMethod.CARD,
       verificationRequestId,
       transactionId,
