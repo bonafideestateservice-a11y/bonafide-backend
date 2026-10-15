@@ -34,6 +34,7 @@ model User {
   notificationSettings  NotificationSettings?
   propertyInquiries     PropertyInquiry[]
   propertyFavorites     PropertyFavorite[]
+  propertyRequests      PropertyRequest[]
 
   @@index([role, createdAt])
   @@index([createdAt])
@@ -321,6 +322,7 @@ model Property {
   deletedAt     DateTime?
   inquiries     PropertyInquiry[]
   activityLogs  ActivityLog[]
+  requests      PropertyRequest[]
   favorites     PropertyFavorite[]
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
@@ -604,4 +606,110 @@ model PropertyFavorite {
 
   @@id([userId, propertyId])
   @@index([propertyId])
+}
+
+enum PropertyRequestType {
+  PURCHASE
+  CONSULTATION
+}
+
+// The purchase progress steps. Admins move a request through them; payments don't.
+enum PropertyRequestStatus {
+  SUBMITTED
+  CONSULTATION
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PropertyPaymentStatus {
+  READY
+  PROCESSING
+  SUCCESSFUL
+  FAILED
+}
+
+enum PropertyPaymentMethod {
+  CARD
+  BANK_TRANSFER
+}
+
+enum PaymentProvider {
+  PAYSTACK
+  STRIPE
+}
+
+// "Purchase Property" or "Request Consultation" on a listing. One open request per type,
+// property and client.
+model PropertyRequest {
+  id         String                @id @default(cuid())
+  // e.g. "BF-PUR-203948"; the payment reuses the number ("BF-PAY-203948").
+  reference  String                @unique
+  type       PropertyRequestType
+  status     PropertyRequestStatus @default(SUBMITTED)
+  propertyId String
+  property   Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  updates PropertyRequestUpdate[]
+  payment PropertyPayment?
+
+  @@index([userId])
+  @@index([propertyId])
+  @@index([status])
+}
+
+// "Purchase Updates": every status change and payment result, newest last.
+model PropertyRequestUpdate {
+  id        String                @id @default(cuid())
+  requestId String
+  request   PropertyRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  status    PropertyRequestStatus
+  note      String?
+  createdAt DateTime              @default(now())
+
+  @@index([requestId])
+}
+
+// The one payment for a purchase, created when the request moves to IN_PROGRESS for the
+// property's listed price. Retries and method changes reuse this row.
+model PropertyPayment {
+  id           String                 @id @default(cuid())
+  reference    String                 @unique
+  requestId    String                 @unique
+  request      PropertyRequest        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  // In kobo (or the currency's smallest unit). BigInt: listing prices overflow Int in kobo.
+  amountInKobo BigInt
+  currency     String                 @default("NGN")
+  status       PropertyPaymentStatus  @default(READY)
+  provider     PaymentProvider?
+  method       PropertyPaymentMethod?
+  // The latest checkout attempt's Paystack reference or Stripe session id.
+  providerRef  String?
+  checkoutUrl  String?
+  paidAt       DateTime?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@index([status])
+}
+
+// Replays the first response for a repeated Idempotency-Key, so a retried payment request
+// can't start a second checkout.
+model IdempotencyKey {
+  id         String   @id @default(cuid())
+  key        String
+  userId     String
+  // Method and path, e.g. "POST /api/v1/client/property-requests/abc/payment/paystack".
+  route      String
+  // Null while the first request is still running.
+  statusCode Int?
+  body       Json?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, route, key])
+  @@index([createdAt])
 }

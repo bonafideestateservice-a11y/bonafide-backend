@@ -33,3 +33,40 @@ export async function createStripeSession({
 
   return session.url;
 }
+
+/** Stripe's largest single charge: 99,999,999 in the currency's smallest unit. */
+export const STRIPE_MAX_AMOUNT = 99_999_999;
+
+/** A one-off Stripe Checkout for a fixed amount, e.g. a property payment. */
+export async function createStripeCheckout({
+  amount,
+  currency,
+  name,
+  metadata,
+}: {
+  amount: number;
+  currency: string;
+  name: string;
+  metadata: Record<string, string>;
+}) {
+  const clientUrl = process.env.CLIENT_URL;
+  if (!clientUrl) throw new Error("CLIENT_URL is required");
+
+  const session = await getStripeClient().checkout.sessions.create({
+    mode: "payment",
+    success_url: clientUrl,
+    cancel_url: clientUrl,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: currency.toLowerCase(),
+          unit_amount: amount,
+          product_data: { name },
+        },
+      },
+    ],
+    metadata,
+  });
+  return { id: session.id, url: session.url };
+}

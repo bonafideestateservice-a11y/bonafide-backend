@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { checkJwt } from "../../../middlewares/check-jwt";
+import { idempotent } from "../../../middlewares/idempotency";
 import { getVerificationReportSummary } from "./handlers/get-verification-report-summary";
 import { getVerificationRequests } from "./handlers/get-verification-requests";
 import { getVerificationTypes } from "./handlers/get-verification-types";
@@ -851,6 +852,7 @@ router.patch("/verification-requests/:id/plan", checkJwt, patchVerificationReque
  *         required: true
  *         description: Verification request id
  *         schema: { type: string }
+ *       - $ref: '#/components/parameters/IdempotencyKey'
  *     responses:
  *       200:
  *         description: Paystack checkout details (new or existing pending one; no envelope)
@@ -898,6 +900,7 @@ router.patch("/verification-requests/:id/plan", checkJwt, patchVerificationReque
 router.post(
   "/verification-requests/:id/payment/initialize-paystack",
   checkJwt,
+  idempotent,
   initializeVerificationPaymentPaystack,
 );
 
@@ -927,6 +930,7 @@ router.post(
  *         required: true
  *         description: Verification request id
  *         schema: { type: string }
+ *       - $ref: '#/components/parameters/IdempotencyKey'
  *     responses:
  *       200:
  *         description: Stripe Checkout URL (new or existing pending one; no envelope)
@@ -971,6 +975,7 @@ router.post(
 router.post(
   "/verification-requests/:id/payment/initialize-stripe",
   checkJwt,
+  idempotent,
   initializeVerificationPaymentStripe,
 );
 

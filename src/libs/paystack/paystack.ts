@@ -91,6 +91,23 @@ export async function createPaystackSession(params: CreateTransactionParams) {
   });
 }
 
+/**
+ * A one-off Paystack checkout (no plan, no customer record), e.g. a property payment.
+ * `channels` limits the checkout to card or bank transfer.
+ */
+export async function createPaystackCheckout(params: {
+  email: string;
+  amount: number;
+  currency: string;
+  channels: Array<"card" | "bank_transfer">;
+  metadata: Record<string, unknown>;
+}) {
+  return paystackRequest<PaystackTransactionSession>("POST", "/transaction/initialize", {
+    ...params,
+    callback_url: `${process.env.SERVER_URL}/account.html`,
+  });
+}
+
 export async function verifyPaystackTransaction(reference: string) {
   const data = await paystackRequest<{
     status: string;

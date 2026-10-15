@@ -1,4 +1,16 @@
-import { AgentStatus, Prisma, ROLE, VerificationStatus } from "@prisma/client";
+import {
+  AgentStatus,
+  Prisma,
+  PropertyRequestStatus,
+  PropertyRequestType,
+  ROLE,
+  VerificationStatus,
+} from "@prisma/client";
+import {
+  createPropertyRequest,
+  findPropertyRequest,
+  setPropertyRequestStatus,
+} from "../../api/services/database/property-request";
 import { generateToken } from "../../utils/jwt";
 import { prismaClient } from "../../utils/prisma";
 
@@ -90,6 +102,24 @@ export const createFixtures = (prefix: string) => {
     return property;
   };
 
+  /**
+   * A client's purchase (or consultation) of a new ₦85m property, moved to `status`. A purchase
+   * at IN_PROGRESS has its payment. Deleted with the property in cleanup().
+   */
+  const createPurchase = async (
+    userId: string,
+    status: PropertyRequestStatus = PropertyRequestStatus.IN_PROGRESS,
+    type: PropertyRequestType = PropertyRequestType.PURCHASE,
+  ) => {
+    const property = await createProperty({ priceAmount: BigInt(85000000) });
+    const created = await createPropertyRequest(userId, property.id, type);
+    if (!created) throw new Error("property not published");
+    if (status !== PropertyRequestStatus.SUBMITTED) {
+      await setPropertyRequestStatus(created.request.id, status, null);
+    }
+    return (await findPropertyRequest({ id: created.request.id }))!;
+  };
+
   const cleanup = async () => {
     const byRequest = { verificationRequestId: { in: requestIds } };
     await prismaClient.activityLog.deleteMany({ where: byRequest });
@@ -116,6 +146,7 @@ export const createFixtures = (prefix: string) => {
     giveOpenJobs,
     trackProperty,
     createProperty,
+    createPurchase,
     cleanup,
   };
 };

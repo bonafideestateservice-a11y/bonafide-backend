@@ -1,7 +1,11 @@
 import Stripe from "stripe";
-import { PaymentStatus, Prisma } from "@prisma/client";
+import { PaymentProvider, PaymentStatus, Prisma } from "@prisma/client";
 import { Request, Response } from "express";
 import { getStripeClient } from "../../libs/stripe";
+import {
+  markPropertyPaymentFailed,
+  markPropertyPaymentSuccessful,
+} from "../services/database/property-request";
 import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
 import { appEvents, AppEventTypes } from "../../events";
@@ -270,6 +274,35 @@ const recordRenewalPayment = async (invoice: Stripe.Invoice) => {
   return paidTransaction;
 };
 
+/**
+ * Property payment Checkout events (metadata kind "property_payment"). Returns true when the
+ * event was one, so the verification handling below is skipped.
+ */
+const handlePropertyPaymentEvent = async (event: Stripe.Event) => {
+  if (!event.type.startsWith("checkout.session.")) return false;
+  const session = event.data.object as Stripe.Checkout.Session;
+  const { kind, propertyPaymentId } = session.metadata ?? {};
+  if (kind !== "property_payment" || !propertyPaymentId) return false;
+
+  const paid =
+    (event.type === "checkout.session.completed" && session.payment_status === "paid") ||
+    event.type === "checkout.session.async_payment_succeeded";
+  const failed =
+    event.type === "checkout.session.expired" ||
+    event.type === "checkout.session.async_payment_failed";
+  if (paid) {
+    await markPropertyPaymentSuccessful(propertyPaymentId, {
+      provider: PaymentProvider.STRIPE,
+      providerRef: session.id,
+      amount: session.amount_total ?? 0,
+      currency: session.currency ?? "",
+    });
+  } else if (failed) {
+    await markPropertyPaymentFailed(propertyPaymentId, session.id);
+  }
+  return true;
+};
+
 export const stripeWebhook = async (req: Request, res: Response) => {
   const signature = req.headers["stripe-signature"];
   const providedSignature = Array.isArray(signature) ? signature[0] : signature;
@@ -306,6 +339,14 @@ export const stripeWebhook = async (req: Request, res: Response) => {
   });
 
   try {
+    if (await handlePropertyPaymentEvent(event)) {
+      await prismaClient.webhookEvent.update({
+        where: { eventId: event.id },
+        data: { processed: true },
+      });
+      return res.json({ received: true });
+    }
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;

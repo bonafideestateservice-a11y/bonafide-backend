@@ -1,6 +1,10 @@
 import { NextFunction, Request, Response } from "express";
 import crypto from "crypto";
-import { PaymentStatus, Prisma } from "@prisma/client";
+import { PaymentProvider, PaymentStatus, Prisma } from "@prisma/client";
+import {
+  markPropertyPaymentFailed,
+  markPropertyPaymentSuccessful,
+} from "../services/database/property-request";
 import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
 import { appEvents, AppEventTypes } from "../../events";
@@ -109,10 +113,37 @@ const verifySignature = (req: Request) => {
   return crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(providedSignature));
 };
 
+/** The property payment a charge is for, from the metadata set when its checkout started. */
+const propertyPaymentIdOf = (event: PaystackEvent) => {
+  let metadata = event.data?.metadata;
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch {
+      return undefined;
+    }
+  }
+  const { kind, propertyPaymentId } = (metadata ?? {}) as Record<string, unknown>;
+  return kind === "property_payment" && typeof propertyPaymentId === "string"
+    ? propertyPaymentId
+    : undefined;
+};
+
 const handleChargeSuccess = async (event: PaystackEvent) => {
   const reference = event.data?.reference;
   if (!reference) {
     logger.warn("Paystack charge.success did not include a reference");
+    return;
+  }
+
+  const propertyPaymentId = propertyPaymentIdOf(event);
+  if (propertyPaymentId) {
+    await markPropertyPaymentSuccessful(propertyPaymentId, {
+      provider: PaymentProvider.PAYSTACK,
+      providerRef: reference,
+      amount: Number(event.data?.amount ?? 0),
+      currency: String(event.data?.currency ?? "NGN"),
+    });
     return;
   }
 
@@ -189,6 +220,12 @@ const handleChargeSuccess = async (event: PaystackEvent) => {
 const handleChargeFailure = async (event: PaystackEvent) => {
   const reference = event.data?.reference;
   if (!reference) return;
+
+  const propertyPaymentId = propertyPaymentIdOf(event);
+  if (propertyPaymentId) {
+    await markPropertyPaymentFailed(propertyPaymentId, reference);
+    return;
+  }
 
   let transaction = await prismaClient.transaction.findFirst({
     where: { providerRef: reference },

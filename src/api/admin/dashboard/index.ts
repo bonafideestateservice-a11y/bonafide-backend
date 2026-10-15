@@ -21,6 +21,9 @@ import { updateUserStatusHandler } from "./handlers/update-user-status";
 import { getAgentHandler } from "./handlers/get-agent";
 import { assignPropertyAgentHandler } from "./handlers/assign-property-agent";
 import { unassignPropertyAgentHandler } from "./handlers/unassign-property-agent";
+import { getAdminPropertyRequestsHandler } from "./handlers/get-property-requests";
+import { getAdminPropertyRequestHandler } from "./handlers/get-property-request-detail";
+import { updatePropertyRequestStatusHandler } from "./handlers/update-property-request-status";
 import {
   getNotificationsHandler,
   markAllNotificationsReadHandler,
@@ -1448,5 +1451,118 @@ router.get("/agents/:id", checkJwt, checkIsAdmin, getAgentHandler);
  */
 router.post("/properties/:id/assign-agent", checkJwt, checkIsAdmin, assignPropertyAgentHandler);
 router.delete("/properties/:id/assign-agent", checkJwt, checkIsAdmin, unassignPropertyAgentHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/property-requests:
+ *   get:
+ *     tags: [Property Purchases]
+ *     summary: Every client's purchase and consultation requests
+ *     description: Newest first, with the client's contact details. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: query, name: type, schema: { type: string, enum: [PURCHASE, CONSULTATION] } }
+ *       - { in: query, name: status, schema: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED] } }
+ *       - { in: query, name: search, description: Reference, client name or email, or property title, schema: { type: string } }
+ *       - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+ *     responses:
+ *       200:
+ *         description: A page of requests.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data: { type: array, items: { $ref: '#/components/schemas/AdminPropertyRequest' } }
+ *                 meta: { type: object, properties: { page: { type: integer }, limit: { type: integer }, totalItems: { type: integer }, totalPages: { type: integer } } }
+ *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.get("/property-requests", checkJwt, checkIsAdmin, getAdminPropertyRequestsHandler);
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     AdminPropertyRequest:
+ *       allOf:
+ *         - $ref: '#/components/schemas/PropertyRequest'
+ *         - type: object
+ *           properties:
+ *             client:
+ *               type: object
+ *               properties:
+ *                 id: { type: string }
+ *                 name: { type: string, example: John Doe }
+ *                 email: { type: string }
+ *                 phone: { type: string, nullable: true }
+ * /api/{version}/admin/property-requests/{id}:
+ *   get:
+ *     tags: [Property Purchases]
+ *     summary: One purchase or consultation request
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: The request, content: { application/json: { schema: { $ref: '#/components/schemas/AdminPropertyRequest' } } } }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.get("/property-requests/:id", checkJwt, checkIsAdmin, getAdminPropertyRequestHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/property-requests/{id}/status:
+ *   patch:
+ *     tags: [Property Purchases]
+ *     summary: Move a request to its next step
+ *     description: >
+ *       Adds the change (and note) to the request's updates. A purchase moved to IN_PROGRESS
+ *       gets its one payment, for the property's listed price, which the client can then pay.
+ *       Consultations can't be IN_PROGRESS. COMPLETED and CANCELLED requests can't change.
+ *       Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status: { type: string, enum: [SUBMITTED, CONSULTATION, IN_PROGRESS, COMPLETED, CANCELLED] }
+ *               note: { type: string, maxLength: 1000, example: Consultation call held with the client. }
+ *     responses:
+ *       200: { description: The updated request, content: { application/json: { schema: { $ref: '#/components/schemas/AdminPropertyRequest' } } } }
+ *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       404: { $ref: '#/components/responses/AdminDashboardNotFound' }
+ *       409:
+ *         description: The request is already COMPLETED or CANCELLED.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.patch(
+  "/property-requests/:id/status",
+  checkJwt,
+  checkIsAdmin,
+  updatePropertyRequestStatusHandler,
+);
 
 export default router;
