@@ -310,6 +310,42 @@ describe("POST /api/v1/webhook/paystack", () => {
       expect(await requestStatus(requestId)).toBe(VerificationStatus.SUBMITTED);
     });
 
+    it("asks Paystack to retry a renewal that arrives before its subscription is stored", async () => {
+      const lateCustomer = `CUS_late_${suffix}`;
+      const lateRequestId = await createRequest(VerificationStatus.AWAITING_RENEWAL);
+      const reference = `ref-renew-early-${suffix}`;
+      const renewal = chargeSuccess(reference, { customer: { customer_code: lateCustomer } });
+
+      // No subscription yet: a 200 would drop the renewal for good.
+      expect((await send(renewal)).status).toBe(500);
+      expect(
+        await prismaClient.transaction.findUnique({ where: { providerRef: reference } }),
+      ).toBeNull();
+
+      await prismaClient.paystackSubscription.create({
+        data: {
+          userId,
+          verificationRequestId: lateRequestId,
+          verificationPlanId: planId,
+          customerCode: lateCustomer,
+          subscriptionCode: `SUB_late_${suffix}`,
+        },
+      });
+
+      // Paystack's retry now finds the subscription.
+      expect((await send(renewal)).status).toBe(200);
+      const recorded = await prismaClient.transaction.findUniqueOrThrow({
+        where: { providerRef: reference },
+      });
+      expect(recorded.verificationRequestId).toBe(lateRequestId);
+      expect(await requestStatus(lateRequestId)).toBe(VerificationStatus.SUBMITTED);
+    });
+
+    it("still ignores an unknown one-off charge (no plan) without asking for a retry", async () => {
+      const response = await send(chargeSuccess(`ref-unknown-${suffix}`, { plan: null }));
+      expect(response.status).toBe(200);
+    });
+
     it("matches a renewal without a subscription code to the subscription due closest", async () => {
       const otherRequestId = await createRequest(VerificationStatus.AWAITING_RENEWAL);
       await prismaClient.paystackSubscription.create({

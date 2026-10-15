@@ -125,6 +125,11 @@ const handleChargeSuccess = async (event: PaystackEvent) => {
     const subscription = await findSubscriptionForCharge(event);
 
     if (!subscription) {
+      if (getPlanCode(event)) {
+        // A subscription renewal whose subscription.create isn't stored yet (Paystack can send
+        // them out of order). Fail so Paystack retries; a 200 here would lose the renewal.
+        throw new Error(`No subscription stored yet for Paystack renewal reference=${reference}`);
+      }
       logger.warn(`Paystack transaction not found reference=${reference}`);
       return;
     }
