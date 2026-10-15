@@ -25,7 +25,7 @@ Severity:
 | 10  | High     | Uploading checklist photos without a status resets a completed item        |
 | 11  | High     | A report can be submitted for an assignment that was never started         |
 | 12  | High     | Clients see reports that haven't been reviewed                             |
-| 13  | Medium   | Bad input (malformed JSON, wrong upload field, non-string OTP) returns 500 |
+| 13  | Medium   | **Partly fixed 15 Oct 2026.** Bad input (malformed JSON, wrong upload field, non-string OTP) returns 500 |
 | 14  | Medium   | Uploads have no size or type limits, and run before ownership checks       |
 | 15  | Medium   | `viewedAt` is never set, so "unviewed reports" counts every report         |
 | 16  | Medium   | Several endpoints ignore construction and business addresses               |
@@ -142,6 +142,7 @@ Severity:
 - **Fix:**
   - map `SyntaxError` (with `type === "entity.parse.failed"`) and `MulterError` to 400 in the error handler
   - type-check `otp` and `email` before using them
+- **Status:** partly fixed 15 Oct 2026. Malformed JSON bodies now return 400 "Request body is not valid JSON." and multer errors return 400. A non-string `otp` or `email` still returns 500.
   - add a minimum length to reset-password, matching sign-up and change-password (8)
 
 ### 14. Uploads have no limits and run before checks

@@ -1,4 +1,5 @@
 import { config } from "../config";
+import { currentRequest } from "./request-context";
 
 type LogLevel = "debug" | "info" | "warn" | "error" | "http";
 
@@ -16,9 +17,11 @@ const log = (level: LogLevel, message: string, meta?: unknown) => {
   if (LEVELS[level] < threshold) return;
   const timestamp = new Date().toISOString();
   const rendered = meta === undefined ? message : `${message} ${JSON.stringify(meta)}`;
+  // Request lines already name the route; other lines get it as a prefix.
+  const route = level === "http" ? undefined : currentRequest();
   // eslint-disable-next-line no-console
   console[level === "http" || level === "debug" ? "log" : level](
-    `[${timestamp}] [${level.toUpperCase()}] ${rendered}`,
+    `[${timestamp}] [${level.toUpperCase()}]${route ? ` [${route}]` : ""} ${rendered}`,
   );
 };
 
