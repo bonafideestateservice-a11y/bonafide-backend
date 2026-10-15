@@ -13,12 +13,14 @@ dotenv.config({ path: "./src/.env" });
 /**
  * TEST MODE ONLY. The test Paystack account can't take USD, so this creates a naira copy of each
  * recurring plan (USD price × PAYSTACK_TEST_USD_TO_NGN_RATE) and saves its plan code. Live uses
- * USD plans from setup-paystack-plans.ts. Safe to re-run: existing naira plans are reused.
-*/
-
+ * USD plans from setup-paystack-plans.ts. Safe to re-run: existing test plans are reused.
+ *
+ * Monthly and quarterly test plans both renew every hour (Paystack's shortest interval), so
+ * renewals can be tested without waiting a month.
+ */
 const intervalByFrequency: Partial<Record<VERIFICATION_FREQUENCY, string>> = {
-  [VERIFICATION_FREQUENCY.MONTHLY]: "monthly",
-  [VERIFICATION_FREQUENCY.QUARTERLY]: "quarterly",
+  [VERIFICATION_FREQUENCY.MONTHLY]: "hourly",
+  [VERIFICATION_FREQUENCY.QUARTERLY]: "hourly",
 };
 
 async function listAllPaystackPlans() {
@@ -55,14 +57,15 @@ async function setupPaystackTestPlans() {
     }
 
     const price = paystackPriceOf(verificationPlan);
-    const marker = `verification_plan_id=${verificationPlan.id};currency=${price.currency}`;
+    // The interval is part of the marker, so changing it creates new plans rather than reusing old ones.
+    const marker = `verification_plan_id=${verificationPlan.id};currency=${price.currency};interval=${interval}`;
     let planCode = codeByDescription.get(marker);
     if (planCode) {
       logger.info(`Test plan ${planCode} already exists for ${label}`);
     } else {
       planCode = (
         await createPaystackPlan({
-          name: `[TEST ${price.currency}] ${verificationPlan.verificationType.name} - ${verificationPlan.name}`,
+          name: `[TEST ${price.currency} ${interval}] ${verificationPlan.verificationType.name} - ${verificationPlan.name}`,
           amount: price.amount,
           interval,
           currency: price.currency,
@@ -70,7 +73,7 @@ async function setupPaystackTestPlans() {
         })
       ).plan_code;
       logger.info(
-        `Created test plan ${planCode} for ${label}: ${price.currency} ${price.amount / 100}`,
+        `Created test plan ${planCode} for ${label}: ${price.currency} ${price.amount / 100} ${interval}`,
       );
     }
 

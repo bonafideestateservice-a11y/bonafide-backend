@@ -15,13 +15,13 @@ const threshold = LEVELS[(config.logLevel as LogLevel) || "info"];
 
 const log = (level: LogLevel, message: string, meta?: unknown) => {
   if (LEVELS[level] < threshold) return;
-  const timestamp = new Date().toISOString();
   const rendered = meta === undefined ? message : `${message} ${JSON.stringify(meta)}`;
   // Request lines already name the route; other lines get it as a prefix.
   const route = level === "http" ? undefined : currentRequest();
   // eslint-disable-next-line no-console
   console[level === "http" || level === "debug" ? "log" : level](
-    `[${timestamp}] [${level.toUpperCase()}]${route ? ` [${route}]` : ""} ${rendered}`,
+    // No timestamp: Render (and most log viewers) add their own.
+    `[${level.toUpperCase()}]${route ? ` [${route}]` : ""} ${rendered}`,
   );
 };
 

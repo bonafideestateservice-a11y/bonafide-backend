@@ -11,7 +11,7 @@ All paths start with `https://bonafide-backend-9mly.onrender.com/api/v1`. Send t
   - `PAYSTACK_SECRET_KEY` is the **test** key (`sk_test_…`), the same one as in `src/.env`.
   - `PAYSTACK_TEST_USD_TO_NGN_RATE=1600`.
 - **Paystack dashboard (test mode)** → Settings → API Keys & Webhooks: set the Test Webhook URL to `https://bonafide-backend-9mly.onrender.com/api/v1/webhook/paystack`.
-- **Paystack test plans:** already created with `npm run paystack:test-plans`. All 6 monthly and quarterly plans have a naira plan code.
+- **Paystack test plans:** already created with `npm run paystack:test-plans`. In test mode, the monthly and quarterly plans both **renew every hour** (Paystack's shortest interval), so a real renewal arrives an hour after paying. Live plans renew monthly and quarterly as normal.
 - **Logins:**
   - a client: any client account
   - an admin: your admin account
@@ -22,8 +22,22 @@ All paths start with `https://bonafide-backend-9mly.onrender.com/api/v1`. Send t
 The plans list shows US dollar prices. In test mode, checkout charges them in naira at ₦1,600 per dollar:
 
 - One-time: $45, charged as ₦72,000.
-- Monthly: $35, charged as ₦56,000 every month.
-- Quarterly: $35, charged as ₦56,000 every 3 months.
+- Monthly: $35, charged as ₦56,000 (every hour in test mode).
+- Quarterly: $35, charged as ₦56,000 (every hour in test mode).
+
+### Recurring plan IDs (for step 5)
+
+- Property verification:
+  - monthly: `cmu5gjper0006gxoj5zvffxnl`
+  - quarterly: `cmu5gjq910008gxoj8tmnnciu`
+- Construction progress:
+  - monthly: `cmu5gjtsm000egxojwyky4r81`
+  - quarterly: `cmu5gjuzy000ggxojzyduzre9`
+- Business verification:
+  - monthly: `cmu5gk293000mgxojb2gp0kk5`
+  - quarterly: `cmu5gk2ye000ogxojloe00kwd`
+
+Step 3 returns these IDs too.
 
 ### Paystack test card
 
@@ -110,7 +124,10 @@ Run the one-time steps with these differences:
 
 ### Test the renewal
 
-Paystack test mode can't skip ahead a month, so `scripts/simulate-paystack-event.ts` sends Paystack's renewal webhooks instead. Each one is signed with the test key, exactly as Paystack signs it. Run it from the project folder:
+There are two ways:
+
+- **Wait for the real one:** in test mode Paystack charges the test card again **an hour after** the first payment and sends `charge.success` to the webhook. This tests real Paystack renewals end to end, and keeps going every hour until the subscription is cancelled. To stop the charges, cancel the subscription in the Paystack dashboard (Subscriptions); Paystack then sends `subscription.disable` itself. The simulator's `cancel` event below only tells our server. It doesn't stop Paystack charging.
+- **Send one now:** `scripts/simulate-paystack-event.ts` sends the same webhooks immediately. Each one is signed with the test key, exactly as Paystack signs it. Run it from the project folder:
 
 ```
 npm run paystack:simulate -- <verificationRequestId> renewal
@@ -144,7 +161,7 @@ The simulator's details:
 
 ## 4. Quarterly plan
 
-The same as the monthly plan, with the `QUARTERLY` plan in step 3. Checkout shows ₦56,000, which is charged every 3 months. `renewal` stands in for the next quarter's charge.
+The same as the monthly plan, with the `QUARTERLY` plan in step 3. Checkout shows ₦56,000. In test mode it also renews every hour; live, it renews every 3 months.
 
 ## 5. Failed payment
 

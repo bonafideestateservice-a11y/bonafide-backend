@@ -33,7 +33,14 @@ async function paystackRequest<T>(
     ...(data ? { data } : {}),
     ...(params ? { params } : {}),
   };
-  const response = await axios.request<PaystackResponse<T>>(config);
+  const response = await axios.request<PaystackResponse<T>>(config).catch((error) => {
+    // Keep Paystack's own reason (e.g. "Invalid key") instead of Axios's "status code 401".
+    if (!axios.isAxiosError(error) || !error.response) throw error;
+    const reason = (error.response.data as { message?: string } | undefined)?.message;
+    throw new Error(
+      `Paystack ${method} ${path} failed (${error.response.status})${reason ? `: ${reason}` : ""}`,
+    );
+  });
 
   if (!response.data.status) {
     throw new Error(response.data.message || "Paystack request failed");
