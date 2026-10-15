@@ -162,10 +162,12 @@ enum PropertyStatus {
   REJECTED
 }
 
+// The Explore Properties chips: Houses, Apartments, Land, Commercial.
 enum PropertyType {
-  RESIDENTIAL
-  COMMERCIAL
+  HOUSE
+  APARTMENT
   LAND
+  COMMERCIAL
 }
 
 enum PaymentMethod {
@@ -294,7 +296,7 @@ model Property {
   number        Int                @unique @default(autoincrement())
   name          String
   address       String
-  propertyType  PropertyType       @default(RESIDENTIAL)
+  propertyType  PropertyType       @default(HOUSE)
   area          String?
   city          String?
   country       String?
@@ -578,6 +580,7 @@ enum PropertyAmenity {
   GYM
   AIR_CONDITIONING
   ELEVATOR
+  ROAD_ACCESS
 }
 
 model PropertyInquiry {

@@ -17,7 +17,7 @@ const create = createProperty as jest.Mock;
 const file = (name: string) => ({ mimetype: "image/png", buffer: Buffer.from(name) });
 const validBody = {
   title: " Ocean View Villa ",
-  propertyType: "RESIDENTIAL",
+  propertyType: "APARTMENT",
   priceAmount: "85,000,000",
   location: "Lekki Phase 1, Lagos",
 };
@@ -91,6 +91,16 @@ describe("createPropertyHandler (unit)", () => {
     });
   });
 
+  it.each(["HOUSE", "APARTMENT", "LAND", "COMMERCIAL"])("accepts the %s type", async (type) => {
+    await callHandler(createPropertyHandler, { body: { ...validBody, propertyType: type } });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ propertyType: type }));
+  });
+
+  it("accepts the road access amenity", async () => {
+    await callHandler(createPropertyHandler, { body: { ...validBody, amenities: "ROAD_ACCESS" } });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ amenities: ["ROAD_ACCESS"] }));
+  });
+
   it("saves a draft with a single amenity and no images", async () => {
     await callHandler(createPropertyHandler, { body: { ...validBody, amenities: "GARDEN" } });
     expect(create).toHaveBeenCalledWith(
@@ -107,6 +117,7 @@ describe("createPropertyHandler (unit)", () => {
   it.each([
     ["no title", { title: "" }],
     ["an unknown type", { propertyType: "CASTLE" }],
+    ["the old RESIDENTIAL type", { propertyType: "RESIDENTIAL" }],
     ["no price", { priceAmount: "" }],
     ["a negative bedroom count", { bedrooms: "-1" }],
     ["a fractional bedroom count", { bedrooms: "2.5" }],

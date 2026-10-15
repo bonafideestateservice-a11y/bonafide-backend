@@ -17,6 +17,11 @@ export interface GetPropertiesQuery {
   limit?: number;
   sortBy?: PropertySortBy;
   sortOrder?: PropertySortOrder;
+  /** Whole naira, inclusive. */
+  minPrice?: number;
+  maxPrice?: number;
+  area?: string;
+  city?: string;
 }
 
 export const propertySelect = {
@@ -78,6 +83,10 @@ export const getAllProperties = async ({
   limit = 12,
   sortBy = "createdAt",
   sortOrder = "desc",
+  minPrice,
+  maxPrice,
+  area,
+  city,
 }: GetPropertiesQuery = {}): Promise<PropertyListResult> => {
   const normalizedSearch = search.trim();
   const statusWhere: Prisma.PropertyWhereInput =
@@ -100,6 +109,16 @@ export const getAllProperties = async ({
     const baseWhere: Prisma.PropertyWhereInput = {
       deletedAt: null,
       ...(type ? { propertyType: type } : {}),
+      ...(minPrice !== undefined || maxPrice !== undefined
+        ? {
+            priceAmount: {
+              ...(minPrice !== undefined ? { gte: BigInt(minPrice) } : {}),
+              ...(maxPrice !== undefined ? { lte: BigInt(maxPrice) } : {}),
+            },
+          }
+        : {}),
+      ...(area ? { area: { equals: area, mode: "insensitive" as const } } : {}),
+      ...(city ? { city: { equals: city, mode: "insensitive" as const } } : {}),
       ...(matchingSearchIds ? { id: { in: matchingSearchIds.map(({ id }) => id) } } : {}),
     };
     const where: Prisma.PropertyWhereInput = { AND: [baseWhere, statusWhere] };

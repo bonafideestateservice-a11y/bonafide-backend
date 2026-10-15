@@ -26,7 +26,7 @@ const profile = (suspended: boolean, openJobs: number) => ({
       id: "p1",
       number: 1,
       name: "4 Bedroom Duplex",
-      propertyType: "RESIDENTIAL",
+      propertyType: "APARTMENT",
       area: "Lekki Phase 1",
       priceAmount: BigInt(85000000),
       viewCount: 1500,
@@ -62,7 +62,7 @@ describe("getAgentHandler (unit)", () => {
         expect.objectContaining({
           id: "p1",
           title: "4 Bedroom Duplex",
-          type: "RESIDENTIAL",
+          type: "APARTMENT",
           price: expect.objectContaining({ amount: 85000000 }),
           viewCount: 1500,
         }),

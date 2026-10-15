@@ -25,7 +25,7 @@ describe("getAllProperties handler (unit)", () => {
       id: "property-1",
       name: "4 Bedroom Duplex",
       address: "Lekki Phase 1, Lagos",
-      propertyType: "RESIDENTIAL",
+      propertyType: "APARTMENT",
       area: "Lekki Phase 1",
       city: "Lagos",
       country: "Nigeria",
@@ -53,7 +53,7 @@ describe("getAllProperties handler (unit)", () => {
     const { req, res, next } = buildMockReqRes({
       status: "published",
       search: "Lekki",
-      type: "RESIDENTIAL",
+      type: "APARTMENT",
       page: "1",
       limit: "12",
       sortBy: "price",
@@ -65,7 +65,7 @@ describe("getAllProperties handler (unit)", () => {
     expect(mockedGetAllProperties).toHaveBeenCalledWith({
       status: "published",
       search: "Lekki",
-      type: "RESIDENTIAL",
+      type: "APARTMENT",
       page: 1,
       limit: 12,
       sortBy: "price",
@@ -77,7 +77,7 @@ describe("getAllProperties handler (unit)", () => {
         {
           id: "property-1",
           title: "4 Bedroom Duplex",
-          type: "RESIDENTIAL",
+          type: "APARTMENT",
           address: "Lekki Phase 1, Lagos",
           location: { area: "Lekki Phase 1", city: "Lagos", country: "Nigeria" },
           price: { amount: 85000000, currency: "NGN" },

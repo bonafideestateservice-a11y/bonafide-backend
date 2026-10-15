@@ -11,7 +11,7 @@ import {
 import { logger } from "../../../../../utils/logger";
 
 const statuses: PropertyListStatus[] = ["all", "published", "unpublished"];
-const types: PropertyType[] = ["RESIDENTIAL", "COMMERCIAL", "LAND"];
+const types = Object.values(PropertyType);
 const sortFields: PropertySortBy[] = ["createdAt", "price"];
 const sortOrders: PropertySortOrder[] = ["asc", "desc"];
 
@@ -70,7 +70,7 @@ export const getAllPropertiesHandler = async (
       throw new BadRequestError("status must be all, published, or unpublished.");
     }
     if (type !== undefined && !types.includes(type as PropertyType)) {
-      throw new BadRequestError("type must be RESIDENTIAL, COMMERCIAL, or LAND.");
+      throw new BadRequestError("type must be HOUSE, APARTMENT, LAND or COMMERCIAL.");
     }
     if (!sortFields.includes(sortBy as PropertySortBy)) {
       throw new BadRequestError("sortBy must be createdAt or price.");

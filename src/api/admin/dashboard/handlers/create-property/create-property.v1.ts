@@ -85,7 +85,7 @@ export const parsePropertyForm = (body: Record<string, unknown>, partial: boolea
   }
   if (required("propertyType")) {
     if (!Object.values(PropertyType).includes(body.propertyType as PropertyType)) {
-      throw new BadRequestError("propertyType must be RESIDENTIAL, COMMERCIAL or LAND.");
+      throw new BadRequestError("propertyType must be HOUSE, APARTMENT, LAND or COMMERCIAL.");
     }
     data.propertyType = body.propertyType as PropertyType;
   }

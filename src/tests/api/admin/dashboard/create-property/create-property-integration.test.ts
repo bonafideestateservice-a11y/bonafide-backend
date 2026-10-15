@@ -29,7 +29,7 @@ describe("POST /api/v1/admin/properties", () => {
   it("saves and publishes a property with its details and photos", async () => {
     const response = await post()
       .field("title", `Ocean View Villa ${fx.tag}`)
-      .field("propertyType", "RESIDENTIAL")
+      .field("propertyType", "APARTMENT")
       .field("priceAmount", "3,500,000,000")
       .field("location", "Banana Island, Lagos")
       .field("bedrooms", "5")

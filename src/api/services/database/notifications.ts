@@ -309,7 +309,7 @@ export const deleteNotification = async (
   }
 };
 
-const inAppFor = (userId: string): Prisma.NotificationWhereInput => ({
+export const inAppFor = (userId: string): Prisma.NotificationWhereInput => ({
   userId,
   meta: { path: ["channel"], equals: "in_app" },
 });
@@ -339,7 +339,11 @@ export const getInAppNotifications = async (
       },
     }),
   ]);
-  return { data, unreadCount, meta: { page, limit, totalItems, totalPages: Math.ceil(totalItems / limit) } };
+  return {
+    data,
+    unreadCount,
+    meta: { page, limit, totalItems, totalPages: Math.ceil(totalItems / limit) },
+  };
 };
 
 /** Mark one (or, without an id, every) in-app notification of the user as read. */

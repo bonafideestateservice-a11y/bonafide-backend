@@ -34,3 +34,21 @@ export const addPropertyFavorite = (userId: string, propertyId: string) =>
 
 export const removePropertyFavorite = (userId: string, propertyId: string) =>
   prismaClient.propertyFavorite.deleteMany({ where: { userId, propertyId } });
+
+/** The Explore Properties location dropdown: each area and city with published properties. */
+export const getPropertyLocations = async () => {
+  const rows = await prismaClient.property.groupBy({
+    by: ["area", "city"],
+    where: {
+      isPublished: true,
+      deletedAt: null,
+      OR: [{ area: { not: null } }, { city: { not: null } }],
+    },
+    orderBy: [{ city: "asc" }, { area: "asc" }],
+  });
+  return rows.map(({ area, city }) => ({
+    area,
+    city,
+    label: [area, city].filter(Boolean).join(", "),
+  }));
+};

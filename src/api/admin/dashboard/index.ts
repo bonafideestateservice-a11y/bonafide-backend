@@ -12,6 +12,7 @@ import { updateAgentStatusHandler } from "./handlers/update-agent-status";
 import { createPropertyHandler, propertyImagesUpload } from "./handlers/create-property";
 import { getVerificationRequestHandler } from "./handlers/get-verification-request";
 import { getPropertyHandler } from "./handlers/get-property";
+import { getPropertyOptionsHandler } from "./handlers/get-property-options";
 import { updatePropertyHandler } from "./handlers/update-property";
 import { deletePropertyHandler } from "./handlers/delete-property";
 import { getUsersHandler } from "./handlers/get-users";
@@ -259,8 +260,8 @@ const router = Router();
  *         address: { type: string, description: The location as entered, example: "Lekki Phase 1, Lagos" }
  *         type:
  *           type: string
- *           enum: [RESIDENTIAL, COMMERCIAL, LAND]
- *           example: RESIDENTIAL
+ *           enum: [HOUSE, APARTMENT, LAND, COMMERCIAL]
+ *           example: APARTMENT
  *         location:
  *           type: object
  *           required: [area, city, country]
@@ -316,7 +317,7 @@ const router = Router();
  *           example: "2026-09-15T10:00:00.000Z"
  *     AdminDashboardAmenity:
  *       type: string
- *       enum: [SWIMMING_POOL, PARKING, SECURITY, GENERATOR, GARDEN, GYM, AIR_CONDITIONING, ELEVATOR]
+ *       enum: [SWIMMING_POOL, PARKING, SECURITY, GENERATOR, GARDEN, GYM, AIR_CONDITIONING, ELEVATOR, ROAD_ACCESS]
  *     AdminDashboardPropertyList:
  *       type: object
  *       required: [data, meta, counts]
@@ -567,7 +568,7 @@ router.get("/verification-requests", checkJwt, checkIsAdmin, getVerificationRequ
  *       - in: query
  *         name: type
  *         required: false
- *         schema: { type: string, enum: [RESIDENTIAL, COMMERCIAL, LAND] }
+ *         schema: { type: string, enum: [HOUSE, APARTMENT, LAND, COMMERCIAL] }
  *       - in: query
  *         name: page
  *         required: false
@@ -599,7 +600,7 @@ router.get("/verification-requests", checkJwt, checkIsAdmin, getVerificationRequ
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
- *             example: { status: error, message: "type must be RESIDENTIAL, COMMERCIAL, or LAND." }
+ *             example: { status: error, message: "type must be HOUSE, APARTMENT, LAND or COMMERCIAL." }
  *       401:
  *         description: No token, an invalid, expired or malformed token, or the token's user no longer exists.
  *         content:
@@ -998,7 +999,7 @@ router.patch("/agents/:id/status", checkJwt, checkIsAdmin, updateAgentStatusHand
  *             required: [title, propertyType, priceAmount, location]
  *             properties:
  *               title: { type: string, example: 4 Bedroom Duplex }
- *               propertyType: { type: string, enum: [RESIDENTIAL, COMMERCIAL, LAND] }
+ *               propertyType: { type: string, enum: [HOUSE, APARTMENT, LAND, COMMERCIAL] }
  *               priceAmount: { type: integer, description: Price in whole naira (commas allowed), example: 85000000 }
  *               location: { type: string, description: "Area, then city after the last comma", example: "Lekki Phase 1, Lagos" }
  *               description: { type: string }
@@ -1028,6 +1029,45 @@ router.patch("/agents/:id/status", checkJwt, checkIsAdmin, updateAgentStatusHand
  *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
  */
 router.post("/properties", checkJwt, checkIsAdmin, propertyImagesUpload, createPropertyHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/properties/options:
+ *   get:
+ *     tags: [Admin Dashboard]
+ *     summary: Property types and amenities for the Add/Edit Property form
+ *     description: Send `value` to POST and PATCH /admin/properties; show `label`. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *     responses:
+ *       200:
+ *         description: The choices.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 types:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       value: { type: string, enum: [HOUSE, APARTMENT, LAND, COMMERCIAL] }
+ *                       label: { type: string, example: Apartment }
+ *                 amenities:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       value: { $ref: '#/components/schemas/AdminDashboardAmenity' }
+ *                       label: { type: string, example: Road Access }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ */
+// Before /properties/:id, so "options" isn't read as a property id.
+router.get("/properties/options", checkJwt, checkIsAdmin, getPropertyOptionsHandler);
 
 /**
  * @swagger
@@ -1083,7 +1123,7 @@ router.post("/properties", checkJwt, checkIsAdmin, propertyImagesUpload, createP
  *             type: object
  *             properties:
  *               title: { type: string }
- *               propertyType: { type: string, enum: [RESIDENTIAL, COMMERCIAL, LAND] }
+ *               propertyType: { type: string, enum: [HOUSE, APARTMENT, LAND, COMMERCIAL] }
  *               priceAmount: { type: integer, description: Price in whole naira (commas allowed) }
  *               location: { type: string, example: "Lekki Phase 1, Lagos" }
  *               description: { type: string }
