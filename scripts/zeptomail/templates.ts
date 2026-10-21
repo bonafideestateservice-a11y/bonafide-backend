@@ -1,3 +1,4 @@
+import { EmailLayout, renderEmailHtml } from "../../src/libs/zeptomail/layout";
 import { EmailTemplate, EmailTemplateData } from "../../src/libs/zeptomail/templates";
 
 /**
@@ -5,59 +6,13 @@ import { EmailTemplate, EmailTemplateData } from "../../src/libs/zeptomail/templ
  * fields the backend sends (see src/libs/zeptomail/email-templates.md). `sample` is the data a
  * test send uses.
  */
-export interface TemplateDefinition<K extends EmailTemplate = EmailTemplate> {
+export interface TemplateDefinition<K extends EmailTemplate = EmailTemplate> extends EmailLayout {
   template: K;
   subject: string;
-  heading: string;
-  paragraphs: string[];
-  /** Label/value rows shown in a details box. */
-  details?: [string, string][];
   sample: EmailTemplateData[K];
 }
 
-const BRAND = "#0F3D3E";
-
-const row = ([label, value]: [string, string]) => `
-            <tr>
-              <td style="padding:6px 0;color:#6b7280;font-size:14px;width:40%;vertical-align:top">${label}</td>
-              <td style="padding:6px 0;color:#111827;font-size:14px;font-weight:600">${value}</td>
-            </tr>`;
-
-export const renderHtml = ({ heading, paragraphs, details }: TemplateDefinition) => `<!doctype html>
-<html>
-  <body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px;overflow:hidden">
-            <tr>
-              <td style="background:${BRAND};padding:20px 28px;color:#ffffff;font-size:20px;font-weight:700">Bonafide</td>
-            </tr>
-            <tr>
-              <td style="padding:28px">
-                <h1 style="margin:0 0 16px;font-size:20px;color:#111827">${heading}</h1>
-${paragraphs.map((p) => `                <p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#374151">${p}</p>`).join("\n")}${
-  details
-    ? `
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 18px;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">${details.map(row).join("")}
-                </table>`
-    : ""
-}
-                <p style="margin:18px 0 0;font-size:15px;color:#374151">The Bonafide team</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:16px 28px;background:#f9fafb;color:#9ca3af;font-size:12px;line-height:1.5">
-                You're receiving this email because you have a Bonafide account.
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
-`;
+export const renderHtml = (definition: TemplateDefinition) => renderEmailHtml(definition);
 
 const request = {
   verificationRequestId: "cmg4x2k1p0001qz8h3f7a9b2c",
@@ -401,14 +356,12 @@ export const templateDefinitions: TemplateDefinition[] = [
     heading: "Welcome to Bonafide",
     paragraphs: [
       "Hi {{firstName}},",
-      "An agent account has been created for you. To get started, set your password with the code below, then log in with {{email}}.",
+      "An agent account has been created for you. To get started, set your password with this code, then log in with {{email}}.",
       "The code expires in {{expiresIn}}. If it expires, use <strong>Forgot password</strong> on the login page to get a new one.",
-      'Log in here: <a href="{{loginUrl}}" style="color:#0F3D3E">{{loginUrl}}</a>',
     ],
-    details: [
-      ["Email", "{{email}}"],
-      ["Setup code", "{{setupCode}}"],
-    ],
+    code: "{{setupCode}}",
+    details: [["Login email", "{{email}}"]],
+    button: { label: "Log in to Bonafide", url: "{{loginUrl}}" },
     sample: {
       firstName: "Tunde Bello",
       email: "tunde@example.com",

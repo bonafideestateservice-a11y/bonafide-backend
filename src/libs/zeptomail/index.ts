@@ -12,8 +12,8 @@ if (!token) {
 const client = new SendMailClient({ url, token: token || "" });
 
 const defaultFrom = {
-  address: process.env.ZEPTO_FROM_EMAIL || "noreply@juyonna.com",
-  name: process.env.ZEPTO_FROM_NAME || "noreply",
+  address: process.env.ZEPTO_FROM_EMAIL || "noreply@bonafide.com.ng",
+  name: process.env.ZEPTO_FROM_NAME || "Bonafide",
 };
 
 export async function clientSendMailWithTemplate({
@@ -55,6 +55,33 @@ export async function clientSendMailWithTemplate({
       mail_template_key,
       error,
     });
+    throw error;
+  }
+}
+
+/** Sends an email with its own HTML instead of a template. */
+export async function clientSendMail({
+  email_address,
+  name,
+  subject,
+  htmlbody,
+}: {
+  email_address: string;
+  name?: string;
+  subject: string;
+  htmlbody: string;
+}) {
+  try {
+    const response = await client.sendMail({
+      from: defaultFrom,
+      to: [{ email_address: { address: email_address, name: name || email_address } }],
+      subject,
+      htmlbody,
+    });
+    logger.info("ZeptoMail sent successfully", { to: email_address, subject });
+    return response;
+  } catch (error) {
+    logger.error("ZeptoMail send error", { to: email_address, subject, error });
     throw error;
   }
 }

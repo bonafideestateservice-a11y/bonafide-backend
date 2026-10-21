@@ -3,11 +3,17 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 
+// Same env files as the app (src/config.ts).
+dotenv.config({ path: "./.env" });
 dotenv.config({ path: "./src/.env" });
 
 // Imported after dotenv so the ZeptoMail client sees the env.
-import { clientSendMailWithTemplate } from "../../src/libs/zeptomail";
-import { getEmailTemplateKey } from "../../src/libs/zeptomail/templates";
+import {
+  EmailContent,
+  EmailTemplate,
+  getEmailTemplateKey,
+} from "../../src/libs/zeptomail/templates";
+import { sendTemplateEmail } from "../../src/libs/zeptomail/zeptomail";
 import { renderHtml, templateDefinitions } from "./templates";
 
 /**
@@ -16,7 +22,7 @@ import { renderHtml, templateDefinitions } from "./templates";
  *   npm run zeptomail:templates -- --preview [dir]   write each template's HTML to dir (no API calls)
  *   npm run zeptomail:templates                      create every template that has no key yet
  *   npm run zeptomail:templates -- --only NAME       create one template
- *   npm run zeptomail:templates -- --send-test EMAIL send each template, with sample data, to EMAIL
+ *   npm run zeptomail:templates -- --send-test EMAIL send every email, with sample data, to EMAIL
  *
  * Creating needs ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET and ZOHO_REFRESH_TOKEN (a Self Client
  * token with the Zeptomail.MailTemplates.ALL scope) and ZEPTO_MAILAGENT_ALIAS. Sending tests
@@ -56,6 +62,10 @@ const preview = (dir: string) => {
   for (const definition of templateDefinitions) {
     fs.writeFileSync(path.join(dir, `${definition.template}.html`), renderHtml(definition));
   }
+  fs.writeFileSync(
+    path.join(dir, "subjects.txt"),
+    templateDefinitions.map((d) => `${d.template}\n  ${d.subject}\n`).join("\n"),
+  );
   console.log(`Wrote ${templateDefinitions.length} templates to ${path.resolve(dir)}`);
 };
 
@@ -100,22 +110,46 @@ const create = async (only?: string) => {
   }
 };
 
+/** Sample data for the emails sent as HTML, which have no template definition. */
+const htmlEmailSamples: EmailContent[] = [
+  {
+    template: EmailTemplate.USER_REGISTERED,
+    data: { firstName: "Ada Okafor", email: "ada@example.com" },
+  },
+  {
+    template: EmailTemplate.FORGOT_PASSWORD,
+    data: { firstName: "Ada Okafor", otp: "482913", resetLink: "482913", expiresIn: "10 minutes" },
+  },
+  {
+    template: EmailTemplate.PAYMENT_RECEIVED,
+    data: {
+      firstName: "Ada Okafor",
+      amount: "1,500.00",
+      currency: "NGN",
+      reference: "T482913650284",
+      payment_receipt: "T482913650284",
+      receipt_id: "cmg4x9q2r0003qz8hk1d7e4f5",
+      booking_ref: "cmg4x2k1p0001qz8h3f7a9b2c",
+      service_name: "Land Verification",
+    },
+  },
+];
+
 const sendTests = async (email: string) => {
-  for (const definition of templateDefinitions) {
-    const key = getEmailTemplateKey(definition.template);
-    if (!key) {
-      console.log(`- ${definition.template}: no key yet, skipped`);
-      continue;
-    }
+  const contents = [
+    ...htmlEmailSamples,
+    ...templateDefinitions.map(
+      (definition) => ({ template: definition.template, data: definition.sample }) as EmailContent,
+    ),
+  ];
+  for (const content of contents) {
     try {
-      await clientSendMailWithTemplate({
-        mail_template_key: key,
-        email_address: email,
-        merge_info: definition.sample as unknown as Record<string, string>,
-      });
-      console.log(`✓ ${definition.template}`);
+      await sendTemplateEmail({ to: { email, name: "Bonafide test" }, content });
+      console.log(`✓ ${content.template}`);
     } catch (error) {
-      console.error(`✗ ${definition.template}: ${JSON.stringify(error)}`);
+      console.error(
+        `✗ ${content.template}: ${error instanceof Error ? error.message : JSON.stringify(error)}`,
+      );
     }
   }
 };

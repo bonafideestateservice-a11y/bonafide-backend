@@ -32,45 +32,45 @@ Account
 Payment
 
 - [ ] `PAYMENT_RECEIVED`: already exists, **needs updating** (see its section)
-- [ ] `PAYMENT_RECEIVED_ADMIN`: new
+- [x] `PAYMENT_RECEIVED_ADMIN`: created, key in templates.ts
 
 Verification request submitted
 
-- [ ] `VERIFICATION_REQUEST_CREATED`: new
-- [ ] `VERIFICATION_REQUEST_CREATED_ADMIN`: new
+- [x] `VERIFICATION_REQUEST_CREATED`: created, key in templates.ts
+- [x] `VERIFICATION_REQUEST_CREATED_ADMIN`: created, key in templates.ts
 
 Agent assigned
 
-- [ ] `AGENT_ASSIGNED`: new
-- [ ] `AGENT_ASSIGNED_AGENT`: new
+- [x] `AGENT_ASSIGNED`: created, key in templates.ts
+- [x] `AGENT_ASSIGNED_AGENT`: created, key in templates.ts
 
 Inspection started
 
-- [ ] `INSPECTION_STARTED`: new
-- [ ] `INSPECTION_STARTED_ADMIN`: new
+- [x] `INSPECTION_STARTED`: created, key in templates.ts
+- [x] `INSPECTION_STARTED_ADMIN`: created, key in templates.ts
 
 Report uploaded
 
-- [ ] `REPORT_UPLOADED`: new
-- [ ] `REPORT_UPLOADED_ADMIN`: new
+- [x] `REPORT_UPLOADED`: created, key in templates.ts
+- [x] `REPORT_UPLOADED_ADMIN`: created, key in templates.ts
 
 Verification payment problems
 
-- [ ] `PAYMENT_FAILED`: new
-- [ ] `SUBSCRIPTION_ENDED`: new
+- [x] `PAYMENT_FAILED`: created, key in templates.ts
+- [x] `SUBSCRIPTION_ENDED`: created, key in templates.ts
 
 Property purchases and consultations
 
-- [ ] `PROPERTY_REQUEST_CREATED`: new
-- [ ] `PROPERTY_REQUEST_CREATED_ADMIN`: new
-- [ ] `PROPERTY_REQUEST_UPDATED`: new
-- [ ] `PROPERTY_PAYMENT_RECEIVED`: new
-- [ ] `PROPERTY_PAYMENT_RECEIVED_ADMIN`: new
-- [ ] `PROPERTY_PAYMENT_FAILED`: new
+- [x] `PROPERTY_REQUEST_CREATED`: created, key in templates.ts
+- [x] `PROPERTY_REQUEST_CREATED_ADMIN`: created, key in templates.ts
+- [x] `PROPERTY_REQUEST_UPDATED`: created, key in templates.ts
+- [x] `PROPERTY_PAYMENT_RECEIVED`: created, key in templates.ts
+- [x] `PROPERTY_PAYMENT_RECEIVED_ADMIN`: created, key in templates.ts
+- [x] `PROPERTY_PAYMENT_FAILED`: created, key in templates.ts
 
 Agents
 
-- [ ] `AGENT_WELCOME`: new
+- [x] `AGENT_WELCOME`: created, key in templates.ts
 
 "Already exists" means the backend has a key for it and uses that key unless you set the variable.
 

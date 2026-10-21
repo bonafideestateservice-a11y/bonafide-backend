@@ -1,4 +1,5 @@
-import { clientSendMailWithTemplate } from "./index";
+import { clientSendMail, clientSendMailWithTemplate } from "./index";
+import { renderHtmlEmail } from "./html-emails";
 import { EmailContent, getEmailTemplateKey } from "./templates";
 
 export class EmailTemplateNotConfiguredError extends Error {
@@ -14,6 +15,16 @@ export interface SendTemplateEmailParams {
 }
 
 export async function sendTemplateEmail({ to, content }: SendTemplateEmailParams) {
+  const html = renderHtmlEmail(content);
+  if (html) {
+    return clientSendMail({
+      email_address: to.email,
+      name: to.name,
+      subject: html.subject,
+      htmlbody: html.html,
+    });
+  }
+
   const templateKey = getEmailTemplateKey(content.template);
   if (!templateKey) {
     throw new EmailTemplateNotConfiguredError(content.template);

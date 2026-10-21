@@ -1,7 +1,8 @@
 /**
  * ZeptoMail templates, one per audience of each notification. Each template's
  * key is read from `ZEPTO_TEMPLATE_<TEMPLATE>` (e.g. ZEPTO_TEMPLATE_PAYMENT_RECEIVED_ADMIN),
- * falling back to the keys of templates that already exist in ZeptoMail.
+ * falling back to the keys below. USER_REGISTERED, FORGOT_PASSWORD and PAYMENT_RECEIVED are sent as
+ * HTML (html-emails.ts) and have no template.
  *
  * The data types below are the merge fields each template receives. Every value
  * is a string, and optional fields are sent as "" when the data is missing.
@@ -168,12 +169,42 @@ export type EmailContent = {
 }[EmailTemplate];
 
 const existingTemplateKeys: Partial<Record<EmailTemplate, string>> = {
-  [EmailTemplate.USER_REGISTERED]:
-    "2d6f.f2423e0ada5619d.k1.8ab2e850-00b4-11f1-b387-963d1902c9da.19c21a67b55",
-  [EmailTemplate.PAYMENT_RECEIVED]:
-    "2d6f.f2423e0ada5619d.k1.254eb990-0086-11f1-b387-963d1902c9da.19c20766ba9",
-  [EmailTemplate.FORGOT_PASSWORD]:
-    "2d6f.f2423e0ada5619d.k1.fee94bc1-01d5-11f1-b1c4-525400114fe6.19c290f7279",
+  [EmailTemplate.PAYMENT_RECEIVED_ADMIN]:
+    "2d6f.1dce9259dff2e5d0.k1.ca360e80-cd64-11f1-a620-5254009dfd0a.1a15f18bf68",
+  [EmailTemplate.VERIFICATION_REQUEST_CREATED]:
+    "2d6f.1dce9259dff2e5d0.k1.b9ad7cc2-cd6d-11f1-a620-5254009dfd0a.1a15f534e8a",
+  [EmailTemplate.VERIFICATION_REQUEST_CREATED_ADMIN]:
+    "2d6f.1dce9259dff2e5d0.k1.ce2d2330-cd6d-11f1-a620-5254009dfd0a.1a15f53d4e3",
+  [EmailTemplate.REPORT_UPLOADED]:
+    "2d6f.1dce9259dff2e5d0.k1.94f744e0-cd65-11f1-a620-5254009dfd0a.1a15f1df02e",
+  [EmailTemplate.REPORT_UPLOADED_ADMIN]:
+    "2d6f.1dce9259dff2e5d0.k1.6b0c17c0-cd6d-11f1-a620-5254009dfd0a.1a15f514b3c",
+  [EmailTemplate.AGENT_ASSIGNED]:
+    "2d6f.1dce9259dff2e5d0.k1.47e80e11-cd64-11f1-a620-5254009dfd0a.1a15f15696f",
+  [EmailTemplate.AGENT_ASSIGNED_AGENT]:
+    "2d6f.1dce9259dff2e5d0.k1.5c8611f1-cd64-11f1-a620-5254009dfd0a.1a15f15f08d",
+  [EmailTemplate.INSPECTION_STARTED]:
+    "2d6f.1dce9259dff2e5d0.k1.94409481-cd64-11f1-a620-5254009dfd0a.1a15f175dc3",
+  [EmailTemplate.INSPECTION_STARTED_ADMIN]:
+    "2d6f.1dce9259dff2e5d0.k1.a4c6c630-cd64-11f1-a620-5254009dfd0a.1a15f17ca13",
+  [EmailTemplate.PAYMENT_FAILED]:
+    "2d6f.1dce9259dff2e5d0.k1.b6726511-cd64-11f1-a620-5254009dfd0a.1a15f183ddf",
+  [EmailTemplate.SUBSCRIPTION_ENDED]:
+    "2d6f.1dce9259dff2e5d0.k1.7e10b6f0-cd6d-11f1-a620-5254009dfd0a.1a15f51c7df",
+  [EmailTemplate.PROPERTY_REQUEST_CREATED]:
+    "2d6f.1dce9259dff2e5d0.k1.54b19070-cd65-11f1-a620-5254009dfd0a.1a15f1c4af7",
+  [EmailTemplate.PROPERTY_REQUEST_CREATED_ADMIN]:
+    "2d6f.1dce9259dff2e5d0.k1.69806850-cd65-11f1-a620-5254009dfd0a.1a15f1cd355",
+  [EmailTemplate.PROPERTY_REQUEST_UPDATED]:
+    "2d6f.1dce9259dff2e5d0.k1.8181bb70-cd65-11f1-a620-5254009dfd0a.1a15f1d70a7",
+  [EmailTemplate.PROPERTY_PAYMENT_RECEIVED]:
+    "2d6f.1dce9259dff2e5d0.k1.143effa0-cd65-11f1-a620-5254009dfd0a.1a15f1aa49a",
+  [EmailTemplate.PROPERTY_PAYMENT_RECEIVED_ADMIN]:
+    "2d6f.1dce9259dff2e5d0.k1.3a8212b0-cd65-11f1-a620-5254009dfd0a.1a15f1b9f5b",
+  [EmailTemplate.PROPERTY_PAYMENT_FAILED]:
+    "2d6f.1dce9259dff2e5d0.k1.e0834901-cd64-11f1-a620-5254009dfd0a.1a15f19518c",
+  [EmailTemplate.AGENT_WELCOME]:
+    "2d6f.1dce9259dff2e5d0.k1.7c0bae41-cd64-11f1-a620-5254009dfd0a.1a15f16bf22",
 };
 
 export const getEmailTemplateKey = (template: EmailTemplate): string | undefined =>
