@@ -8,7 +8,7 @@ import {
 import { prismaClient } from "../src/utils/prisma";
 import { logger } from "../src/utils/logger";
 
-dotenv.config({ path: "./src/.env" });
+dotenv.config({ path: "./.env" });
 
 /**
  * TEST MODE ONLY. The test Paystack account can't take USD, so this creates a naira copy of each

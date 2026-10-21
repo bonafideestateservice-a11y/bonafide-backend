@@ -4,7 +4,7 @@ import { VERIFICATION_FREQUENCY } from "@prisma/client";
 import { prismaClient } from "../src/utils/prisma";
 import { logger } from "../src/utils/logger";
 
-dotenv.config({ path: "./src/.env" });
+dotenv.config({ path: "./.env" });
 
 let stripeClient: Stripe | null = null;
 

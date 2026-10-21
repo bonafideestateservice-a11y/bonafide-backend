@@ -64,12 +64,17 @@ export function paystackPriceOf(plan: { priceInCents: number; currency: string }
   return { amount: plan.priceInCents, currency: plan.currency };
 }
 
+/**
+ * After paying, Paystack sends the user back to the frontend (CLIENT_URL), like Stripe does.
+ * Without it, Paystack falls back to the callback URL set in its dashboard.
+ */
+const callbackUrl = () => (process.env.CLIENT_URL ? { callback_url: process.env.CLIENT_URL } : {});
+
 export async function createPaystackSession(params: CreateTransactionParams) {
   if (!params.email || !params.amount || !params.customer) {
     throw new Error("Please provide a valid customer email, amount to charge, and customer");
   }
 
-  const callback_url = `${process.env.SERVER_URL}/account.html`;
   const description = `Paystack transaction by user ${params.userId}`;
 
   const metadata: PaymentMetadata = {
@@ -85,7 +90,7 @@ export async function createPaystackSession(params: CreateTransactionParams) {
     amount: params.amount,
     ...(params.plan ? { plan: params.plan } : {}),
     channels: ["card"],
-    callback_url,
+    ...callbackUrl(),
     currency: params.currency,
     metadata,
   });
@@ -104,7 +109,7 @@ export async function createPaystackCheckout(params: {
 }) {
   return paystackRequest<PaystackTransactionSession>("POST", "/transaction/initialize", {
     ...params,
-    callback_url: `${process.env.SERVER_URL}/account.html`,
+    ...callbackUrl(),
   });
 }
 

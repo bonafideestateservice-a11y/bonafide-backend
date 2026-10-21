@@ -1,8 +1,9 @@
 import { SendMailClient } from "zeptomail";
 import { logger } from "../../utils/logger";
 
-// The client appends "v1.1/email/..." directly, so the host must end with "/".
-const url = (process.env.ZEPTO_URL || "api.zeptomail.com").replace(/\/?$/, "/");
+// The client appends "v1.1/email/..." to the host, so keep only the host (ending in "/"). A URL
+// with a path, e.g. "api.zeptomail.com/v1.1/email/template", would send every email there.
+const url = `${(process.env.ZEPTO_URL || "api.zeptomail.com").split("/v1.1")[0].replace(/\/+$/, "")}/`;
 const token = process.env.ZEPTO_TOKEN;
 
 if (!token) {

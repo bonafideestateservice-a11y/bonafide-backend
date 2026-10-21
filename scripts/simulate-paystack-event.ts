@@ -4,12 +4,12 @@ import { paystackPriceOf } from "../src/libs/paystack/paystack";
 import { prismaClient } from "../src/utils/prisma";
 import { logger } from "../src/utils/logger";
 
-dotenv.config({ path: "./src/.env" });
+dotenv.config({ path: "./.env" });
 
 /**
  * TEST MODE ONLY. Sends a signed Paystack webhook for a recurring request's subscription, so
  * renewals can be tested without waiting a month. The target server must use the same
- * PAYSTACK_SECRET_KEY (test key) as src/.env.
+ * PAYSTACK_SECRET_KEY (test key) as .env.
  *
  *   npm run paystack:simulate -- <verificationRequestId> renewal|renewal-failed|cancel [webhookUrl]
  */

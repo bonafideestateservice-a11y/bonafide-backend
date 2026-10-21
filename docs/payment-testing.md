@@ -8,7 +8,7 @@ All paths start with `https://bonafide-backend-9mly.onrender.com/api/v1`. Send t
 
 - **Render deployment:** it must include commit `46f3ab9` (naira test prices) or later.
 - **Render environment:**
-  - `PAYSTACK_SECRET_KEY` is the **test** key (`sk_test_…`), the same one as in `src/.env`.
+  - `PAYSTACK_SECRET_KEY` is the **test** key (`sk_test_…`), the same one as in `.env`.
   - `PAYSTACK_TEST_USD_TO_NGN_RATE=1600`.
 - **Paystack dashboard (test mode)** → Settings → API Keys & Webhooks: set the Test Webhook URL to `https://bonafide-backend-9mly.onrender.com/api/v1/webhook/paystack`.
 - **Paystack test plans:** already created with `npm run paystack:test-plans`. In test mode, the monthly and quarterly plans both **renew every hour** (Paystack's shortest interval), so a real renewal arrives an hour after paying. Live plans renew monthly and quarterly as normal.
@@ -174,6 +174,6 @@ The same as the monthly plan, with the `QUARTERLY` plan in step 3. Checkout show
 
 - **Checkout shows USD, or Paystack rejects the currency:** `PAYSTACK_TEST_USD_TO_NGN_RATE` isn't set on Render, or Render uses a live key.
 - **The status stays `PENDING_PAYMENT` after paying:** the webhook didn't arrive. Check the webhook URL in the Paystack dashboard, and look in Render's logs for `POST /api/v1/webhook/paystack -> 200`.
-- **The simulator gets `401`:** Render's `PAYSTACK_SECRET_KEY` isn't the same as the one in `src/.env`.
+- **The simulator gets `401`:** Render's `PAYSTACK_SECRET_KEY` isn't the same as the one in `.env`.
 - **Monthly or quarterly checkout fails with "plan not configured":** run `npm run paystack:test-plans` again.
 - **Reading the logs:** each warning and error line names the request it came from, e.g. `[WARN] [PATCH /api/v1/client/verification-requests/abc] 400 …`. The next line, `PATCH … -> 400 (…ms)`, shows the response.

@@ -4,7 +4,7 @@ import { createPaystackPlan, listPaystackPlans } from "../src/libs/paystack/pays
 import { prismaClient } from "../src/utils/prisma";
 import { logger } from "../src/utils/logger";
 
-dotenv.config({ path: "./src/.env" });
+dotenv.config({ path: "./.env" });
 
 const intervalByFrequency: Partial<Record<VERIFICATION_FREQUENCY, string>> = {
   [VERIFICATION_FREQUENCY.MONTHLY]: "monthly",

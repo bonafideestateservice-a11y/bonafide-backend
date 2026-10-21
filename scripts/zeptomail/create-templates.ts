@@ -3,9 +3,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 
-// Same env files as the app (src/config.ts).
 dotenv.config({ path: "./.env" });
-dotenv.config({ path: "./src/.env" });
 
 // Imported after dotenv so the ZeptoMail client sees the env.
 import {
@@ -38,7 +36,7 @@ const argValue = (flag: string) => {
 
 const required = (name: string) => {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is not set in src/.env`);
+  if (!value) throw new Error(`${name} is not set in .env`);
   return value;
 };
 

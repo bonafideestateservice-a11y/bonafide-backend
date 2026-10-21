@@ -26,12 +26,12 @@ Everything else still goes out.
 
 Account
 
-- [ ] `USER_REGISTERED`: already exists
-- [ ] `FORGOT_PASSWORD`: already exists
+- [x] `USER_REGISTERED`: sent as HTML, no template
+- [x] `FORGOT_PASSWORD`: sent as HTML, no template
 
 Payment
 
-- [ ] `PAYMENT_RECEIVED`: already exists, **needs updating** (see its section)
+- [x] `PAYMENT_RECEIVED`: sent as HTML, no template
 - [x] `PAYMENT_RECEIVED_ADMIN`: created, key in templates.ts
 
 Verification request submitted
@@ -72,7 +72,8 @@ Agents
 
 - [x] `AGENT_WELCOME`: created, key in templates.ts
 
-"Already exists" means the backend has a key for it and uses that key unless you set the variable.
+"Sent as HTML" means the backend builds the email itself (`html-emails.ts`, using the layout in
+`layout.ts`) and sends it without a ZeptoMail template. To change one, edit the code.
 
 ---
 
@@ -81,8 +82,8 @@ Agents
 ## USER_REGISTERED
 
 - **Sent to:** the user who just signed up (always sent)
-- **Variable:** `ZEPTO_TEMPLATE_USER_REGISTERED`
-- **Suggested subject:** Welcome to Bonafide, {{firstName}}
+- **Sent as HTML** from `src/libs/zeptomail/html-emails.ts`. There is no ZeptoMail template.
+- **Subject:** Welcome to Bonafide, {firstName}
 
 Fields:
 
@@ -92,15 +93,15 @@ Fields:
 ## FORGOT_PASSWORD
 
 - **Sent to:** the client or admin who asked to reset their password (always sent)
-- **Variable:** `ZEPTO_TEMPLATE_FORGOT_PASSWORD`
-- **Suggested subject:** Your password reset code
+- **Sent as HTML** from `src/libs/zeptomail/html-emails.ts`. There is no ZeptoMail template.
+- **Subject:** Your password reset code
 
 Fields:
 
 - `firstName`: user's name. _Ada Okafor_
 - `otp`: 6-digit reset code. _482913_
 - `expiresIn`: how long the code works. _10 minutes_
-- `resetLink`: same value as `otp`, kept for the old template. Use `otp` instead.
+- `resetLink`: same value as `otp`, not used in the email.
 
 ---
 
@@ -109,13 +110,8 @@ Fields:
 ## PAYMENT_RECEIVED
 
 - **Sent to:** the client who paid, once Paystack or Stripe confirms it
-- **Variable:** `ZEPTO_TEMPLATE_PAYMENT_RECEIVED`
-- **Suggested subject:** Payment received: {{currency}} {{amount}}
-
-> **Update the existing template:**
->
-> - Remove `service_time`, `trip_type`, `service_date` and `airport`. They are no longer sent and would show blank.
-> - `amount` is now formatted like `1,500.00` (it used to be the raw kobo/cents value, `150000`).
+- **Sent as HTML** from `src/libs/zeptomail/html-emails.ts`. There is no ZeptoMail template.
+- **Subject:** Payment received: {currency} {amount}
 
 Fields:
 

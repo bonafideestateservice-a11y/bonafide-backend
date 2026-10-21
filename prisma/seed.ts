@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import path from "path";
 
-dotenv.config({ path: path.resolve(__dirname, "../src/.env") });
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 import { ROLE, VERIFICATION_FREQUENCY } from "@prisma/client";
 import { prismaClient } from "../src/utils/prisma";
