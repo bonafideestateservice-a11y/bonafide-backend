@@ -1,5 +1,6 @@
 import request from "supertest";
 import app from "../../../../../app";
+import { appEvents } from "../../../../../events";
 import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";
 import { createFixtures } from "../../../../helpers/fixtures";
@@ -80,8 +81,30 @@ describe("PATCH /api/v1/admin/property-requests/:id/status", () => {
 
   it("sends the client an in-app notification for each status change", async () => {
     const purchase = await fx.createPurchase(clientId, "SUBMITTED");
+    const emit = jest.spyOn(appEvents, "emit");
     await setStatus(purchase.id, { status: "CONSULTATION", note: "We'll call you on Monday." });
     await setStatus(purchase.id, { status: "OWNERSHIP_TRANSFER" }); // skipping ahead is allowed
+
+    // Each change also queues the PROPERTY_REQUEST_UPDATED email.
+    expect(emit.mock.calls.filter(([type]) => type === "PROPERTY_REQUEST_UPDATED")).toEqual([
+      [
+        "PROPERTY_REQUEST_UPDATED",
+        {
+          propertyRequestId: purchase.id,
+          status: "CONSULTATION",
+          message: "We'll call you on Monday.",
+        },
+      ],
+      [
+        "PROPERTY_REQUEST_UPDATED",
+        {
+          propertyRequestId: purchase.id,
+          status: "OWNERSHIP_TRANSFER",
+          message: expect.stringMatching(/^Bonafide is handling the ownership transfer/),
+        },
+      ],
+    ]);
+    emit.mockRestore();
 
     const notifications = await prismaClient.notification.findMany({
       where: {

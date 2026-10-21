@@ -19,6 +19,15 @@ export enum EmailTemplate {
   AGENT_ASSIGNED_AGENT = "AGENT_ASSIGNED_AGENT",
   INSPECTION_STARTED = "INSPECTION_STARTED",
   INSPECTION_STARTED_ADMIN = "INSPECTION_STARTED_ADMIN",
+  PAYMENT_FAILED = "PAYMENT_FAILED",
+  SUBSCRIPTION_ENDED = "SUBSCRIPTION_ENDED",
+  PROPERTY_REQUEST_CREATED = "PROPERTY_REQUEST_CREATED",
+  PROPERTY_REQUEST_CREATED_ADMIN = "PROPERTY_REQUEST_CREATED_ADMIN",
+  PROPERTY_REQUEST_UPDATED = "PROPERTY_REQUEST_UPDATED",
+  PROPERTY_PAYMENT_RECEIVED = "PROPERTY_PAYMENT_RECEIVED",
+  PROPERTY_PAYMENT_RECEIVED_ADMIN = "PROPERTY_PAYMENT_RECEIVED_ADMIN",
+  PROPERTY_PAYMENT_FAILED = "PROPERTY_PAYMENT_FAILED",
+  AGENT_WELCOME = "AGENT_WELCOME",
 }
 
 /** Fields shared by every verification request email. */
@@ -50,6 +59,32 @@ export interface PaymentMergeInfo {
   receipt_id: string;
   booking_ref: string;
   service_name: string;
+}
+
+/** Fields shared by every property purchase or consultation email. */
+export interface PropertyRequestMergeInfo {
+  firstName: string;
+  /** "purchase" or "consultation". */
+  requestType: string;
+  /** e.g. "BF-PUR-203948". */
+  reference: string;
+  propertyName: string;
+  propertyAddress: string;
+}
+
+/** Fields shared by every property payment email. */
+export interface PropertyPaymentMergeInfo {
+  firstName: string;
+  propertyName: string;
+  /** The purchase reference, e.g. "BF-PUR-203948". */
+  reference: string;
+  /** e.g. "BF-PAY-203948". */
+  paymentReference: string;
+  /** Major units, e.g. "85,000,000.00". */
+  amount: string;
+  currency: string;
+  /** "Card" or "Bank transfer". */
+  method: string;
 }
 
 export interface EmailTemplateData {
@@ -86,6 +121,45 @@ export interface EmailTemplateData {
   };
   [EmailTemplate.INSPECTION_STARTED_ADMIN]: VerificationRequestMergeInfo &
     ClientMergeInfo & { assignmentId: string; agentName: string };
+  [EmailTemplate.PAYMENT_FAILED]: VerificationRequestMergeInfo & {
+    /** Major units of the payment that failed; "" if unknown. */
+    amount: string;
+    currency: string;
+    /** "first payment" or "renewal". */
+    paymentKind: string;
+  };
+  [EmailTemplate.SUBSCRIPTION_ENDED]: VerificationRequestMergeInfo & {
+    /** e.g. "Monthly Update". */
+    planName: string;
+  };
+  [EmailTemplate.PROPERTY_REQUEST_CREATED]: PropertyRequestMergeInfo & {
+    /** The listed price in major units, e.g. "85,000,000.00". */
+    price: string;
+    currency: string;
+    submittedAt: string;
+  };
+  [EmailTemplate.PROPERTY_REQUEST_CREATED_ADMIN]: PropertyRequestMergeInfo &
+    ClientMergeInfo & { price: string; currency: string; submittedAt: string };
+  [EmailTemplate.PROPERTY_REQUEST_UPDATED]: PropertyRequestMergeInfo & {
+    /** e.g. "OWNERSHIP_TRANSFER". */
+    status: string;
+    /** e.g. "Ownership transfer". */
+    statusLabel: string;
+    message: string;
+  };
+  [EmailTemplate.PROPERTY_PAYMENT_RECEIVED]: PropertyPaymentMergeInfo & { paidAt: string };
+  [EmailTemplate.PROPERTY_PAYMENT_RECEIVED_ADMIN]: PropertyPaymentMergeInfo &
+    Pick<ClientMergeInfo, "clientName" | "clientEmail"> & { paidAt: string };
+  [EmailTemplate.PROPERTY_PAYMENT_FAILED]: PropertyPaymentMergeInfo;
+  [EmailTemplate.AGENT_WELCOME]: {
+    firstName: string;
+    email: string;
+    /** One-time code to set a password at POST /admin/reset-password. */
+    setupCode: string;
+    expiresIn: string;
+    /** The admin/agent app's login page, from ADMIN_APP_URL; "" when not set. */
+    loginUrl: string;
+  };
 }
 
 /** A template paired with its merge data, safe to serialize into a queue job. */

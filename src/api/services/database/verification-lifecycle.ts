@@ -1,3 +1,4 @@
+import { appEvents, AppEventTypes } from "../../../events";
 import {
   PaymentStatus,
   PaystackSubscriptionStatus,
@@ -94,6 +95,18 @@ export const markRequestPaid = (db: Db, verificationRequestId: string) =>
   });
 
 /** A due payment failed. Requests already being worked on are left alone. */
+/**
+ * Emails the client when markRequestPaymentFailed has just moved the request to
+ * PAYMENT_FAILED. A count of 0 means it already was (or wasn't due), so nothing is sent twice.
+ */
+export const announcePaymentFailed = (result: { count: number }, verificationRequestId: string) => {
+  if (result.count > 0) appEvents.emit(AppEventTypes.PAYMENT_FAILED, { verificationRequestId });
+};
+
+/** Emails the client that their recurring plan was cancelled or ended. */
+export const announceSubscriptionEnded = (verificationRequestId: string) =>
+  appEvents.emit(AppEventTypes.SUBSCRIPTION_ENDED, { verificationRequestId });
+
 export const markRequestPaymentFailed = (db: Db, verificationRequestId: string) =>
   db.verificationRequest.updateMany({
     where: { id: verificationRequestId, status: { in: PAYMENT_DUE_STATUSES } },

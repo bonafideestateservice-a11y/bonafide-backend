@@ -11,6 +11,8 @@ import {
 } from "@prisma/client";
 import { prismaClient } from "../../../utils/prisma";
 import { logger } from "../../../utils/logger";
+import { appEvents, AppEventTypes } from "../../../events";
+import { getAdminNotificationRecipients } from "./notifications";
 
 const OPEN_STATUSES: PropertyRequestStatus[] = [
   PropertyRequestStatus.SUBMITTED,
@@ -30,7 +32,7 @@ const REFERENCE_PREFIX: Record<PropertyRequestType, string> = {
   CONSULTATION: "BF-CON",
 };
 
-const STATUS_LABELS: Record<PropertyRequestStatus, string> = {
+export const STATUS_LABELS: Record<PropertyRequestStatus, string> = {
   SUBMITTED: "Request submitted",
   CONSULTATION: "Consultation",
   IN_PROGRESS: "Purchase in progress",
@@ -192,6 +194,41 @@ export const toRequestResponse = (request: RequestRow) => {
   };
 };
 
+/**
+ * In-app notifications (Updates screen for clients, the bell for admins). Failures are logged,
+ * never thrown: the action being reported has already happened.
+ */
+const notifyInApp = async (
+  recipients: "admins" | string[],
+  notification: {
+    type: NotificationType;
+    title: string;
+    body: string;
+    meta: Record<string, string>;
+  },
+) => {
+  try {
+    const userIds =
+      recipients === "admins"
+        ? (await getAdminNotificationRecipients()).map((admin) => admin.id)
+        : recipients;
+    if (!userIds.length) return;
+    await prismaClient.notification.createMany({
+      data: userIds.map((userId) => ({
+        userId,
+        type: notification.type,
+        title: notification.title,
+        body: notification.body,
+        notificationStatus: "SENT" as const,
+        sentAt: new Date(),
+        meta: { channel: "in_app", ...notification.meta },
+      })),
+    });
+  } catch (error) {
+    logger.error(`Could not send ${notification.type} notifications: ${error}`);
+  }
+};
+
 const sixDigits = () => String(randomInt(100000, 1000000));
 
 /**
@@ -236,6 +273,23 @@ export const createPropertyRequest = async (
         select: requestSelect,
       });
       logger.info(`Property request created reference=${request.reference}`);
+      const purchase = type === PropertyRequestType.PURCHASE;
+      await notifyInApp("admins", {
+        type: NotificationType.PROPERTY_REQUEST_CREATED,
+        title: purchase ? "New purchase request" : "New consultation request",
+        body: purchase
+          ? `${request.user.fullName} wants to buy ${request.property.name}.`
+          : `${request.user.fullName} requested a consultation about ${request.property.name}.`,
+        meta: {
+          propertyRequestId: request.id,
+          reference: request.reference,
+          clientId: userId,
+          clientName: request.user.fullName,
+          propertyName: request.property.name,
+        },
+      });
+      // Emails: a confirmation to the client and a heads-up to admins.
+      appEvents.emit(AppEventTypes.PROPERTY_REQUEST_CREATED, { propertyRequestId: request.id });
       return { request, created: true };
     } catch (error) {
       const clash = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
@@ -324,28 +378,24 @@ export const setPropertyRequestStatus = async (
   });
   logger.info(`Property request ${updated.reference} moved to ${status}`);
 
-  // The client's Updates screen. A failed notification doesn't undo the status change.
-  await prismaClient.notification
-    .create({
-      data: {
-        userId: request.userId,
-        type: NotificationType.PROPERTY_REQUEST_UPDATED,
-        title: STATUS_LABELS[status],
-        body: note ?? defaultMessage(status, request.type, request.property.name),
-        notificationStatus: "SENT",
-        sentAt: new Date(),
-        meta: {
-          channel: "in_app",
-          propertyRequestId: id,
-          propertyName: request.property.name,
-          reference: request.reference,
-          status,
-        },
-      },
-    })
-    .catch((error) =>
-      logger.error(`Could not notify the client about ${request.reference}: ${error}`),
-    );
+  // The client's Updates screen, and the same update by email.
+  const message = note ?? defaultMessage(status, request.type, request.property.name);
+  appEvents.emit(AppEventTypes.PROPERTY_REQUEST_UPDATED, {
+    propertyRequestId: id,
+    status,
+    message,
+  });
+  await notifyInApp([request.userId], {
+    type: NotificationType.PROPERTY_REQUEST_UPDATED,
+    title: STATUS_LABELS[status],
+    body: message,
+    meta: {
+      propertyRequestId: id,
+      propertyName: request.property.name,
+      reference: request.reference,
+      status,
+    },
+  });
   return { kind: "UPDATED", request: updated };
 };
 
@@ -378,7 +428,18 @@ export const markPropertyPaymentSuccessful = async (
 ) => {
   const payment = await prismaClient.propertyPayment.findUnique({
     where: { id: paymentId },
-    include: { request: { select: { status: true } } },
+    include: {
+      request: {
+        select: {
+          id: true,
+          status: true,
+          reference: true,
+          userId: true,
+          user: { select: { fullName: true } },
+          property: { select: { name: true } },
+        },
+      },
+    },
   });
   if (!payment) {
     logger.warn(`Property payment not found paymentId=${paymentId}`);
@@ -425,13 +486,46 @@ export const markPropertyPaymentSuccessful = async (
     },
   });
   logger.info(`Property payment ${payment.reference} successful`);
+
+  const amount = naira(payment.amountInKobo, payment.currency);
+  const { request } = payment;
+  const meta = {
+    propertyRequestId: request.id,
+    reference: request.reference,
+    paymentReference: payment.reference,
+    propertyName: request.property.name,
+  };
+  await notifyInApp([request.userId], {
+    type: NotificationType.PROPERTY_PAYMENT_RECEIVED,
+    title: "Payment received",
+    body: `Your payment of ${amount} for ${request.property.name} was received. Your purchase remains in progress.`,
+    meta,
+  });
+  await notifyInApp("admins", {
+    type: NotificationType.PROPERTY_PAYMENT_RECEIVED,
+    title: "Property payment received",
+    body: `${request.user.fullName} paid ${amount} for ${request.property.name}.`,
+    meta: { ...meta, clientId: request.userId, clientName: request.user.fullName },
+  });
+  appEvents.emit(AppEventTypes.PROPERTY_PAYMENT_RECEIVED, { propertyPaymentId: payment.id });
 };
 
 /** A checkout attempt failed. Ignored once the payment has succeeded. */
 export const markPropertyPaymentFailed = async (paymentId: string, providerRef: string) => {
   const payment = await prismaClient.propertyPayment.findUnique({
     where: { id: paymentId },
-    include: { request: { select: { status: true } } },
+    include: {
+      request: {
+        select: {
+          id: true,
+          status: true,
+          reference: true,
+          userId: true,
+          user: { select: { fullName: true } },
+          property: { select: { name: true } },
+        },
+      },
+    },
   });
   if (!payment || payment.status === PropertyPaymentStatus.SUCCESSFUL) return;
   // An older attempt failing doesn't fail a newer one still open.
@@ -456,6 +550,19 @@ export const markPropertyPaymentFailed = async (paymentId: string, providerRef: 
     },
   });
   logger.info(`Property payment ${payment.reference} failed`);
+
+  await notifyInApp([payment.request.userId], {
+    type: NotificationType.PROPERTY_PAYMENT_FAILED,
+    title: "Payment not successful",
+    body: `Your payment of ${naira(payment.amountInKobo, payment.currency)} for ${payment.request.property.name} was not successful. You can retry or choose another payment method.`,
+    meta: {
+      propertyRequestId: payment.request.id,
+      reference: payment.request.reference,
+      paymentReference: payment.reference,
+      propertyName: payment.request.property.name,
+    },
+  });
+  appEvents.emit(AppEventTypes.PROPERTY_PAYMENT_FAILED, { propertyPaymentId: payment.id });
 };
 
 export type PayablePayment =

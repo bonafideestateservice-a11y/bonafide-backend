@@ -9,6 +9,13 @@ export enum AppEventTypes {
   REPORT_UPLOADED = "REPORT_UPLOADED",
   AGENT_ASSIGNED = "AGENT_ASSIGNED",
   INSPECTION_STARTED = "INSPECTION_STARTED",
+  PAYMENT_FAILED = "PAYMENT_FAILED",
+  SUBSCRIPTION_ENDED = "SUBSCRIPTION_ENDED",
+  PROPERTY_REQUEST_CREATED = "PROPERTY_REQUEST_CREATED",
+  PROPERTY_REQUEST_UPDATED = "PROPERTY_REQUEST_UPDATED",
+  PROPERTY_PAYMENT_RECEIVED = "PROPERTY_PAYMENT_RECEIVED",
+  PROPERTY_PAYMENT_FAILED = "PROPERTY_PAYMENT_FAILED",
+  AGENT_CREATED = "AGENT_CREATED",
 }
 
 export interface ForgotPasswordPayload {
@@ -60,6 +67,40 @@ export interface InspectionStartedPayload {
   agentId: string;
 }
 
+/** A verification request has just moved to PAYMENT_FAILED (first payment or renewal). */
+export interface PaymentFailedPayload {
+  verificationRequestId: string;
+}
+
+/** A recurring verification's subscription was cancelled or ended. */
+export interface SubscriptionEndedPayload {
+  verificationRequestId: string;
+}
+
+export interface PropertyRequestCreatedPayload {
+  propertyRequestId: string;
+}
+
+export interface PropertyRequestUpdatedPayload {
+  propertyRequestId: string;
+  status: string;
+  /** The card text shown to the client: the admin's note or the stage's standard message. */
+  message: string;
+}
+
+export interface PropertyPaymentPayload {
+  propertyPaymentId: string;
+}
+
+/** An admin created an agent; the welcome email carries a one-time password setup code. */
+export interface AgentCreatedPayload {
+  userId: string;
+  email: string;
+  fullName: string;
+  setupCode: string;
+  expiresIn: string;
+}
+
 export interface AppEventPayloads {
   [AppEventTypes.USER_REGISTERED]: UserRegisteredPayload;
   [AppEventTypes.PAYMENT_RECEIVED]: PaymentReceivedPayload;
@@ -68,6 +109,13 @@ export interface AppEventPayloads {
   [AppEventTypes.REPORT_UPLOADED]: ReportUploadedPayload;
   [AppEventTypes.AGENT_ASSIGNED]: AgentAssignedPayload;
   [AppEventTypes.INSPECTION_STARTED]: InspectionStartedPayload;
+  [AppEventTypes.PAYMENT_FAILED]: PaymentFailedPayload;
+  [AppEventTypes.SUBSCRIPTION_ENDED]: SubscriptionEndedPayload;
+  [AppEventTypes.PROPERTY_REQUEST_CREATED]: PropertyRequestCreatedPayload;
+  [AppEventTypes.PROPERTY_REQUEST_UPDATED]: PropertyRequestUpdatedPayload;
+  [AppEventTypes.PROPERTY_PAYMENT_RECEIVED]: PropertyPaymentPayload;
+  [AppEventTypes.PROPERTY_PAYMENT_FAILED]: PropertyPaymentPayload;
+  [AppEventTypes.AGENT_CREATED]: AgentCreatedPayload;
 }
 
 export type PayloadEventType = keyof AppEventPayloads;

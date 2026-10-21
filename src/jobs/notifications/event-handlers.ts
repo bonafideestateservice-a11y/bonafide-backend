@@ -3,13 +3,18 @@ import { AppEventPayloads, AppEventTypes, PayloadEventType } from "../../events"
 import {
   getAdminNotificationRecipients,
   getNotificationRecipient,
+  getPropertyPaymentNotificationContext,
+  getPropertyRequestNotificationContext,
   getVerificationRequestNotificationContext,
+  PropertyRequestNotificationContext,
   VerificationRequestNotificationContext,
 } from "../../api/services/database/notifications";
+import { STATUS_LABELS } from "../../api/services/database/property-request";
 import {
   ClientMergeInfo,
   EmailContent,
   EmailTemplate,
+  PropertyRequestMergeInfo,
   VerificationRequestMergeInfo,
 } from "../../libs/zeptomail/templates";
 import { formatDate } from "../../utils/date";
@@ -33,6 +38,18 @@ const emailAndInApp = (
 ): NotificationDelivery[] => [
   { channel: "email", recipient: toRecipient(recipient), notification, email },
   { channel: "in_app", recipient: toRecipient(recipient), notification },
+];
+
+/**
+ * A tracked email with no in-app copy: used where the in-app notification is created by the
+ * action itself (property requests and payments). It still respects the email setting.
+ */
+const emailOnly = (
+  recipient: DeliveryRecipient,
+  notification: NotificationRecord,
+  email: EmailContent,
+): NotificationDelivery[] => [
+  { channel: "email", recipient: toRecipient(recipient), notification, email },
 ];
 
 /** Payment amounts are stored in minor units (kobo/cents). */
@@ -388,6 +405,265 @@ const handleInspectionStarted: EventHandler<AppEventTypes.INSPECTION_STARTED> = 
   ];
 };
 
+const handlePaymentFailed: EventHandler<AppEventTypes.PAYMENT_FAILED> = async (payload) => {
+  const context = await loadContext(AppEventTypes.PAYMENT_FAILED, payload.verificationRequestId);
+  if (!context) return [];
+
+  const failed = context.transactions.find((transaction) => transaction.status === "FAILED");
+  const renewal = context.transactions.some((transaction) => transaction.status === "SUCCESS");
+  const merge = requestMergeInfo(context, context.user);
+  const subject = merge.requestName || `${context.verificationType.name} verification`;
+
+  return emailAndInApp(
+    context.user,
+    {
+      ...requestRecord(context, NotificationType.PAYMENT_FAILED),
+      title: "Payment not successful",
+      body: renewal
+        ? `The renewal payment for ${subject} didn't go through. Update your card to keep it active.`
+        : `Your payment for ${subject} didn't go through. You can try again.`,
+    },
+    {
+      template: EmailTemplate.PAYMENT_FAILED,
+      data: {
+        ...merge,
+        amount: failed ? formatAmount(failed.amountInCents) : "",
+        currency: failed?.currency ?? "",
+        paymentKind: renewal ? "renewal" : "first payment",
+      },
+    },
+  );
+};
+
+const handleSubscriptionEnded: EventHandler<AppEventTypes.SUBSCRIPTION_ENDED> = async (payload) => {
+  const context = await loadContext(
+    AppEventTypes.SUBSCRIPTION_ENDED,
+    payload.verificationRequestId,
+  );
+  if (!context) return [];
+
+  const planName = context.verificationPlan?.name ?? "";
+  const merge = requestMergeInfo(context, context.user);
+  const subject = merge.requestName || `${context.verificationType.name} verification`;
+
+  return emailAndInApp(
+    context.user,
+    {
+      ...requestRecord(context, NotificationType.SUBSCRIPTION_ENDED),
+      title: "Subscription ended",
+      body: `Your ${planName || "recurring"} plan for ${subject} has ended. No more renewals will be charged.`,
+    },
+    { template: EmailTemplate.SUBSCRIPTION_ENDED, data: { ...merge, planName } },
+  );
+};
+
+const propertyMergeInfo = (
+  context: PropertyRequestNotificationContext,
+  recipient: DeliveryRecipient,
+): PropertyRequestMergeInfo => ({
+  firstName: recipient.fullName,
+  requestType: context.type.toLowerCase(),
+  reference: context.reference,
+  propertyName: context.property.name,
+  propertyAddress: context.property.address ?? "",
+});
+
+const propertyRecord = (
+  context: PropertyRequestNotificationContext,
+  type: NotificationType,
+  title: string,
+  body: string,
+): NotificationRecord => ({
+  type,
+  title,
+  body,
+  meta: { propertyRequestId: context.id, reference: context.reference },
+});
+
+const handlePropertyRequestCreated: EventHandler<AppEventTypes.PROPERTY_REQUEST_CREATED> = async (
+  payload,
+) => {
+  const context = await getPropertyRequestNotificationContext(payload.propertyRequestId);
+  if (!context) return [];
+
+  const admins = await getAdminNotificationRecipients([context.user.id]);
+  const what = context.type === "PURCHASE" ? "purchase" : "consultation";
+  const listing = {
+    price: formatAmount(Number(context.property.priceAmount) * 100),
+    currency: context.property.priceCurrency,
+    submittedAt: formatDate(context.createdAt),
+  };
+  const client = {
+    clientName: context.user.fullName,
+    clientEmail: context.user.email,
+    clientPhone: context.user.phone ?? "",
+  };
+
+  return [
+    ...emailOnly(
+      context.user,
+      propertyRecord(
+        context,
+        NotificationType.PROPERTY_REQUEST_CREATED,
+        `We've received your ${what} request`,
+        `Your ${what} request for ${context.property.name} was received.`,
+      ),
+      {
+        template: EmailTemplate.PROPERTY_REQUEST_CREATED,
+        data: { ...propertyMergeInfo(context, context.user), ...listing },
+      },
+    ),
+    ...admins.flatMap((admin) =>
+      emailOnly(
+        admin,
+        propertyRecord(
+          context,
+          NotificationType.PROPERTY_REQUEST_CREATED,
+          `New ${what} request`,
+          `${context.user.fullName} made a ${what} request for ${context.property.name}.`,
+        ),
+        {
+          template: EmailTemplate.PROPERTY_REQUEST_CREATED_ADMIN,
+          data: { ...propertyMergeInfo(context, admin), ...client, ...listing },
+        },
+      ),
+    ),
+  ];
+};
+
+const handlePropertyRequestUpdated: EventHandler<AppEventTypes.PROPERTY_REQUEST_UPDATED> = async (
+  payload,
+) => {
+  const context = await getPropertyRequestNotificationContext(payload.propertyRequestId);
+  if (!context) return [];
+
+  const statusLabel = STATUS_LABELS[payload.status as keyof typeof STATUS_LABELS] ?? payload.status;
+  return emailOnly(
+    context.user,
+    propertyRecord(
+      context,
+      NotificationType.PROPERTY_REQUEST_UPDATED,
+      statusLabel,
+      payload.message,
+    ),
+    {
+      template: EmailTemplate.PROPERTY_REQUEST_UPDATED,
+      data: {
+        ...propertyMergeInfo(context, context.user),
+        status: payload.status,
+        statusLabel,
+        message: payload.message,
+      },
+    },
+  );
+};
+
+const METHOD_LABELS: Record<string, string> = { CARD: "Card", BANK_TRANSFER: "Bank transfer" };
+
+const loadPropertyPayment = async (propertyPaymentId: string) => {
+  const payment = await getPropertyPaymentNotificationContext(propertyPaymentId);
+  if (!payment) return null;
+  const { request } = payment;
+  return {
+    payment,
+    request,
+    merge: (recipient: DeliveryRecipient) => ({
+      firstName: recipient.fullName,
+      propertyName: request.property.name,
+      reference: request.reference,
+      paymentReference: payment.reference,
+      amount: formatAmount(Number(payment.amountInKobo)),
+      currency: payment.currency,
+      method: payment.method ? (METHOD_LABELS[payment.method] ?? payment.method) : "",
+    }),
+  };
+};
+
+const handlePropertyPaymentReceived: EventHandler<AppEventTypes.PROPERTY_PAYMENT_RECEIVED> = async (
+  payload,
+) => {
+  const loaded = await loadPropertyPayment(payload.propertyPaymentId);
+  if (!loaded) return [];
+  const { payment, request, merge } = loaded;
+
+  const admins = await getAdminNotificationRecipients([request.user.id]);
+  const paidAt = payment.paidAt ? formatDate(payment.paidAt) : "";
+  const amount = `${payment.currency} ${formatAmount(Number(payment.amountInKobo))}`;
+
+  return [
+    ...emailOnly(
+      request.user,
+      propertyRecord(
+        request,
+        NotificationType.PROPERTY_PAYMENT_RECEIVED,
+        "Payment received",
+        `Your payment of ${amount} for ${request.property.name} was received.`,
+      ),
+      {
+        template: EmailTemplate.PROPERTY_PAYMENT_RECEIVED,
+        data: { ...merge(request.user), paidAt },
+      },
+    ),
+    ...admins.flatMap((admin) =>
+      emailOnly(
+        admin,
+        propertyRecord(
+          request,
+          NotificationType.PROPERTY_PAYMENT_RECEIVED,
+          "Property payment received",
+          `${request.user.fullName} paid ${amount} for ${request.property.name}.`,
+        ),
+        {
+          template: EmailTemplate.PROPERTY_PAYMENT_RECEIVED_ADMIN,
+          data: {
+            ...merge(admin),
+            paidAt,
+            clientName: request.user.fullName,
+            clientEmail: request.user.email,
+          },
+        },
+      ),
+    ),
+  ];
+};
+
+const handlePropertyPaymentFailed: EventHandler<AppEventTypes.PROPERTY_PAYMENT_FAILED> = async (
+  payload,
+) => {
+  const loaded = await loadPropertyPayment(payload.propertyPaymentId);
+  if (!loaded) return [];
+  const { request, merge } = loaded;
+
+  return emailOnly(
+    request.user,
+    propertyRecord(
+      request,
+      NotificationType.PROPERTY_PAYMENT_FAILED,
+      "Payment not successful",
+      `Your payment for ${request.property.name} was not successful.`,
+    ),
+    { template: EmailTemplate.PROPERTY_PAYMENT_FAILED, data: merge(request.user) },
+  );
+};
+
+/** The new agent's welcome email with a one-time code to set a password. Always sent. */
+const handleAgentCreated: EventHandler<AppEventTypes.AGENT_CREATED> = async (payload) => [
+  {
+    channel: "email",
+    recipient: { id: payload.userId, email: payload.email, fullName: payload.fullName },
+    email: {
+      template: EmailTemplate.AGENT_WELCOME,
+      data: {
+        firstName: payload.fullName,
+        email: payload.email,
+        setupCode: payload.setupCode,
+        expiresIn: payload.expiresIn,
+        loginUrl: process.env.ADMIN_APP_URL ?? "",
+      },
+    },
+  },
+];
+
 export const notificationEventHandlers: { [K in PayloadEventType]: EventHandler<K> } = {
   [AppEventTypes.USER_REGISTERED]: handleUserRegistered,
   [AppEventTypes.FORGOT_PASSWORD]: handleForgotPassword,
@@ -396,4 +672,11 @@ export const notificationEventHandlers: { [K in PayloadEventType]: EventHandler<
   [AppEventTypes.REPORT_UPLOADED]: handleReportUploaded,
   [AppEventTypes.AGENT_ASSIGNED]: handleAgentAssigned,
   [AppEventTypes.INSPECTION_STARTED]: handleInspectionStarted,
+  [AppEventTypes.PAYMENT_FAILED]: handlePaymentFailed,
+  [AppEventTypes.SUBSCRIPTION_ENDED]: handleSubscriptionEnded,
+  [AppEventTypes.PROPERTY_REQUEST_CREATED]: handlePropertyRequestCreated,
+  [AppEventTypes.PROPERTY_REQUEST_UPDATED]: handlePropertyRequestUpdated,
+  [AppEventTypes.PROPERTY_PAYMENT_RECEIVED]: handlePropertyPaymentReceived,
+  [AppEventTypes.PROPERTY_PAYMENT_FAILED]: handlePropertyPaymentFailed,
+  [AppEventTypes.AGENT_CREATED]: handleAgentCreated,
 };

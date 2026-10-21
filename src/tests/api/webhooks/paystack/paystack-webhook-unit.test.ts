@@ -16,6 +16,8 @@ const lifecycle = {
   markRequestPaid: jest.fn(),
   markRequestPaymentFailed: jest.fn(),
   completeRequestIfFinished: jest.fn(),
+  announcePaymentFailed: jest.fn(),
+  announceSubscriptionEnded: jest.fn(),
 };
 
 jest.mock("../../../../utils/prisma", () => ({ prismaClient: prismaMock }));
@@ -186,11 +188,12 @@ describe("paystackWebhook (unit)", () => {
     });
   });
 
-  it("charge.failed marks the due payment failed", async () => {
+  it("charge.failed marks the due payment failed and announces it", async () => {
     prismaMock.transaction.findFirst.mockResolvedValue({
       id: "txn-1",
       verificationRequestId: "vr-1",
     });
+    lifecycle.markRequestPaymentFailed.mockResolvedValue({ count: 1 });
 
     await run({ event: "charge.failed", data: { reference: "ref-1" } });
 
@@ -199,6 +202,7 @@ describe("paystackWebhook (unit)", () => {
       data: { status: "FAILED" },
     });
     expect(lifecycle.markRequestPaymentFailed).toHaveBeenCalledWith(tx, "vr-1");
+    expect(lifecycle.announcePaymentFailed).toHaveBeenCalledWith({ count: 1 }, "vr-1");
   });
 
   describe("subscription.create", () => {
@@ -252,6 +256,7 @@ describe("paystackWebhook (unit)", () => {
     beforeEach(() => {
       prismaMock.paystackSubscription.findUnique.mockResolvedValue({
         verificationRequestId: "vr-1",
+        status: "ACTIVE",
       });
     });
 
@@ -262,8 +267,21 @@ describe("paystackWebhook (unit)", () => {
 
         expect(lifecycle.completeRequestIfFinished).toHaveBeenCalledWith(prismaMock, "vr-1");
         expect(lifecycle.markRequestPaymentFailed).not.toHaveBeenCalled();
+        expect(lifecycle.announceSubscriptionEnded).toHaveBeenCalledWith("vr-1");
       },
     );
+
+    it("subscription.disable after not_renew doesn't announce the end twice", async () => {
+      prismaMock.paystackSubscription.findUnique.mockResolvedValue({
+        verificationRequestId: "vr-1",
+        status: "NON_RENEWING",
+      });
+
+      await run({ event: "subscription.disable", data: { subscription_code: "SUB_1" } });
+
+      expect(lifecycle.completeRequestIfFinished).toHaveBeenCalled();
+      expect(lifecycle.announceSubscriptionEnded).not.toHaveBeenCalled();
+    });
 
     it("invoice.payment_failed marks the due payment failed", async () => {
       await run({
@@ -276,6 +294,7 @@ describe("paystackWebhook (unit)", () => {
         data: { status: "PAYMENT_FAILED" },
       });
       expect(lifecycle.markRequestPaymentFailed).toHaveBeenCalledWith(prismaMock, "vr-1");
+      expect(lifecycle.announcePaymentFailed).toHaveBeenCalled();
       expect(lifecycle.completeRequestIfFinished).not.toHaveBeenCalled();
     });
   });

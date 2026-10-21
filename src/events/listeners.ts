@@ -15,6 +15,13 @@ const notificationEvents: PayloadEventType[] = [
   AppEventTypes.REPORT_UPLOADED,
   AppEventTypes.AGENT_ASSIGNED,
   AppEventTypes.INSPECTION_STARTED,
+  AppEventTypes.PAYMENT_FAILED,
+  AppEventTypes.SUBSCRIPTION_ENDED,
+  AppEventTypes.PROPERTY_REQUEST_CREATED,
+  AppEventTypes.PROPERTY_REQUEST_UPDATED,
+  AppEventTypes.PROPERTY_PAYMENT_RECEIVED,
+  AppEventTypes.PROPERTY_PAYMENT_FAILED,
+  AppEventTypes.AGENT_CREATED,
 ];
 
 notificationEvents.forEach((eventType) => {

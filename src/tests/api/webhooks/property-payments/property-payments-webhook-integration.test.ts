@@ -10,6 +10,7 @@ import crypto from "crypto";
 import Stripe from "stripe";
 import request from "supertest";
 import app from "../../../../app";
+import { appEvents } from "../../../../events";
 import { prismaClient } from "../../../../utils/prisma";
 import { createFixtures } from "../../../helpers/fixtures";
 
@@ -21,11 +22,23 @@ process.env.STRIPE_WEBHOOK_SECRET = STRIPE_SECRET;
 const fx = createFixtures("property-webhooks");
 const signer = new Stripe("sk_test_integration");
 let clientId: string;
+let adminId: string;
 let events = 0;
 
 beforeAll(async () => {
   clientId = (await fx.createUser("CLIENT", "client")).id;
+  adminId = (await fx.createUser("ADMIN", "admin")).id;
 });
+
+/** In-app notifications of a type about one payment, for one user. */
+const notificationsFor = (userId: string, type: string, paymentReference: string) =>
+  prismaClient.notification.findMany({
+    where: {
+      userId,
+      type: type as never,
+      meta: { path: ["paymentReference"], equals: paymentReference },
+    },
+  });
 afterAll(async () => {
   await fx.cleanup();
   await prismaClient.$disconnect();
@@ -95,6 +108,7 @@ const reload = (id: string) =>
 describe("property payment webhooks", () => {
   it("Paystack charge.success marks the payment successful; the purchase stays in progress", async () => {
     const payment = await processing(`ps_ok_${fx.tag}`);
+    const emit = jest.spyOn(appEvents, "emit");
 
     expect((await paystack("charge.success", payment.id, `ps_ok_${fx.tag}`)).status).toBe(200);
 
@@ -106,13 +120,60 @@ describe("property payment webhooks", () => {
     });
     expect(after.request.status).toBe("IN_PROGRESS");
     expect(after.request.updates.at(-1)?.note).toBe("Payment of NGN 85,000,000.00 received");
+
+    // The client and the admins are told.
+    const [toClient] = await notificationsFor(
+      clientId,
+      "PROPERTY_PAYMENT_RECEIVED",
+      payment.reference,
+    );
+    expect(toClient).toMatchObject({
+      title: "Payment received",
+      body: expect.stringMatching(
+        /^Your payment of NGN 85,000,000\.00 for .+ was received\. Your purchase remains in progress\.$/,
+      ),
+      meta: expect.objectContaining({ channel: "in_app", propertyRequestId: payment.requestId }),
+    });
+    const [toAdmin] = await notificationsFor(
+      adminId,
+      "PROPERTY_PAYMENT_RECEIVED",
+      payment.reference,
+    );
+    expect(toAdmin).toMatchObject({
+      title: "Property payment received",
+      body: expect.stringMatching(/^client .+ paid NGN 85,000,000\.00 for /),
+    });
+
+    // A repeat delivery doesn't notify again.
+    await paystack("charge.success", payment.id, `ps_ok_${fx.tag}`);
+    expect(
+      await notificationsFor(clientId, "PROPERTY_PAYMENT_RECEIVED", payment.reference),
+    ).toHaveLength(1);
+
+    // The emails are queued once too.
+    expect(emit.mock.calls.filter(([type]) => type === "PROPERTY_PAYMENT_RECEIVED")).toEqual([
+      ["PROPERTY_PAYMENT_RECEIVED", { propertyPaymentId: payment.id }],
+    ]);
+    emit.mockRestore();
   });
 
   it("Paystack charge.failed marks it failed, and a later success still counts", async () => {
     const payment = await processing(`ps_fail_${fx.tag}`);
+    const emit = jest.spyOn(appEvents, "emit");
 
     await paystack("charge.failed", payment.id, `ps_fail_${fx.tag}`);
     expect((await reload(payment.id)).status).toBe("FAILED");
+    expect(emit).toHaveBeenCalledWith("PROPERTY_PAYMENT_FAILED", { propertyPaymentId: payment.id });
+    emit.mockRestore();
+    const [failed] = await notificationsFor(clientId, "PROPERTY_PAYMENT_FAILED", payment.reference);
+    expect(failed).toMatchObject({
+      title: "Payment not successful",
+      body: expect.stringContaining("You can retry or choose another payment method."),
+    });
+    // Admins aren't told about failures.
+    expect(
+      await notificationsFor(adminId, "PROPERTY_PAYMENT_FAILED", payment.reference),
+    ).toHaveLength(0);
 
     await paystack("charge.success", payment.id, `ps_retry_${fx.tag}`);
     expect(await reload(payment.id)).toMatchObject({
@@ -125,6 +186,9 @@ describe("property payment webhooks", () => {
     const payment = await processing(`ps_short_${fx.tag}`);
     await paystack("charge.success", payment.id, `ps_short_${fx.tag}`, 100);
     expect((await reload(payment.id)).status).toBe("PROCESSING");
+    expect(
+      await notificationsFor(clientId, "PROPERTY_PAYMENT_RECEIVED", payment.reference),
+    ).toHaveLength(0);
   });
 
   it("a failure from an older attempt doesn't fail the newer open checkout", async () => {

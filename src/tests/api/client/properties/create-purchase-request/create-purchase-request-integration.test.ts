@@ -56,6 +56,29 @@ describe("POST /api/v1/client/properties/:id/purchase-requests", () => {
     expect(response.body.steps[0]).toMatchObject({ current: true, reachedAt: expect.any(String) });
   });
 
+  it("notifies admins about the new purchase request, but not about a repeat", async () => {
+    const admin = await fx.createUser("ADMIN", "admin");
+    const property = await fx.createProperty({ name: `Banana Island House ${fx.tag}` });
+
+    const created = await submit(property.id);
+    await submit(property.id);
+
+    const notifications = await prismaClient.notification.findMany({
+      where: { userId: admin.id, type: "PROPERTY_REQUEST_CREATED" },
+    });
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({
+      title: "New purchase request",
+      body: `${client.fullName} wants to buy Banana Island House ${fx.tag}.`,
+      meta: expect.objectContaining({
+        channel: "in_app",
+        propertyRequestId: created.body.id,
+        reference: created.body.reference,
+        clientId: client.id,
+      }),
+    });
+  });
+
   it("returns the open request instead of a duplicate", async () => {
     const property = await fx.createProperty();
     const first = await submit(property.id);

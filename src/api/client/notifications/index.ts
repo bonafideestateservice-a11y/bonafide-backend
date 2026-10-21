@@ -17,7 +17,11 @@ const router = Router();
  *         id: { type: string }
  *         type:
  *           type: string
- *           enum: [VERIFICATION_REQUEST_CREATED, PAYMENT_RECEIVED, AGENT_ASSIGNED, INSPECTION_STARTED, REPORT_UPLOADED]
+ *           enum: [VERIFICATION_REQUEST_CREATED, PAYMENT_RECEIVED, AGENT_ASSIGNED, INSPECTION_STARTED, REPORT_UPLOADED, PROPERTY_REQUEST_UPDATED, PROPERTY_PAYMENT_RECEIVED, PROPERTY_PAYMENT_FAILED]
+ *           description: >
+ *             Verification updates, plus property purchase updates: a status change
+ *             (PROPERTY_REQUEST_UPDATED) and a payment result (PROPERTY_PAYMENT_RECEIVED,
+ *             PROPERTY_PAYMENT_FAILED). Property updates keep their stored title and body.
  *           example: AGENT_ASSIGNED
  *         title:
  *           type: string
@@ -40,6 +44,7 @@ const router = Router();
  *           example: Lekki Phase 1 Apartment
  *         verificationRequestId: { type: string, nullable: true }
  *         reportId: { type: string, nullable: true, description: REPORT_UPLOADED only; for "View Report". }
+ *         propertyRequestId: { type: string, nullable: true, description: Property updates only; the purchase or consultation to open. }
  *         read: { type: boolean }
  *         createdAt: { type: string, format: date-time }
  *   responses:

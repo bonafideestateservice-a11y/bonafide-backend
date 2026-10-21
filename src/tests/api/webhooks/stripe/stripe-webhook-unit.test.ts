@@ -11,6 +11,8 @@ const lifecycle = {
   markRequestPaid: jest.fn(),
   markRequestPaymentFailed: jest.fn(),
   completeRequestIfFinished: jest.fn(),
+  announcePaymentFailed: jest.fn(),
+  announceSubscriptionEnded: jest.fn(),
 };
 
 jest.mock("../../../../libs/stripe", () => ({
@@ -48,7 +50,11 @@ const run = async (type: string, object: object) => {
   return res;
 };
 
-const storedSubscription = { verificationRequestId: "vr-1", subscriptionId: "sub_1" };
+const storedSubscription = {
+  verificationRequestId: "vr-1",
+  subscriptionId: "sub_1",
+  status: "ACTIVE",
+};
 const subscription = (status: string) => ({
   id: "sub_1",
   status,
@@ -143,6 +149,7 @@ describe("stripeWebhook (unit)", () => {
     await run("invoice.payment_failed", { id: "in_1", subscription: "sub_1" });
 
     expect(lifecycle.markRequestPaymentFailed).toHaveBeenCalledWith(prismaMock, "vr-1");
+    expect(lifecycle.announcePaymentFailed).toHaveBeenCalled();
     expect(prismaMock.stripeSubscription.update).not.toHaveBeenCalled();
   });
 
@@ -164,6 +171,8 @@ describe("stripeWebhook (unit)", () => {
         expect.objectContaining({ data: expect.objectContaining({ status: "INACTIVE" }) }),
       );
       expect(lifecycle.markRequestPaymentFailed).toHaveBeenCalledWith(prismaMock, "vr-1");
+      expect(lifecycle.announcePaymentFailed).toHaveBeenCalled();
+      expect(lifecycle.announceSubscriptionEnded).not.toHaveBeenCalled();
     });
 
     it("completes the request when the subscription is canceled", async () => {
@@ -171,6 +180,19 @@ describe("stripeWebhook (unit)", () => {
 
       expect(lifecycle.completeRequestIfFinished).toHaveBeenCalledWith(prismaMock, "vr-1");
       expect(lifecycle.markRequestPaymentFailed).not.toHaveBeenCalled();
+      expect(lifecycle.announceSubscriptionEnded).toHaveBeenCalledWith("vr-1");
+    });
+
+    it("doesn't announce the end again for a subscription already inactive", async () => {
+      prismaMock.stripeSubscription.findUnique.mockResolvedValue({
+        ...storedSubscription,
+        status: "INACTIVE",
+      });
+
+      await run("customer.subscription.updated", subscription("canceled"));
+
+      expect(lifecycle.completeRequestIfFinished).toHaveBeenCalled();
+      expect(lifecycle.announceSubscriptionEnded).not.toHaveBeenCalled();
     });
   });
 
@@ -182,6 +204,7 @@ describe("stripeWebhook (unit)", () => {
       data: { status: "INACTIVE" },
     });
     expect(lifecycle.completeRequestIfFinished).toHaveBeenCalledWith(prismaMock, "vr-1");
+    expect(lifecycle.announceSubscriptionEnded).toHaveBeenCalledWith("vr-1");
   });
 
   it("returns 500 so Stripe retries when handling fails", async () => {

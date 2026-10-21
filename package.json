@@ -13,6 +13,7 @@
     "paystack:test-plans": "ts-node --transpile-only scripts/setup-paystack-test-plans.ts",
     "paystack:simulate": "ts-node --transpile-only scripts/simulate-paystack-event.ts",
     "stripe:products": "ts-node --transpile-only scripts/setup-stripe-products.ts",
+    "zeptomail:templates": "ts-node --transpile-only scripts/zeptomail/create-templates.ts",
     "test": "jest --runInBand",
     "format": "prettier --write \"src/**/*.ts\" \"postman/**/*.ts\" \"prisma/seed.ts\" \"*.js\" \"*.json\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"postman/**/*.ts\" \"prisma/seed.ts\" \"*.js\" \"*.json\"",

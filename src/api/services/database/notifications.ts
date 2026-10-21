@@ -146,6 +146,13 @@ export const getVerificationRequestNotificationContext = async (verificationRequ
           take: 5,
           select: { id: true, agent: { select: { name: true } } },
         },
+        // Payment-failed and subscription-ended emails: the plan and the latest payments.
+        verificationPlan: { select: { name: true } },
+        transactions: {
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: { status: true, amountInCents: true, currency: true },
+        },
       },
     });
   } catch (error) {
@@ -159,6 +166,41 @@ export const getVerificationRequestNotificationContext = async (verificationRequ
 export type VerificationRequestNotificationContext = NonNullable<
   Awaited<ReturnType<typeof getVerificationRequestNotificationContext>>
 >;
+
+const propertyRequestContextSelect = {
+  id: true,
+  reference: true,
+  type: true,
+  createdAt: true,
+  user: { select: notificationRecipientSelect },
+  property: { select: { name: true, address: true, priceAmount: true, priceCurrency: true } },
+} satisfies Prisma.PropertyRequestSelect;
+
+/** A purchase or consultation request, for its emails. */
+export const getPropertyRequestNotificationContext = (propertyRequestId: string) =>
+  prismaClient.propertyRequest.findUnique({
+    where: { id: propertyRequestId },
+    select: propertyRequestContextSelect,
+  });
+
+export type PropertyRequestNotificationContext = NonNullable<
+  Awaited<ReturnType<typeof getPropertyRequestNotificationContext>>
+>;
+
+/** A property payment and its request, for its emails. */
+export const getPropertyPaymentNotificationContext = (propertyPaymentId: string) =>
+  prismaClient.propertyPayment.findUnique({
+    where: { id: propertyPaymentId },
+    select: {
+      id: true,
+      reference: true,
+      amountInKobo: true,
+      currency: true,
+      method: true,
+      paidAt: true,
+      request: { select: propertyRequestContextSelect },
+    },
+  });
 
 export const createNotification = async (data: CreateNotificationData): Promise<Notification> => {
   try {

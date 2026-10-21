@@ -54,6 +54,24 @@ Report uploaded
 - [ ] `REPORT_UPLOADED`: new
 - [ ] `REPORT_UPLOADED_ADMIN`: new
 
+Verification payment problems
+
+- [ ] `PAYMENT_FAILED`: new
+- [ ] `SUBSCRIPTION_ENDED`: new
+
+Property purchases and consultations
+
+- [ ] `PROPERTY_REQUEST_CREATED`: new
+- [ ] `PROPERTY_REQUEST_CREATED_ADMIN`: new
+- [ ] `PROPERTY_REQUEST_UPDATED`: new
+- [ ] `PROPERTY_PAYMENT_RECEIVED`: new
+- [ ] `PROPERTY_PAYMENT_RECEIVED_ADMIN`: new
+- [ ] `PROPERTY_PAYMENT_FAILED`: new
+
+Agents
+
+- [ ] `AGENT_WELCOME`: new
+
 "Already exists" means the backend has a key for it and uses that key unless you set the variable.
 
 ---
@@ -293,6 +311,176 @@ Fields:
 
 ---
 
+# Verification payment problems
+
+## PAYMENT_FAILED
+
+- **Sent to:** the client, when a verification payment or renewal fails
+  (also shown in their in-app notifications)
+- **Variable:** `ZEPTO_TEMPLATE_PAYMENT_FAILED`
+- **Suggested subject:** Your payment didn't go through
+
+Fields:
+
+- `firstName`: client's name. _Ada Okafor_
+- `amount`: amount that failed, 2 decimals (may be blank). _1,500.00_
+- `currency`: currency code (may be blank). _NGN_
+- `paymentKind`: `first payment` or `renewal`. _renewal_
+- `verificationType`: type of verification. _Land Verification_
+- `serviceName`: service it belongs to. _Property_
+- `requestName`: property or business name (may be blank). _Palm Villa_
+- `address`: property, construction or business address (may be blank). _12 Allen Avenue, Ikeja, Lagos_
+- `verificationRequestId`: request ID. _cmg4x2k1p0001qz8h3f7a9b2c_
+
+## SUBSCRIPTION_ENDED
+
+- **Sent to:** the client, when a recurring plan is cancelled or ends
+  (also shown in their in-app notifications)
+- **Variable:** `ZEPTO_TEMPLATE_SUBSCRIPTION_ENDED`
+- **Suggested subject:** Your {{planName}} plan has ended
+
+Fields:
+
+- `firstName`: client's name. _Ada Okafor_
+- `planName`: the plan (may be blank). _Monthly Update_
+- `verificationType`: type of verification. _Land Verification_
+- `serviceName`: service it belongs to. _Property_
+- `requestName`: property or business name (may be blank). _Palm Villa_
+- `address`: property, construction or business address (may be blank). _12 Allen Avenue, Ikeja, Lagos_
+- `verificationRequestId`: request ID. _cmg4x2k1p0001qz8h3f7a9b2c_
+
+---
+
+# Property purchases and consultations
+
+## PROPERTY_REQUEST_CREATED
+
+- **Sent to:** the client who made a purchase or consultation request
+- **Variable:** `ZEPTO_TEMPLATE_PROPERTY_REQUEST_CREATED`
+- **Suggested subject:** We've received your {{requestType}} request for {{propertyName}}
+
+Fields:
+
+- `firstName`: client's name. _Ada Okafor_
+- `requestType`: `purchase` or `consultation`. _purchase_
+- `reference`: request reference. _BF-PUR-203948_
+- `propertyName`: property name. _Palm Villa_
+- `propertyAddress`: property address (may be blank). _12 Allen Avenue, Ikeja, Lagos_
+- `price`: listed price, 2 decimals. _85,000,000.00_
+- `currency`: currency code. _NGN_
+- `submittedAt`: when it was made. _2026-09-30T10:00:00.000Z_
+
+## PROPERTY_REQUEST_CREATED_ADMIN
+
+- **Sent to:** every admin, when a client makes a purchase or consultation request
+- **Variable:** `ZEPTO_TEMPLATE_PROPERTY_REQUEST_CREATED_ADMIN`
+- **Suggested subject:** New {{requestType}} request from {{clientName}}
+
+Fields:
+
+- `firstName`: admin's name. _Chidi Eze_
+- `clientName`: client's name. _Ada Okafor_
+- `clientEmail`: client's email. _ada@example.com_
+- `clientPhone`: client's phone (may be blank). _+2348012345678_
+- `requestType`: `purchase` or `consultation`. _purchase_
+- `reference`: request reference. _BF-PUR-203948_
+- `propertyName`: property name. _Palm Villa_
+- `propertyAddress`: property address (may be blank). _12 Allen Avenue, Ikeja, Lagos_
+- `price`: listed price, 2 decimals. _85,000,000.00_
+- `currency`: currency code. _NGN_
+- `submittedAt`: when it was made. _2026-09-30T10:00:00.000Z_
+
+## PROPERTY_REQUEST_UPDATED
+
+- **Sent to:** the client, when an admin moves their request to a new stage
+- **Variable:** `ZEPTO_TEMPLATE_PROPERTY_REQUEST_UPDATED`
+- **Suggested subject:** {{propertyName}}: {{statusLabel}}
+
+Fields:
+
+- `firstName`: client's name. _Ada Okafor_
+- `requestType`: `purchase` or `consultation`. _purchase_
+- `reference`: request reference. _BF-PUR-203948_
+- `propertyName`: property name. _Palm Villa_
+- `propertyAddress`: property address (may be blank). _12 Allen Avenue, Ikeja, Lagos_
+- `status`: new stage code. _OWNERSHIP_TRANSFER_
+- `statusLabel`: new stage, readable. _Ownership transfer_
+- `message`: the admin's note, or a default one for the stage. _We've started transferring ownership to you._
+
+## PROPERTY_PAYMENT_RECEIVED
+
+- **Sent to:** the client, once their property payment is confirmed
+- **Variable:** `ZEPTO_TEMPLATE_PROPERTY_PAYMENT_RECEIVED`
+- **Suggested subject:** Payment received for {{propertyName}}
+
+Fields:
+
+- `firstName`: client's name. _Ada Okafor_
+- `propertyName`: property name. _Palm Villa_
+- `reference`: purchase reference. _BF-PUR-203948_
+- `paymentReference`: payment reference. _BF-PAY-203948_
+- `amount`: amount, 2 decimals. _85,000,000.00_
+- `currency`: currency code. _NGN_
+- `method`: `Card` or `Bank transfer`. _Card_
+- `paidAt`: when it was paid. _2026-09-30T10:00:00.000Z_
+
+## PROPERTY_PAYMENT_RECEIVED_ADMIN
+
+- **Sent to:** every admin, when a property payment is confirmed
+- **Variable:** `ZEPTO_TEMPLATE_PROPERTY_PAYMENT_RECEIVED_ADMIN`
+- **Suggested subject:** {{clientName}} paid for {{propertyName}}
+
+Fields:
+
+- `firstName`: admin's name. _Chidi Eze_
+- `clientName`: client who paid. _Ada Okafor_
+- `clientEmail`: client's email. _ada@example.com_
+- `propertyName`: property name. _Palm Villa_
+- `reference`: purchase reference. _BF-PUR-203948_
+- `paymentReference`: payment reference. _BF-PAY-203948_
+- `amount`: amount, 2 decimals. _85,000,000.00_
+- `currency`: currency code. _NGN_
+- `method`: `Card` or `Bank transfer`. _Card_
+- `paidAt`: when it was paid. _2026-09-30T10:00:00.000Z_
+
+## PROPERTY_PAYMENT_FAILED
+
+- **Sent to:** the client, when their property payment fails
+- **Variable:** `ZEPTO_TEMPLATE_PROPERTY_PAYMENT_FAILED`
+- **Suggested subject:** Your payment for {{propertyName}} didn't go through
+
+Fields:
+
+- `firstName`: client's name. _Ada Okafor_
+- `propertyName`: property name. _Palm Villa_
+- `reference`: purchase reference. _BF-PUR-203948_
+- `paymentReference`: payment reference. _BF-PAY-203948_
+- `amount`: amount, 2 decimals. _85,000,000.00_
+- `currency`: currency code. _NGN_
+- `method`: `Card` or `Bank transfer`. _Card_
+
+---
+
+# Agents
+
+## AGENT_WELCOME
+
+- **Sent to:** a new agent, when an admin adds them (always sent)
+- **Variable:** `ZEPTO_TEMPLATE_AGENT_WELCOME`
+- **Suggested subject:** Your Bonafide agent account is ready
+
+The agent sets a password with the code, then logs in. Tell them to use **Forgot password** if the code expires.
+
+Fields:
+
+- `firstName`: agent's name. _Tunde Bello_
+- `email`: the email they log in with. _tunde@example.com_
+- `setupCode`: 6-digit code to set their password. _482913_
+- `expiresIn`: how long the code lasts. _48 hours_
+- `loginUrl`: the admin/agent app's login page (blank until `ADMIN_APP_URL` is set). _https://admin.bonafide.com.ng/login_
+
+---
+
 # Testing in ZeptoMail
 
 Paste this into ZeptoMail's merge data preview to test `INSPECTION_STARTED_ADMIN`.
@@ -320,5 +508,6 @@ Ask a developer if a design needs any of these:
 
 - **Report download link:** stored on the report, easy to add to the report emails.
 - **Inspection scheduled date:** stored on the assignment, easy to add to the agent and inspection emails.
-- **Links to the dashboard or a specific request:** needs the frontend URL for each app.
+- **Links to the dashboard or a specific request:** needs the frontend URL for each app
+  (only the agent login link exists, from `ADMIN_APP_URL`).
 - **A separate first name:** only the full name is stored.

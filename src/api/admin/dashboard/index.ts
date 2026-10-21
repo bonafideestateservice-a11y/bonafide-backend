@@ -19,6 +19,7 @@ import { getUsersHandler } from "./handlers/get-users";
 import { getUserHandler } from "./handlers/get-user";
 import { updateUserStatusHandler } from "./handlers/update-user-status";
 import { getAgentHandler } from "./handlers/get-agent";
+import { createAgentHandler } from "./handlers/create-agent";
 import { assignPropertyAgentHandler } from "./handlers/assign-property-agent";
 import { unassignPropertyAgentHandler } from "./handlers/unassign-property-agent";
 import { getAdminPropertyRequestsHandler } from "./handlers/get-property-requests";
@@ -759,7 +760,13 @@ router.get("/dashboard/analytics", checkJwt, checkIsAdmin, getDashboardAnalytics
  *                     type: object
  *                     properties:
  *                       id: { type: string, format: uuid }
- *                       type: { type: string, example: VERIFICATION_REQUEST_CREATED }
+ *                       type:
+ *                         type: string
+ *                         description: >
+ *                           Includes PROPERTY_REQUEST_CREATED (a client submitted a purchase or
+ *                           consultation request) and PROPERTY_PAYMENT_RECEIVED (a client paid for
+ *                           a property).
+ *                         example: VERIFICATION_REQUEST_CREATED
  *                       title: { type: string, nullable: true, example: New verification request }
  *                       body: { type: string, nullable: true }
  *                       read: { type: boolean }
@@ -872,6 +879,61 @@ router.patch("/notifications/:id/read", checkJwt, checkIsAdmin, markNotification
  *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
  */
 router.get("/agents", checkJwt, checkIsAdmin, getAgentsHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/agents:
+ *   post:
+ *     tags: [Admin Dashboard]
+ *     summary: Add an agent
+ *     description: >
+ *       Creates an AGENT account with no password and emails the agent (AGENT_WELCOME) a 6-digit
+ *       setup code valid for 48 hours. The agent sets a password with POST /admin/reset-password
+ *       ({email, otp: setupCode, password}), then logs in with POST /admin/login. If the code
+ *       expires, POST /admin/forgot-password sends a new one. Admin only.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [fullName, email]
+ *             properties:
+ *               fullName: { type: string, example: John Anderson }
+ *               email: { type: string, format: email, description: Trimmed and lower-cased, example: john.anderson@example.com }
+ *               phone: { type: string, nullable: true, example: "+2348012345678" }
+ *               region: { type: string, nullable: true, example: Lagos }
+ *     responses:
+ *       201:
+ *         description: The new agent. The setup code is only sent by email.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id: { type: string, description: Agent id used by the other /admin/agents endpoints, example: cmg3agent01 }
+ *                 userId: { type: string, format: uuid }
+ *                 name: { type: string, example: John Anderson }
+ *                 email: { type: string, format: email }
+ *                 phone: { type: string, nullable: true }
+ *                 region: { type: string, nullable: true, example: Lagos }
+ *                 status: { type: string, enum: [ACTIVE, INACTIVE], example: ACTIVE }
+ *                 createdAt: { type: string, format: date-time }
+ *       400:
+ *         description: fullName missing, email invalid, or phone/region not a string.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
+ *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
+ *       409:
+ *         description: An account with this email already exists.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
+ */
+router.post("/agents", checkJwt, checkIsAdmin, createAgentHandler);
 
 /**
  * @swagger

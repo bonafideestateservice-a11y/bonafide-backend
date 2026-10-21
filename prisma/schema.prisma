@@ -535,6 +535,15 @@ enum NotificationType {
   PROPERTY_ADDED
   // A purchase or consultation request changed status (client in-app notification).
   PROPERTY_REQUEST_UPDATED
+  // A client submitted a purchase or consultation request (admin in-app notification).
+  PROPERTY_REQUEST_CREATED
+  // A property payment succeeded (client and admin) or failed (client); in-app only.
+  PROPERTY_PAYMENT_RECEIVED
+  PROPERTY_PAYMENT_FAILED
+  // A verification payment (first or renewal) failed.
+  PAYMENT_FAILED
+  // A monthly or quarterly verification subscription was cancelled or ended.
+  SUBSCRIPTION_ENDED
 }
 
 enum NotificationStatus {

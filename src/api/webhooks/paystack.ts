@@ -9,6 +9,8 @@ import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
 import { appEvents, AppEventTypes } from "../../events";
 import {
+  announcePaymentFailed,
+  announceSubscriptionEnded,
   completeRequestIfFinished,
   markRequestPaid,
   markRequestPaymentFailed,
@@ -248,13 +250,14 @@ const handleChargeFailure = async (event: PaystackEvent) => {
   }
 
   const { id: transactionId, verificationRequestId } = transaction;
-  await prismaClient.$transaction(async (tx) => {
+  const result = await prismaClient.$transaction(async (tx) => {
     await tx.transaction.updateMany({
       where: { id: transactionId, status: PaymentStatus.PENDING },
       data: { status: PaymentStatus.FAILED },
     });
-    await markRequestPaymentFailed(tx, verificationRequestId);
+    return markRequestPaymentFailed(tx, verificationRequestId);
   });
+  announcePaymentFailed(result, verificationRequestId);
 };
 
 const handleSubscriptionCreated = async (event: PaystackEvent) => {
@@ -344,6 +347,12 @@ const handleSubscriptionStatusChange = async (event: PaystackEvent) => {
     return;
   }
 
+  const subscription = await prismaClient.paystackSubscription.findUnique({
+    where: { subscriptionCode },
+    select: { verificationRequestId: true, status: true },
+  });
+  if (!subscription) return;
+
   await prismaClient.paystackSubscription.updateMany({
     where: { subscriptionCode },
     data: {
@@ -355,17 +364,18 @@ const handleSubscriptionStatusChange = async (event: PaystackEvent) => {
     },
   });
 
-  const subscription = await prismaClient.paystackSubscription.findUnique({
-    where: { subscriptionCode },
-    select: { verificationRequestId: true },
-  });
-  if (!subscription) return;
-
   if (status === "PAYMENT_FAILED") {
-    await markRequestPaymentFailed(prismaClient, subscription.verificationRequestId);
+    announcePaymentFailed(
+      await markRequestPaymentFailed(prismaClient, subscription.verificationRequestId),
+      subscription.verificationRequestId,
+    );
   } else {
     // NON_RENEWING or DISABLED: no more renewals will be charged.
     await completeRequestIfFinished(prismaClient, subscription.verificationRequestId);
+    // Paystack sends not_renew, then disable at period end: only the first tells the client.
+    if (subscription.status !== "NON_RENEWING" && subscription.status !== "DISABLED") {
+      announceSubscriptionEnded(subscription.verificationRequestId);
+    }
   }
 };
 

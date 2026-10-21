@@ -10,6 +10,8 @@ import { logger } from "../../utils/logger";
 import { prismaClient } from "../../utils/prisma";
 import { appEvents, AppEventTypes } from "../../events";
 import {
+  announcePaymentFailed,
+  announceSubscriptionEnded,
   completeRequestIfFinished,
   markRequestPaid,
   markRequestPaymentFailed,
@@ -44,14 +46,23 @@ const isActiveSubscription = (status: Stripe.Subscription.Status) =>
 /**
  * Apply an inactive subscription to its request: "unpaid" means Stripe gave up retrying (the
  * period is unpaid); anything else (canceled, incomplete_expired, paused) means it ended.
+ * The client is emailed when the subscription has just stopped being active.
  */
-const settleInactiveSubscription = (
+const settleInactiveSubscription = async (
   verificationRequestId: string,
   status: Stripe.Subscription.Status,
-) =>
-  status === "unpaid"
-    ? markRequestPaymentFailed(prismaClient, verificationRequestId)
-    : completeRequestIfFinished(prismaClient, verificationRequestId);
+  wasActive: boolean,
+) => {
+  if (status === "unpaid") {
+    announcePaymentFailed(
+      await markRequestPaymentFailed(prismaClient, verificationRequestId),
+      verificationRequestId,
+    );
+    return;
+  }
+  await completeRequestIfFinished(prismaClient, verificationRequestId);
+  if (wasActive) announceSubscriptionEnded(verificationRequestId);
+};
 
 const getSubscriptionDetails = (subscription: Stripe.Subscription) => {
   const item = subscription.items.data[0];
@@ -153,6 +164,10 @@ const upsertSubscription = async (
   }
 
   const active = isActiveSubscription(subscription.status);
+  const previous = await prismaClient.stripeSubscription.findUnique({
+    where: { subscriptionId: subscription.id },
+    select: { status: true },
+  });
   await prismaClient.stripeSubscription.upsert({
     where: { subscriptionId: subscription.id },
     create: {
@@ -172,7 +187,11 @@ const upsertSubscription = async (
   });
 
   if (!active) {
-    await settleInactiveSubscription(metadata.verificationRequestId, subscription.status);
+    await settleInactiveSubscription(
+      metadata.verificationRequestId,
+      subscription.status,
+      previous?.status === "ACTIVE",
+    );
   }
 };
 
@@ -188,6 +207,9 @@ const endSubscription = async (subscriptionId: string) => {
     data: { status: "INACTIVE" },
   });
   await completeRequestIfFinished(prismaClient, subscription.verificationRequestId);
+  if (subscription.status === "ACTIVE") {
+    announceSubscriptionEnded(subscription.verificationRequestId);
+  }
 };
 
 /**
@@ -202,7 +224,10 @@ const recordFailedInvoice = async (subscriptionId: string) => {
   });
   if (!subscription) return;
 
-  await markRequestPaymentFailed(prismaClient, subscription.verificationRequestId);
+  announcePaymentFailed(
+    await markRequestPaymentFailed(prismaClient, subscription.verificationRequestId),
+    subscription.verificationRequestId,
+  );
 };
 
 const recordRenewalPayment = async (invoice: Stripe.Invoice) => {
@@ -387,7 +412,11 @@ export const stripeWebhook = async (req: Request, res: Response) => {
               },
             });
             if (!active) {
-              await settleInactiveSubscription(stored.verificationRequestId, subscription.status);
+              await settleInactiveSubscription(
+                stored.verificationRequestId,
+                subscription.status,
+                stored.status === "ACTIVE",
+              );
             }
           }
         }
