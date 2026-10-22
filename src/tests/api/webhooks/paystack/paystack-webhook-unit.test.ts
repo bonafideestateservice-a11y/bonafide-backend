@@ -252,6 +252,27 @@ describe("paystackWebhook (unit)", () => {
     });
   });
 
+  it.each(["invoice.create", "invoice.update"])(
+    "%s keeps the subscription's next payment date current",
+    async (event) => {
+      await run({
+        event,
+        data: {
+          invoice_code: `INV_${event}`,
+          subscription: {
+            subscription_code: "SUB_1",
+            next_payment_date: "2026-10-20T13:48:00.000Z",
+          },
+        },
+      });
+
+      expect(prismaMock.paystackSubscription.updateMany).toHaveBeenCalledWith({
+        where: { subscriptionCode: "SUB_1" },
+        data: { nextPaymentDate: new Date("2026-10-20T13:48:00.000Z") },
+      });
+    },
+  );
+
   describe("subscription status changes", () => {
     beforeEach(() => {
       prismaMock.paystackSubscription.findUnique.mockResolvedValue({

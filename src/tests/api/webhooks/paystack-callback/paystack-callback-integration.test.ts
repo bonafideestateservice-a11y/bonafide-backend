@@ -1,39 +1,39 @@
+const verifyPaystackTransaction = jest.fn();
+jest.mock("../../../../libs/paystack/paystack", () => ({
+  ...jest.requireActual("../../../../libs/paystack/paystack"),
+  verifyPaystackTransaction,
+}));
+
 import request from "supertest";
 import app from "../../../../app";
-import { prismaClient } from "../../../../utils/prisma";
-import { createFixtures } from "../../../helpers/fixtures";
 
-const fx = createFixtures("paystack-callback");
-
-afterAll(async () => {
-  await fx.cleanup();
-  await prismaClient.$disconnect();
-});
+const SUCCESS = "https://app.example.com/payment/success";
+const FAILURE = "https://app.example.com/payment/failed";
 
 const callback = (query = "") => request(app).get(`/api/v1/webhook/paystack/callback${query}`);
 
 describe("GET /api/v1/webhook/paystack/callback", () => {
-  it("shows the payment's status after Paystack redirects back", async () => {
-    const client = await fx.createUser("CLIENT", "client");
-    const paid = await fx.createPaidRequest(client.id);
-    const reference = `ref_callback_${fx.tag}`;
-    await prismaClient.transaction.update({
-      where: { id: paid.paymentId },
-      data: { providerRef: reference },
-    });
-
-    const response = await callback(`?reference=${reference}`);
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      message: "Payment received. Webhook processing will update the verification request.",
-      reference,
-      status: "SUCCESS",
-    });
+  const env = { ...process.env };
+  beforeAll(() => {
+    process.env.PAYMENT_SUCCESS_URL = SUCCESS;
+    process.env.PAYMENT_FAILURE_URL = FAILURE;
+  });
+  afterAll(() => {
+    process.env = env;
   });
 
-  it("returns 400 without a reference and 404 for an unknown one", async () => {
-    expect((await callback()).status).toBe(400);
-    expect((await callback("?reference=never-issued")).status).toBe(404);
+  it("redirects a paid customer to the success page", async () => {
+    verifyPaystackTransaction.mockResolvedValue({ status: "success" });
+    const response = await callback("?reference=ref_ok");
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe(`${SUCCESS}?reference=ref_ok`);
+  });
+
+  it("redirects a failed or unknown payment to the failure page", async () => {
+    verifyPaystackTransaction.mockResolvedValue({ status: "failed" });
+    expect((await callback("?reference=ref_bad")).headers.location).toBe(
+      `${FAILURE}?reference=ref_bad`,
+    );
+    expect((await callback()).headers.location).toBe(FAILURE);
   });
 });

@@ -80,14 +80,16 @@ describe("Paystack redirect after paying", () => {
   it.each([
     ["verification", session],
     ["property", checkout],
-  ])("sends the %s payer back to CLIENT_URL", async (_, start) => {
-    process.env.CLIENT_URL = "https://app.example.com";
+  ])("sends the %s payer back through the backend's callback", async (_, start) => {
+    process.env.SERVER_URL = "https://api.example.com/";
     await start();
-    expect(sentBody().callback_url).toBe("https://app.example.com");
+    expect(sentBody().callback_url).toBe(
+      "https://api.example.com/api/v1/webhook/paystack/callback",
+    );
   });
 
-  it("leaves the redirect to Paystack's dashboard setting when CLIENT_URL isn't set", async () => {
-    delete process.env.CLIENT_URL;
+  it("leaves the redirect to Paystack's dashboard setting when SERVER_URL isn't set", async () => {
+    delete process.env.SERVER_URL;
     await checkout();
     expect(sentBody()).not.toHaveProperty("callback_url");
   });

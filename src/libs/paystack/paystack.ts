@@ -65,10 +65,14 @@ export function paystackPriceOf(plan: { priceInCents: number; currency: string }
 }
 
 /**
- * After paying, Paystack sends the user back to the frontend (CLIENT_URL), like Stripe does.
- * Without it, Paystack falls back to the callback URL set in its dashboard.
+ * After paying, Paystack sends the customer to the backend's callback, which redirects them to
+ * the frontend's success or failure page. Without SERVER_URL, Paystack falls back to the
+ * callback URL set in its dashboard.
  */
-const callbackUrl = () => (process.env.CLIENT_URL ? { callback_url: process.env.CLIENT_URL } : {});
+const callbackUrl = () => {
+  const serverUrl = process.env.SERVER_URL?.replace(/\/+$/, "");
+  return serverUrl ? { callback_url: `${serverUrl}/api/v1/webhook/paystack/callback` } : {};
+};
 
 export async function createPaystackSession(params: CreateTransactionParams) {
   if (!params.email || !params.amount || !params.customer) {

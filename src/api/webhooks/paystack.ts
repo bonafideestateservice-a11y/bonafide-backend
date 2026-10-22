@@ -6,6 +6,8 @@ import {
   markPropertyPaymentSuccessful,
 } from "../services/database/property-request";
 import { logger } from "../../utils/logger";
+import { paymentPages, withQuery } from "../../utils/payment-pages";
+import { verifyPaystackTransaction } from "../../libs/paystack/paystack";
 import { prismaClient } from "../../utils/prisma";
 import { appEvents, AppEventTypes } from "../../events";
 import {
@@ -379,6 +381,23 @@ const handleSubscriptionStatusChange = async (event: PaystackEvent) => {
   }
 };
 
+/**
+ * invoice.create (before each renewal) and invoice.update (after it is charged) carry the
+ * subscription's next payment date. Keeping it current lets findSubscriptionForCharge pick the
+ * right subscription when a customer has two on the same plan.
+ */
+const handleInvoice = async (event: PaystackEvent) => {
+  const subscriptionCode = getSubscriptionCode(event);
+  const subscription = event.data?.subscription as { next_payment_date?: unknown } | undefined;
+  const nextPaymentDate = subscription?.next_payment_date;
+  if (!subscriptionCode || typeof nextPaymentDate !== "string") return;
+
+  await prismaClient.paystackSubscription.updateMany({
+    where: { subscriptionCode },
+    data: { nextPaymentDate: new Date(nextPaymentDate) },
+  });
+};
+
 const handleExpiringCards = async (event: PaystackEvent) => {
   const customerCode = event.data?.customer?.customer_code;
   if (!customerCode) {
@@ -439,7 +458,8 @@ export const paystackWebhook = async (req: Request, res: Response, _next: NextFu
         await handleExpiringCards(event);
         break;
       case "invoice.create":
-        logger.info("Paystack invoice.create received");
+      case "invoice.update":
+        await handleInvoice(event);
         break;
       default:
         logger.info(`Ignoring unsupported Paystack event=${event.event}`);
@@ -453,23 +473,29 @@ export const paystackWebhook = async (req: Request, res: Response, _next: NextFu
   }
 };
 
+/**
+ * Paystack sends the customer here after a checkout, with ?reference=. Paystack has one callback
+ * for every outcome, so ask it how the charge went and redirect to the frontend's success or
+ * failure page. Only for display: the webhook records the payment.
+ */
 export const callback_url = async (req: Request, res: Response) => {
-  const reference = req.query.reference as string;
-
-  if (!reference) {
-    return res.status(400).json({ error: "Reference not provided" });
+  const { success, failure } = paymentPages();
+  if (!success || !failure) {
+    logger.error(
+      "PAYMENT_SUCCESS_URL and PAYMENT_FAILURE_URL must be set for the Paystack callback",
+    );
+    return res.status(500).json({ error: "Payment pages are not configured" });
   }
 
-  const transaction = await prismaClient.transaction.findFirst({
-    where: { providerRef: reference },
-  });
-  if (!transaction) {
-    return res.status(404).json({ error: "Transaction not found" });
-  }
+  const reference = typeof req.query.reference === "string" ? req.query.reference.trim() : "";
+  if (!reference) return res.redirect(302, failure);
 
-  return res.status(200).json({
-    message: "Payment received. Webhook processing will update the verification request.",
-    reference,
-    status: transaction.status,
-  });
+  let paid = false;
+  try {
+    paid = (await verifyPaystackTransaction(reference)).status === "success";
+  } catch (error) {
+    logger.warn(`Could not verify Paystack reference=${reference}: ${error}`);
+  }
+  const page = paid ? success : failure;
+  return res.redirect(302, withQuery(page, "reference", encodeURIComponent(reference)));
 };

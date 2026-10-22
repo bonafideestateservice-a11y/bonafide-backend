@@ -246,8 +246,9 @@ webHookRouter.post("/paystack", paystackWebhook);
  *     tags: [Webhooks]
  *     summary: Paystack payment callback
  *     description: >
- *       Redirect target after Paystack checkout. Reports the current status of the transaction with this
- *       reference; it does not change anything (the webhook updates the request).
+ *       Paystack sends the customer here after a checkout (verification or property payment). The
+ *       backend asks Paystack how the charge went and redirects to PAYMENT_SUCCESS_URL or
+ *       PAYMENT_FAILURE_URL with ?reference= added. It changes nothing: the webhook records the payment.
  *     security: []
  *     parameters:
  *       - in: path
@@ -256,43 +257,23 @@ webHookRouter.post("/paystack", paystackWebhook);
  *         schema: { type: string, enum: [v1], default: v1 }
  *       - in: query
  *         name: reference
- *         required: true
- *         description: Paystack transaction reference (Transaction.providerRef).
+ *         description: Paystack transaction reference, added by Paystack. Without it, the customer goes to the failure page.
  *         schema: { type: string, example: ref_7PGx9kQ2 }
  *     responses:
- *       200:
- *         description: The transaction was found.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               required: [message, reference, status]
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Payment received. Webhook processing will update the verification request.
- *                 reference:
- *                   type: string
- *                   example: ref_7PGx9kQ2
- *                 status:
- *                   type: string
- *                   description: The transaction's current PaymentStatus.
- *                   enum: [PENDING, SUCCESS, FAILED]
- *                   example: PENDING
- *       400:
- *         description: The reference query parameter is missing or empty. Note the body uses an "error" key, not ErrorResponse.
+ *       302:
+ *         description: >
+ *           Redirect to PAYMENT_SUCCESS_URL?reference=... when Paystack reports the charge as successful,
+ *           otherwise (failed, abandoned, unknown reference or Paystack unreachable) to PAYMENT_FAILURE_URL?reference=...
+ *         headers:
+ *           Location:
+ *             schema: { type: string, example: "https://bonafideweb.netlify.app/payment/success?reference=ref_7PGx9kQ2" }
+ *       500:
+ *         description: PAYMENT_SUCCESS_URL or PAYMENT_FAILURE_URL is not set. Note the body uses an "error" key, not ErrorResponse.
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/WebhookCallbackError'
- *             example: { error: Reference not provided }
- *       404:
- *         description: No transaction has this reference. Note the body uses an "error" key, not ErrorResponse.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/WebhookCallbackError'
- *             example: { error: Transaction not found }
+ *             example: { error: Payment pages are not configured }
  */
 webHookRouter.get("/paystack/callback", callback_url);
 
