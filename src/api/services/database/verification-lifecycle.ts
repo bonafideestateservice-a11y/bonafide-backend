@@ -114,6 +114,44 @@ export const markRequestPaymentFailed = (db: Db, verificationRequestId: string) 
   });
 
 /**
+ * A subscription renewal charge failed. The first time each invoice fails, it is recorded as a
+ * FAILED transaction (providerRef = the invoice) and the client is emailed, whatever the
+ * request's status, so they can fix their card before the provider stops retrying. Retries of
+ * the same invoice change nothing. The request becomes PAYMENT_FAILED only if it was waiting
+ * for this payment; work in progress is left alone.
+ */
+export const recordFailedRenewal = async (params: {
+  verificationRequestId: string;
+  providerRef: string;
+  amountInCents: number;
+  currency: string;
+}) => {
+  const { verificationRequestId, providerRef, amountInCents, currency } = params;
+  if (await prismaClient.transaction.findUnique({ where: { providerRef } })) return;
+
+  try {
+    await prismaClient.$transaction(async (tx) => {
+      await tx.transaction.create({
+        data: {
+          verificationRequestId,
+          amountInCents,
+          currency,
+          method: "CARD",
+          status: PaymentStatus.FAILED,
+          providerRef,
+        },
+      });
+      await markRequestPaymentFailed(tx, verificationRequestId);
+    });
+  } catch (error) {
+    // Another delivery of the same failure recorded it first.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return;
+    throw error;
+  }
+  appEvents.emit(AppEventTypes.PAYMENT_FAILED, { verificationRequestId });
+};
+
+/**
  * The subscription ended: complete the request if every paid period is reported. Requests
  * still in progress are completed by report submission instead.
  */

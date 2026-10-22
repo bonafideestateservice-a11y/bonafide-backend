@@ -14,6 +14,7 @@ import {
   announcePaymentFailed,
   announceSubscriptionEnded,
   completeRequestIfFinished,
+  recordFailedRenewal,
   markRequestPaid,
   markRequestPaymentFailed,
 } from "../services/database/verification-lifecycle";
@@ -366,7 +367,15 @@ const handleSubscriptionStatusChange = async (event: PaystackEvent) => {
     },
   });
 
-  if (status === "PAYMENT_FAILED") {
+  const invoiceCode = event.data?.invoice_code;
+  if (status === "PAYMENT_FAILED" && invoiceCode) {
+    await recordFailedRenewal({
+      verificationRequestId: subscription.verificationRequestId,
+      providerRef: invoiceCode,
+      amountInCents: Number(event.data?.amount ?? 0),
+      currency: String(event.data?.currency ?? "NGN"),
+    });
+  } else if (status === "PAYMENT_FAILED") {
     announcePaymentFailed(
       await markRequestPaymentFailed(prismaClient, subscription.verificationRequestId),
       subscription.verificationRequestId,

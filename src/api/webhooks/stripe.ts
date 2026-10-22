@@ -13,6 +13,7 @@ import {
   announcePaymentFailed,
   announceSubscriptionEnded,
   completeRequestIfFinished,
+  recordFailedRenewal,
   markRequestPaid,
   markRequestPaymentFailed,
 } from "../services/database/verification-lifecycle";
@@ -217,17 +218,19 @@ const endSubscription = async (subscriptionId: string) => {
  * retries the charge; a later invoice.paid moves the request on, and giving up arrives as a
  * subscription update (unpaid/canceled) or deletion.
  */
-const recordFailedInvoice = async (subscriptionId: string) => {
+const recordFailedInvoice = async (subscriptionId: string, invoice: Stripe.Invoice) => {
   const subscription = await prismaClient.stripeSubscription.findUnique({
     where: { subscriptionId },
     select: { verificationRequestId: true },
   });
   if (!subscription) return;
 
-  announcePaymentFailed(
-    await markRequestPaymentFailed(prismaClient, subscription.verificationRequestId),
-    subscription.verificationRequestId,
-  );
+  await recordFailedRenewal({
+    verificationRequestId: subscription.verificationRequestId,
+    providerRef: invoice.id,
+    amountInCents: invoice.amount_due ?? 0,
+    currency: invoice.currency ?? "usd",
+  });
 };
 
 /**
@@ -440,8 +443,9 @@ export const stripeWebhook = async (req: Request, res: Response) => {
         break;
       }
       case "invoice.payment_failed": {
-        const subscriptionId = invoiceSubscriptionId(event.data.object as Stripe.Invoice);
-        if (subscriptionId) await recordFailedInvoice(subscriptionId);
+        const invoice = event.data.object as Stripe.Invoice;
+        const subscriptionId = invoiceSubscriptionId(invoice);
+        if (subscriptionId) await recordFailedInvoice(subscriptionId, invoice);
         break;
       }
       case "invoice.paid": {
