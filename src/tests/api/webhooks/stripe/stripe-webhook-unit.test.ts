@@ -145,6 +145,34 @@ describe("stripeWebhook (unit)", () => {
     expect(lifecycle.markRequestPaid).toHaveBeenCalledWith(prismaMock, "vr-1");
   });
 
+  it.each(["invoice.paid", "invoice.payment_failed"])(
+    "%s finds the subscription in parent.subscription_details (current API versions)",
+    async (type) => {
+      prismaMock.transaction.upsert.mockResolvedValue({
+        id: "txn-3",
+        verificationRequestId: "vr-1",
+      });
+
+      await run(type, {
+        id: "in_2",
+        billing_reason: "subscription_cycle",
+        amount_paid: 3500,
+        currency: "usd",
+        created: 1,
+        parent: { subscription_details: { subscription: "sub_1" } },
+      });
+
+      expect(prismaMock.stripeSubscription.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { subscriptionId: "sub_1" } }),
+      );
+      if (type === "invoice.paid") {
+        expect(lifecycle.markRequestPaid).toHaveBeenCalledWith(prismaMock, "vr-1");
+      } else {
+        expect(lifecycle.markRequestPaymentFailed).toHaveBeenCalledWith(prismaMock, "vr-1");
+      }
+    },
+  );
+
   it("invoice.payment_failed flags the payment but keeps the subscription active", async () => {
     await run("invoice.payment_failed", { id: "in_1", subscription: "sub_1" });
 

@@ -230,15 +230,27 @@ const recordFailedInvoice = async (subscriptionId: string) => {
   );
 };
 
+/**
+ * The subscription an invoice bills. Current API versions put it in
+ * parent.subscription_details; older ones had invoice.subscription.
+ */
+const invoiceSubscriptionId = (invoice: Stripe.Invoice) => {
+  const { parent, subscription } = invoice as Stripe.Invoice & {
+    parent?: { subscription_details?: { subscription?: string | { id: string } | null } | null };
+    subscription?: string | { id: string } | null;
+  };
+  const id = parent?.subscription_details?.subscription ?? subscription;
+  return typeof id === "string" ? id : id?.id;
+};
+
 const recordRenewalPayment = async (invoice: Stripe.Invoice) => {
   const invoiceWithSubscription = invoice as Stripe.Invoice & {
-    subscription?: string | Stripe.Subscription | null;
     amount_paid?: number | null;
     currency?: string | null;
     status_transitions?: { paid_at?: number | null };
   };
-  const subscriptionId = invoiceWithSubscription.subscription;
-  if (typeof subscriptionId !== "string") {
+  const subscriptionId = invoiceSubscriptionId(invoice);
+  if (!subscriptionId) {
     logger.warn(`Stripe invoice has no subscription invoiceId=${invoice.id}`);
     return;
   }
@@ -428,13 +440,8 @@ export const stripeWebhook = async (req: Request, res: Response) => {
         break;
       }
       case "invoice.payment_failed": {
-        const invoice = event.data.object as Stripe.Invoice;
-        const invoiceWithSubscription = invoice as Stripe.Invoice & {
-          subscription?: string | Stripe.Subscription | null;
-        };
-        if (typeof invoiceWithSubscription.subscription === "string") {
-          await recordFailedInvoice(invoiceWithSubscription.subscription);
-        }
+        const subscriptionId = invoiceSubscriptionId(event.data.object as Stripe.Invoice);
+        if (subscriptionId) await recordFailedInvoice(subscriptionId);
         break;
       }
       case "invoice.paid": {
