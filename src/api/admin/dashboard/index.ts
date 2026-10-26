@@ -117,8 +117,8 @@ const router = Router();
  *         status:
  *           type: string
  *           nullable: true
- *           description: The request's current status, as on the verification requests list; null for PROPERTY_ADDED.
- *           enum: [PENDING, ASSIGNED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED, PAYMENT_FAILED]
+ *           description: The request's current VerificationStatus, as on the verification requests list; null for PROPERTY_ADDED.
+ *           enum: [DRAFT, PENDING_PAYMENT, PAYMENT_FAILED, SUBMITTED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED]
  *           example: IN_PROGRESS
  *         verificationRequestId: { type: string, nullable: true, example: cmg4x2k1p0001 }
  *         property:
@@ -190,12 +190,11 @@ const router = Router();
  *         status:
  *           type: string
  *           description: >
- *             Display status, not the raw VerificationStatus. ASSIGNED when the agent assignment is ASSIGNED;
- *             otherwise PENDING for DRAFT, PENDING_PAYMENT and SUBMITTED; IN_PROGRESS for IN_PROGRESS or an
- *             assignment that is ACCEPTED or INSPECTION_SCHEDULED; otherwise the raw status
- *             (PAYMENT_FAILED, AWAITING_RENEWAL, COMPLETED, CANCELLED).
- *           enum: [PENDING, ASSIGNED, IN_PROGRESS, PAYMENT_FAILED, AWAITING_RENEWAL, COMPLETED, CANCELLED]
- *           example: ASSIGNED
+ *             The request's VerificationStatus. DRAFT and PENDING_PAYMENT are unpaid; SUBMITTED is paid and
+ *             waiting for an agent; IN_PROGRESS from the moment an agent is assigned until the period's
+ *             report is submitted.
+ *           enum: [DRAFT, PENDING_PAYMENT, PAYMENT_FAILED, SUBMITTED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED]
+ *           example: SUBMITTED
  *         agent:
  *           type: object
  *           nullable: true
@@ -955,7 +954,7 @@ router.post("/agents", checkJwt, checkIsAdmin, createAgentHandler);
  *               type: object
  *               properties:
  *                 id: { type: string }
- *                 status: { type: string, description: Same display status as the list, example: IN_PROGRESS }
+ *                 status: { type: string, description: "The request's VerificationStatus, as on the list", enum: [DRAFT, PENDING_PAYMENT, PAYMENT_FAILED, SUBMITTED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED], example: SUBMITTED }
  *                 client:
  *                   type: object
  *                   properties:

@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { prismaClient } from "../../../../../utils/prisma";
-import { getDisplayStatus } from "../../handlers/get-verification-requests/get-verification-requests.v1";
 
 export const activitySelect = {
   id: true,
@@ -33,7 +32,7 @@ export const toActivityResponse = ({
   amount: row.amount === null ? null : row.amount / 100,
   verificationType: request?.verificationType.name ?? null,
   // The request's current status, as on the verification requests list.
-  status: request ? getDisplayStatus(request) : null,
+  status: request?.status ?? null,
   property: property ? { id: property.id, title: property.name } : null,
 });
 

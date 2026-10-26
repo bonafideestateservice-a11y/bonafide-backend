@@ -107,7 +107,7 @@ describe("getVerificationRequests handler (unit)", () => {
           },
           propertyType: "RESIDENTIAL",
           location: { city: "Lagos", country: "Nigeria" },
-          status: "PENDING",
+          status: "SUBMITTED",
           agent: null,
           createdAt: "2026-01-06T00:00:00.000Z",
         },

@@ -2,7 +2,6 @@ import { NextFunction, Request, Response } from "express";
 import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptions";
 import { logger } from "../../../../../utils/logger";
 import { getVerificationRequestForAdmin } from "../../services/database/verification-request";
-import { getDisplayStatus } from "../get-verification-requests/get-verification-requests.v1";
 
 /** One verification request for the admin detail view. */
 export const getVerificationRequestHandler = async (
@@ -17,7 +16,7 @@ export const getVerificationRequestHandler = async (
     const { user, agentAssignment, verificationPlan, transactions, reports } = request;
     res.status(HttpStatusCode.OK).json({
       id: request.id,
-      status: getDisplayStatus(request),
+      status: request.status,
       client: {
         id: user.id,
         name: user.fullName,

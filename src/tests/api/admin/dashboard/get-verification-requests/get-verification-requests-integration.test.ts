@@ -167,7 +167,7 @@ describe("GET /api/v1/admin/verification-requests", () => {
         client: expect.objectContaining({ name: "Verification Pending Client" }),
         propertyType: "RESIDENTIAL",
         location: { city: "Lagos", country: "Nigeria" },
-        status: "PENDING",
+        status: "SUBMITTED",
         agent: null,
       }),
     ]);
@@ -184,7 +184,8 @@ describe("GET /api/v1/admin/verification-requests", () => {
     expect(res.body.data[0]).toEqual(
       expect.objectContaining({
         id: requestIds[1],
-        status: "ASSIGNED",
+        // The stored status as is (this fixture creates the assignment directly, without assigning).
+        status: "SUBMITTED",
         agent: { id: agentId, name: "Verification Requests Agent" },
       }),
     );

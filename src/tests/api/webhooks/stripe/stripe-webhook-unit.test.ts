@@ -13,6 +13,7 @@ const lifecycle = {
   completeRequestIfFinished: jest.fn(),
   announcePaymentFailed: jest.fn(),
   announceSubscriptionEnded: jest.fn(),
+  recordFailedRenewal: jest.fn(),
 };
 
 jest.mock("../../../../libs/stripe", () => ({
@@ -168,16 +169,27 @@ describe("stripeWebhook (unit)", () => {
       if (type === "invoice.paid") {
         expect(lifecycle.markRequestPaid).toHaveBeenCalledWith(prismaMock, "vr-1");
       } else {
-        expect(lifecycle.markRequestPaymentFailed).toHaveBeenCalledWith(prismaMock, "vr-1");
+        expect(lifecycle.recordFailedRenewal).toHaveBeenCalledWith(
+          expect.objectContaining({ verificationRequestId: "vr-1", providerRef: "in_2" }),
+        );
       }
     },
   );
 
-  it("invoice.payment_failed flags the payment but keeps the subscription active", async () => {
-    await run("invoice.payment_failed", { id: "in_1", subscription: "sub_1" });
+  it("invoice.payment_failed records the failed renewal once per invoice and keeps the subscription", async () => {
+    await run("invoice.payment_failed", {
+      id: "in_1",
+      subscription: "sub_1",
+      amount_due: 3500,
+      currency: "usd",
+    });
 
-    expect(lifecycle.markRequestPaymentFailed).toHaveBeenCalledWith(prismaMock, "vr-1");
-    expect(lifecycle.announcePaymentFailed).toHaveBeenCalled();
+    expect(lifecycle.recordFailedRenewal).toHaveBeenCalledWith({
+      verificationRequestId: "vr-1",
+      providerRef: "in_1",
+      amountInCents: 3500,
+      currency: "usd",
+    });
     expect(prismaMock.stripeSubscription.update).not.toHaveBeenCalled();
   });
 

@@ -55,22 +55,6 @@ const getAddressParts = (details: unknown) => {
   return { city: city?.trim() || null, country: country?.trim() || null };
 };
 
-export const getDisplayStatus = (request: {
-  status: string;
-  agentAssignment?: { status: string } | null;
-}) => {
-  if (request.agentAssignment?.status === "ASSIGNED") return "ASSIGNED";
-  if (["DRAFT", "PENDING_PAYMENT", "SUBMITTED"].includes(request.status)) return "PENDING";
-  if (
-    request.status === "IN_PROGRESS" ||
-    request.agentAssignment?.status === "ACCEPTED" ||
-    request.agentAssignment?.status === "INSPECTION_SCHEDULED"
-  ) {
-    return "IN_PROGRESS";
-  }
-  return request.status;
-};
-
 export const getVerificationRequestsHandler = async (
   req: Request,
   res: Response,
@@ -128,7 +112,7 @@ export const getVerificationRequestsHandler = async (
               ? details.propertyType
               : request.verificationType.name,
           location,
-          status: getDisplayStatus(request),
+          status: request.status,
           agent: request.agentAssignment?.agent
             ? { id: request.agentAssignment.agent.id, name: request.agentAssignment.agent.name }
             : null,

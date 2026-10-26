@@ -72,7 +72,7 @@ describe("GET /api/v1/admin/dashboard/activities", () => {
       agentName: agent.name,
       amount: null,
       verificationType: "Land Verification",
-      status: "PENDING",
+      status: "SUBMITTED",
       property: null,
     });
     expect(response.body.meta).toMatchObject({ page: 1, limit: 100 });

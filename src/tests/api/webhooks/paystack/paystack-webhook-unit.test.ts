@@ -18,6 +18,7 @@ const lifecycle = {
   completeRequestIfFinished: jest.fn(),
   announcePaymentFailed: jest.fn(),
   announceSubscriptionEnded: jest.fn(),
+  recordFailedRenewal: jest.fn(),
 };
 
 jest.mock("../../../../utils/prisma", () => ({ prismaClient: prismaMock }));
@@ -304,18 +305,26 @@ describe("paystackWebhook (unit)", () => {
       expect(lifecycle.announceSubscriptionEnded).not.toHaveBeenCalled();
     });
 
-    it("invoice.payment_failed marks the due payment failed", async () => {
+    it("invoice.payment_failed records the failed renewal once per invoice", async () => {
       await run({
         event: "invoice.payment_failed",
-        data: { invoice_code: "INV_1", subscription: { subscription_code: "SUB_1" } },
+        data: {
+          invoice_code: "INV_1",
+          amount: 5600000,
+          subscription: { subscription_code: "SUB_1" },
+        },
       });
 
       expect(prismaMock.paystackSubscription.updateMany).toHaveBeenCalledWith({
         where: { subscriptionCode: "SUB_1" },
         data: { status: "PAYMENT_FAILED" },
       });
-      expect(lifecycle.markRequestPaymentFailed).toHaveBeenCalledWith(prismaMock, "vr-1");
-      expect(lifecycle.announcePaymentFailed).toHaveBeenCalled();
+      expect(lifecycle.recordFailedRenewal).toHaveBeenCalledWith({
+        verificationRequestId: "vr-1",
+        providerRef: "INV_1",
+        amountInCents: 5600000,
+        currency: "NGN",
+      });
       expect(lifecycle.completeRequestIfFinished).not.toHaveBeenCalled();
     });
   });

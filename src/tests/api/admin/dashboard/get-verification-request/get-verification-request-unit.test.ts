@@ -15,7 +15,7 @@ const find = getVerificationRequestForAdmin as jest.Mock;
 describe("getVerificationRequestHandler (unit)", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("returns the request with display status, agent and reports", async () => {
+  it("returns the request with its status, agent and reports", async () => {
     find.mockResolvedValue({
       id: "vr-1",
       status: "IN_PROGRESS",
