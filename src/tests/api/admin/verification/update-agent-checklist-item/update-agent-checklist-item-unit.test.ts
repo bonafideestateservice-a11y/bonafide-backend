@@ -56,6 +56,35 @@ describe("updateAgentAssignmentChecklistItem (unit)", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["COMPLETED", "COMPLETE"],
+    ["complete", "COMPLETE"],
+    [" Pending ", "PENDING"],
+  ])("accepts status %p as %s", async (sent, saved) => {
+    mockedUpdateItem.mockResolvedValue({ id: "item-1" });
+    const { req, res, next } = buildMockReqRes({ status: sent });
+
+    await updateAgentAssignmentChecklistItem(req, res, next);
+
+    expect(mockedUpdateItem).toHaveBeenCalledWith("agent-1", "assignment-1", "item-1", saved, []);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("keeps the current status when none is sent (adding photos only)", async () => {
+    mockedUpdateItem.mockResolvedValue({ id: "item-1" });
+    const { req, res, next } = buildMockReqRes({});
+
+    await updateAgentAssignmentChecklistItem(req, res, next);
+
+    expect(mockedUpdateItem).toHaveBeenCalledWith(
+      "agent-1",
+      "assignment-1",
+      "item-1",
+      undefined,
+      [],
+    );
+  });
+
   it("rejects an invalid status", async () => {
     const { req, res, next } = buildMockReqRes({ status: "DONE" });
 

@@ -21,6 +21,18 @@ cloudinary.config({
   secure: true,
 });
 
+/**
+ * PENDING, or COMPLETE (COMPLETED is accepted too), in any letter case. Undefined when not sent,
+ * so uploading more photos keeps the item's status; null when the value isn't recognised.
+ */
+const parseStatus = (value: unknown): "PENDING" | "COMPLETE" | undefined | null => {
+  if (value === undefined || value === "") return undefined;
+  const status = typeof value === "string" ? value.trim().toUpperCase() : "";
+  if (status === "PENDING") return "PENDING";
+  if (status === "COMPLETE" || status === "COMPLETED") return "COMPLETE";
+  return null;
+};
+
 export const updateAgentAssignmentChecklistItem = async (
   req: Request,
   res: Response,
@@ -32,8 +44,8 @@ export const updateAgentAssignmentChecklistItem = async (
       return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
 
-    const status = req.body.status ?? "PENDING";
-    if (status !== "PENDING" && status !== "COMPLETE") {
+    const status = parseStatus(req.body?.status);
+    if (status === null) {
       return next(new BadRequestError("Status must be PENDING or COMPLETE."));
     }
 

@@ -236,10 +236,9 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *         status:
  *           type: string
  *           enum: [PENDING, COMPLETE]
- *           default: PENDING
  *           description: >
- *             New item status. Defaults to PENDING when omitted, so a media-only update
- *             resets a COMPLETE item to PENDING.
+ *             New item status. COMPLETED and any letter case are also accepted (saved as COMPLETE).
+ *             Leave it out to keep the current status, e.g. when only adding photos.
  *         media:
  *           type: array
  *           description: >
@@ -775,7 +774,7 @@ router.get(
  *     tags: [Admin Verification]
  *     summary: Update a checklist item's status and optionally attach media
  *     description: >
- *       Uploads any `media` files to Cloudinary, sets the item's status, attaches the files to
+ *       Uploads any `media` files to Cloudinary, sets the item's status (if sent), attaches the files to
  *       the item, and recomputes the assignment's progressPercent. Media files are uploaded
  *       before the item is looked up, so they are uploaded even when the request then 404s.
  *     security:
@@ -808,7 +807,7 @@ router.get(
  *             type: object
  *             description: Status-only update without files.
  *             properties:
- *               status: { type: string, enum: [PENDING, COMPLETE], default: PENDING }
+ *               status: { type: string, enum: [PENDING, COMPLETE], description: "COMPLETED and any letter case are also accepted. Leave out to keep the current status." }
  *     responses:
  *       200:
  *         description: The updated checklist item with all of its media.
@@ -816,7 +815,7 @@ router.get(
  *           application/json:
  *             schema: { $ref: '#/components/schemas/AdminVerificationChecklistItem' }
  *       400:
- *         description: "status is present but not PENDING or COMPLETE (`Status must be PENDING or COMPLETE.`)."
+ *         description: "status is present but not PENDING, COMPLETE or COMPLETED (`Status must be PENDING or COMPLETE.`)."
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }

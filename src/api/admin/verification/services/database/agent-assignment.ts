@@ -612,7 +612,8 @@ export const updateAgentChecklistItem = async (
   agentId: string,
   assignmentId: string,
   itemId: string,
-  status: "PENDING" | "COMPLETE",
+  /** Leave out to keep the item's current status (e.g. when only adding photos). */
+  status: "PENDING" | "COMPLETE" | undefined,
   media: ChecklistMediaData[] = [],
 ): Promise<UpdatedAgentChecklistItem | null> => {
   try {
@@ -632,10 +633,12 @@ export const updateAgentChecklistItem = async (
       if (!item?.agentAssignment) return null;
       const { verificationRequestId } = item.agentAssignment;
 
-      await transaction.verificationChecklistItem.update({
-        where: { id: item.id },
-        data: { status },
-      });
+      if (status) {
+        await transaction.verificationChecklistItem.update({
+          where: { id: item.id },
+          data: { status },
+        });
+      }
 
       if (media.length > 0) {
         await transaction.document.createMany({

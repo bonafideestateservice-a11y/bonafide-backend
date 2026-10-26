@@ -789,7 +789,7 @@ router.post("/fcm-token", checkJwt, registerFcmTokenHandler);
  *           schema:
  *             type: object
  *             properties:
- *               fcmToken: { type: string, description: This browser's FCM token, if push was enabled }
+ *               fcmToken: { type: string, description: "This browser's FCM token, if push was enabled" }
  *     responses:
  *       200:
  *         description: Logged out.
