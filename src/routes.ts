@@ -6,6 +6,7 @@ import clientNotificationRoutes from "./api/client/notifications";
 import adminAuthenticationRoutes from "./api/admin/authentication";
 import adminDashboardRoutes from "./api/admin/dashboard";
 import adminVerificationRoutes from "./api/admin/verification";
+import authRoutes from "./api/auth";
 import webhookRoutes from "./api/webhooks";
 
 const router = Router();
@@ -15,6 +16,7 @@ const healthCheckHandler = (_req: Request, res: Response) => {
 };
 
 router.get("/healthcheck", healthCheckHandler);
+router.use("/:version/auth", authRoutes);
 router.use("/:version/client", clientAuthenticationRoutes);
 router.use("/:version/client", clientVerificationRoutes);
 router.use("/:version/client", clientPropertyRoutes);
