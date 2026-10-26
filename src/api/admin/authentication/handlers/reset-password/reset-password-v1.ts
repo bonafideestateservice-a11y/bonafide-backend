@@ -41,7 +41,10 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
 
     const hashedPassword = await hashPassword(password);
 
-    await updateAdmin({ id: resetRecord.userId }, { password: hashedPassword });
+    await updateAdmin(
+      { id: resetRecord.userId },
+      { password: hashedPassword, mustChangePassword: false },
+    );
     logger.info(`Password reset successful for admin: ${resetRecord.userId}`);
 
     await markTokenAsUsed(resetRecord.id);

@@ -134,7 +134,10 @@ describe("changePassword handler (unit)", () => {
     await changePassword(req, res, next);
 
     expect(mockedBcrypt.hash).toHaveBeenCalledWith("newpass123", 10);
-    expect(mockedUpdateAdmin).toHaveBeenCalledWith({ id: "u1" }, { password: "new_hashed" });
+    expect(mockedUpdateAdmin).toHaveBeenCalledWith(
+      { id: "u1" },
+      { password: "new_hashed", mustChangePassword: false },
+    );
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ message: "Password has been changed successfully." }),

@@ -20,6 +20,7 @@ export interface UpdateAdminData {
   profilePhoto?: string | null;
   role?: ROLE;
   termsAndCondition?: boolean;
+  mustChangePassword?: boolean;
 }
 
 export interface FindAdminUnique {

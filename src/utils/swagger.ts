@@ -50,6 +50,10 @@ const options: swaggerJsdoc.Options = {
             location: { type: "string", nullable: true, example: "Lagos" },
             profilePhoto: { type: "string", format: "uri", nullable: true },
             termsAndCondition: { type: "boolean" },
+            mustChangePassword: {
+              type: "boolean",
+              description: "True for an agent still using the password an admin set.",
+            },
             provider: {
               type: "string",
               nullable: true,

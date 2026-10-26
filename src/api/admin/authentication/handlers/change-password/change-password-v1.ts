@@ -80,7 +80,7 @@ export const changePassword = async (
     // --- Hash and update new password ---
     const hashedPassword = await hashPassword(newPassword);
 
-    await updateAdmin({ id: admin.id }, { password: hashedPassword });
+    await updateAdmin({ id: admin.id }, { password: hashedPassword, mustChangePassword: false });
 
     logger.info(`Password successfully changed for adminId=${admin.id}`);
 

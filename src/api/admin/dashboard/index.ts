@@ -887,10 +887,10 @@ router.get("/agents", checkJwt, checkIsAdmin, getAgentsHandler);
  *     tags: [Admin Dashboard]
  *     summary: Add an agent
  *     description: >
- *       Creates an AGENT account with no password and emails the agent (AGENT_WELCOME) a 6-digit
- *       setup code valid for 48 hours. The agent sets a password with POST /admin/reset-password
- *       ({email, otp: setupCode, password}), then logs in with POST /admin/login. If the code
- *       expires, POST /admin/forgot-password sends a new one. Admin only.
+ *       Creates an AGENT user and their verification agent record. The admin sets the first
+ *       password and shares it with the agent, who logs in at /admin/login. Login returns
+ *       `user.mustChangePassword: true` until the agent changes the password
+ *       (/admin/change-password) or resets it. Admin only.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -901,35 +901,35 @@ router.get("/agents", checkJwt, checkIsAdmin, getAgentsHandler);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [fullName, email]
+ *             required: [fullName, email, password]
  *             properties:
- *               fullName: { type: string, example: John Anderson }
- *               email: { type: string, format: email, description: Trimmed and lower-cased, example: john.anderson@example.com }
+ *               fullName: { type: string, example: Tunde Bello }
+ *               email: { type: string, format: email, example: tunde@example.com }
+ *               password: { type: string, minLength: 8, description: Temporary password the agent must change }
  *               phone: { type: string, nullable: true, example: "+2348012345678" }
  *               region: { type: string, nullable: true, example: Lagos }
  *     responses:
  *       201:
- *         description: The new agent. The setup code is only sent by email.
+ *         description: The created agent. Use `id` for the other /admin/agents endpoints.
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 id: { type: string, description: Agent id used by the other /admin/agents endpoints, example: cmg3agent01 }
+ *                 id: { type: string, description: Verification agent ID, example: cmg3agent01 }
  *                 userId: { type: string, format: uuid }
- *                 name: { type: string, example: John Anderson }
+ *                 name: { type: string, example: Tunde Bello }
  *                 email: { type: string, format: email }
  *                 phone: { type: string, nullable: true }
- *                 region: { type: string, nullable: true, example: Lagos }
+ *                 region: { type: string, nullable: true }
  *                 status: { type: string, enum: [ACTIVE, INACTIVE], example: ACTIVE }
+ *                 mustChangePassword: { type: boolean, example: true }
  *                 createdAt: { type: string, format: date-time }
- *       400:
- *         description: fullName missing, email invalid, or phone/region not a string.
- *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ *       400: { $ref: '#/components/responses/AdminDashboardBadRequest' }
  *       401: { $ref: '#/components/responses/AdminDashboardUnauthorized' }
  *       403: { $ref: '#/components/responses/AdminDashboardForbidden' }
  *       409:
- *         description: An account with this email already exists.
+ *         description: A user with this email already exists.
  *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
  *       500: { $ref: '#/components/responses/AdminDashboardServerError' }
  */

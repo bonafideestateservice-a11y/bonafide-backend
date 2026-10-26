@@ -1,11 +1,11 @@
 import request from "supertest";
 import app from "../../../../../app";
-import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { createFixtures } from "../../../../helpers/fixtures";
 
-const fx = createFixtures("create-agent");
+const fx = createFixtures("add-agent");
 const email = `new-agent-${fx.tag}@example.com`;
+const password = "Temp@1234";
 let adminToken: string;
 let clientToken: string;
 
@@ -14,69 +14,85 @@ beforeAll(async () => {
   clientToken = (await fx.createUser("CLIENT", "client")).token;
 });
 afterAll(async () => {
-  const user = await prismaClient.user.findUnique({ where: { email } });
-  if (user) {
-    await prismaClient.verificationAgent.deleteMany({ where: { userId: user.id } });
-    await prismaClient.user.delete({ where: { id: user.id } });
-  }
+  await prismaClient.verificationAgent.deleteMany({ where: { user: { email } } });
+  await prismaClient.user.deleteMany({ where: { email } });
   await fx.cleanup();
   await prismaClient.$disconnect();
 });
 
-const createAgent = (body: object, token = adminToken) =>
-  request(app).post("/api/v1/admin/agents").set("Authorization", `Bearer ${token}`).send(body);
+const addAgent = (data: Record<string, unknown>, token = adminToken) =>
+  request(app).post("/api/v1/admin/agents").set("Authorization", `Bearer ${token}`).send(data);
 
 describe("POST /api/v1/admin/agents", () => {
-  it("creates an agent who sets a password with the emailed code and logs in", async () => {
-    const emit = jest.spyOn(appEvents, "emit");
-
-    const response = await createAgent({
-      fullName: "John Anderson",
+  it("creates an agent who must change the admin-set password", async () => {
+    const response = await addAgent({
+      fullName: "Tunde Bello",
       email: email.toUpperCase(),
+      password,
+      phone: "+2348012345678",
       region: "Lagos",
     });
 
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({
-      name: "John Anderson",
+      name: "Tunde Bello",
       email,
+      phone: "+2348012345678",
       region: "Lagos",
-      phone: null,
       status: "ACTIVE",
+      mustChangePassword: true,
     });
-    expect(response.body).not.toHaveProperty("setupCode");
-    const user = await prismaClient.user.findUniqueOrThrow({ where: { email } });
-    expect(user).toMatchObject({ role: "AGENT", password: null });
+    expect(response.body).not.toHaveProperty("password");
 
-    const [, payload] = emit.mock.calls.find(([type]) => type === AppEventTypes.AGENT_CREATED)!;
-    const { setupCode, expiresIn } = payload as { setupCode: string; expiresIn: string };
-    expect(setupCode).toMatch(/^\d{6}$/);
-    expect(expiresIn).toBe("48 hours");
-    emit.mockRestore();
+    const user = await prismaClient.user.findUniqueOrThrow({
+      where: { email },
+      include: { verificationAgent: true },
+    });
+    expect(user.role).toBe("AGENT");
+    expect(user.password).not.toBe(password);
+    expect(user.verificationAgent?.id).toBe(response.body.id);
 
-    const reset = await request(app)
-      .post("/api/v1/admin/reset-password")
-      .send({ email, otp: setupCode, password: "Agent!2345" });
-    expect(reset.status).toBe(200);
-
-    const login = await request(app)
-      .post("/api/v1/admin/login")
-      .send({ email, password: "Agent!2345" });
-    expect(login.status).toBe(200);
+    // The agent appears in the agents list.
+    const list = await request(app)
+      .get("/api/v1/admin/agents")
+      .query({ search: email })
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(list.body.data.map((agent: { id: string }) => agent.id)).toContain(response.body.id);
   });
 
-  it("returns 409 for an email already in use", async () => {
-    const response = await createAgent({ fullName: "Someone Else", email });
+  it("lets the agent log in, then clears the flag once the password is changed", async () => {
+    const login = await request(app).post("/api/v1/admin/login").send({ email, password });
+    expect(login.status).toBe(200);
+    expect(login.body.user).toMatchObject({ role: "AGENT", mustChangePassword: true });
+
+    const change = await request(app)
+      .post("/api/v1/admin/change-password")
+      .set("Authorization", `Bearer ${login.body.token}`)
+      .send({
+        currentPassword: password,
+        newPassword: "Agent@5678",
+        confirmPassword: "Agent@5678",
+      });
+    expect(change.status).toBe(200);
+
+    const again = await request(app)
+      .post("/api/v1/admin/login")
+      .send({ email, password: "Agent@5678" });
+    expect(again.body.user.mustChangePassword).toBe(false);
+  });
+
+  it("rejects a duplicate email", async () => {
+    const response = await addAgent({ fullName: "Copy", email, password });
     expect(response.status).toBe(409);
   });
 
   it("validates the body", async () => {
-    expect((await createAgent({ email: "x@example.com" })).status).toBe(400);
-    expect((await createAgent({ fullName: "X", email: "bad" })).status).toBe(400);
+    const response = await addAgent({ fullName: "No Password", email: `x-${email}` });
+    expect(response.status).toBe(400);
   });
 
   it("is admin only", async () => {
-    const response = await createAgent({ fullName: "X", email: "x@example.com" }, clientToken);
-    expect(response.status).toBe(403);
+    expect((await addAgent({}, clientToken)).status).toBe(403);
+    expect((await request(app).post("/api/v1/admin/agents").send({})).status).toBe(401);
   });
 });

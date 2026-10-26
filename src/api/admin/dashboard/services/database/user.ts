@@ -179,3 +179,60 @@ export const findUserForStatusChange = (id: string) =>
 
 export const setUserStatus = (id: string, status: UserStatus) =>
   prismaClient.user.update({ where: { id }, data: { status }, select: { id: true, status: true } });
+
+export const findUserByEmail = (email: string) =>
+  prismaClient.user.findUnique({ where: { email }, select: { id: true } });
+
+export interface CreateAgentData {
+  fullName: string;
+  email: string;
+  /** Already hashed. */
+  password: string;
+  phone: string | null;
+  region: string | null;
+}
+
+/**
+ * "Add Agent": an AGENT user and their verification agent record, created together.
+ * The agent must change the admin-set password after logging in.
+ */
+export const createAgent = async ({
+  fullName,
+  email,
+  password,
+  phone,
+  region,
+}: CreateAgentData) => {
+  const user = await prismaClient.user.create({
+    data: {
+      fullName,
+      email,
+      password,
+      phone,
+      role: ROLE.AGENT,
+      termsAndCondition: true,
+      mustChangePassword: true,
+      verificationAgent: { create: { name: fullName, phone, region } },
+    },
+    select: {
+      id: true,
+      email: true,
+      mustChangePassword: true,
+      verificationAgent: {
+        select: { id: true, name: true, phone: true, region: true, status: true, createdAt: true },
+      },
+    },
+  });
+  const agent = user.verificationAgent!;
+  return {
+    id: agent.id,
+    userId: user.id,
+    name: agent.name,
+    email: user.email,
+    phone: agent.phone,
+    region: agent.region,
+    status: agent.status,
+    mustChangePassword: user.mustChangePassword,
+    createdAt: agent.createdAt,
+  };
+};

@@ -1,16 +1,13 @@
-import crypto from "crypto";
 import {
   AgentAssignmentStatus,
   AgentStatus,
   Prisma,
-  ROLE,
   UserStatus,
   VerificationStatus,
 } from "@prisma/client";
 import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
-import { generateNumericOTP } from "../../../../../utils/otp";
 import { findUnreportedPaidTransaction } from "../../../../services/database/verification-lifecycle";
 import {
   MAX_ACTIVE_ASSIGNMENTS,
@@ -895,69 +892,4 @@ export const getAgentAssignmentStats = async (): Promise<AgentAssignmentStats> =
     logger.error(`Error fetching agent assignment stats ${error}`);
     throw error;
   }
-};
-
-const SETUP_CODE_HOURS = 48;
-
-export interface CreateAgentData {
-  fullName: string;
-  email: string;
-  phone?: string | null;
-  region?: string | null;
-}
-
-/**
- * Create an agent account with no password, and a 48-hour setup code the agent uses with
- * POST /admin/reset-password to set one. The welcome email carries the code.
- * Null when the email is already in use.
- */
-export const createAgent = async (data: CreateAgentData) => {
-  const setupCode = generateNumericOTP(6);
-  let user;
-  try {
-    user = await prismaClient.user.create({
-      data: {
-        fullName: data.fullName,
-        email: data.email,
-        phone: data.phone ?? null,
-        role: ROLE.AGENT,
-        verificationAgent: {
-          create: { name: data.fullName, phone: data.phone ?? null, region: data.region ?? null },
-        },
-        passwordResetTokens: {
-          create: {
-            tokenHash: crypto.createHash("sha256").update(setupCode).digest("hex"),
-            expiresAt: new Date(Date.now() + SETUP_CODE_HOURS * 60 * 60 * 1000),
-          },
-        },
-      },
-      select: { id: true, email: true, fullName: true, verificationAgent: true },
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return null;
-    }
-    throw error;
-  }
-
-  appEvents.emit(AppEventTypes.AGENT_CREATED, {
-    userId: user.id,
-    email: user.email,
-    fullName: user.fullName,
-    setupCode,
-    expiresIn: `${SETUP_CODE_HOURS} hours`,
-  });
-  logger.info(`Agent created userId=${user.id}`);
-
-  const agent = user.verificationAgent!;
-  return {
-    id: agent.id,
-    userId: user.id,
-    name: agent.name,
-    email: user.email,
-    phone: agent.phone,
-    region: agent.region,
-    status: agent.status,
-    createdAt: agent.createdAt,
-  };
 };

@@ -123,7 +123,10 @@ describe("resetPassword handler (unit)", () => {
     await resetPassword(req, res, next);
 
     expect(mockedHashPassword).toHaveBeenCalledWith("newpass123");
-    expect(mockedUpdateAdmin).toHaveBeenCalledWith({ id: "u1" }, { password: "new_hashed_pw" });
+    expect(mockedUpdateAdmin).toHaveBeenCalledWith(
+      { id: "u1" },
+      { password: "new_hashed_pw", mustChangePassword: false },
+    );
     expect(mockedMarkTokenAsUsed).toHaveBeenCalledWith("rt1");
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(res.json).toHaveBeenCalledWith(
