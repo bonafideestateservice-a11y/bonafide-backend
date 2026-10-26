@@ -145,3 +145,37 @@ export const deleteFcmToken = async (where: Prisma.FCMTokenWhereUniqueInput): Pr
     throw new Error("Failed to delete FCM token");
   }
 };
+
+/**
+ * Saves a browser/device token for the user. A token already saved (for example, from another
+ * user on the same browser) moves to this user and becomes active again.
+ */
+export const saveFcmTokenForUser = async (userId: string, token: string): Promise<FCMToken> => {
+  try {
+    const tokenRecord = await prismaClient.fCMToken.upsert({
+      where: { token },
+      create: { userId, token },
+      update: { userId, isActive: true, lastSeenAt: new Date() },
+    });
+    logger.info(`FCM token saved id=${tokenRecord.id} userId=${userId}`);
+    return tokenRecord;
+  } catch (error) {
+    logger.error(`Error saving FCM token for user ${userId} ${error}`);
+    throw error;
+  }
+};
+
+/** Stops pushes to one of the user's tokens. Returns how many tokens were deactivated (0 or 1). */
+export const deactivateFcmTokenForUser = async (userId: string, token: string): Promise<number> => {
+  try {
+    const { count } = await prismaClient.fCMToken.updateMany({
+      where: { userId, token, isActive: true },
+      data: { isActive: false, lastSeenAt: new Date() },
+    });
+    logger.info(`FCM tokens deactivated userId=${userId} count=${count}`);
+    return count;
+  } catch (error) {
+    logger.error(`Error deactivating FCM token for user ${userId} ${error}`);
+    throw error;
+  }
+};

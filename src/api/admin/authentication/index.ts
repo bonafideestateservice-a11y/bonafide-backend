@@ -12,6 +12,7 @@ import { getProfile } from "./handlers/get-profile/get-profile-v1";
 import { updateProfile } from "./handlers/update-profile/update-profile-v1";
 import { changeEmail } from "./handlers/change-email/change-email-v1";
 import { updateNotificationSettings } from "./handlers/update-notification-settings/update-notification-settings-v1";
+import { logoutHandler, registerFcmTokenHandler } from "../../services/handlers/fcm-token";
 import multer from "multer";
 
 const router = Router();
@@ -559,6 +560,91 @@ router.patch("/profile/email", checkJwt, adminOrAgent, changeEmail);
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.patch("/notification-settings", checkJwt, adminOrAgent, updateNotificationSettings);
+
+/**
+ * @swagger
+ * /api/{version}/admin/fcm-token:
+ *   post:
+ *     tags: [Admin Authentication]
+ *     summary: Save this browser's FCM token for push notifications
+ *     description: >
+ *       Call after login and whenever Firebase returns a new token. Saving a token that is
+ *       already stored moves it to the logged-in user and reactivates it.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [fcmToken]
+ *             properties:
+ *               fcmToken: { type: string, maxLength: 4096, description: Token from Firebase getToken() }
+ *     responses:
+ *       200:
+ *         description: Token saved.
+ *         content:
+ *           application/json:
+ *             schema: { type: object, properties: { message: { type: string, example: FCM token saved. } } }
+ *       400:
+ *         description: fcmToken missing, blank, not a string or too long.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ *       401:
+ *         description: Missing, invalid or expired token.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ *       403:
+ *         description: The authenticated user is not an ADMIN or AGENT.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ *       500:
+ *         description: Unexpected server or database error.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ */
+router.post("/fcm-token", checkJwt, adminOrAgent, registerFcmTokenHandler);
+
+/**
+ * @swagger
+ * /api/{version}/admin/logout:
+ *   post:
+ *     tags: [Admin Authentication]
+ *     summary: Log out and stop push notifications to this browser
+ *     description: >
+ *       The JWT is stateless, so the app must also discard it. Send this browser's FCM token to
+ *       stop pushes to it; without one, nothing is changed on the server.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: version, required: true, schema: { type: string, enum: [v1], default: v1 } }
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fcmToken: { type: string, description: This browser's FCM token, if push was enabled }
+ *     responses:
+ *       200:
+ *         description: Logged out.
+ *         content:
+ *           application/json:
+ *             schema: { type: object, properties: { message: { type: string, example: Logged out. } } }
+ *       400:
+ *         description: fcmToken is not a string.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ *       401:
+ *         description: Missing, invalid or expired token.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ *       403:
+ *         description: The authenticated user is not an ADMIN or AGENT.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ *       500:
+ *         description: Unexpected server or database error.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+ */
+router.post("/logout", checkJwt, adminOrAgent, logoutHandler);
 
 /**
  * @swagger
