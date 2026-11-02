@@ -7,8 +7,8 @@ export interface CreateVerificationPlanData {
   frequency: VERIFICATION_FREQUENCY;
   name: string;
   description?: string | null;
-  priceInCents: number;
-  currency?: string;
+  priceUsdCents: number;
+  priceNgnKobo: number;
 }
 
 export interface UpdateVerificationPlanData {
@@ -16,8 +16,8 @@ export interface UpdateVerificationPlanData {
   frequency?: VERIFICATION_FREQUENCY;
   name?: string;
   description?: string | null;
-  priceInCents?: number;
-  currency?: string;
+  priceUsdCents?: number;
+  priceNgnKobo?: number;
 }
 
 export interface FindVerificationPlanUnique {
@@ -26,7 +26,7 @@ export interface FindVerificationPlanUnique {
 
 export type VerificationPlanCard = Pick<
   VerificationPlan,
-  "id" | "frequency" | "name" | "description" | "priceInCents" | "currency"
+  "id" | "frequency" | "name" | "description" | "priceUsdCents" | "priceNgnKobo"
 >;
 
 export const getVerificationPlansForTypeSlug = async (
@@ -43,8 +43,8 @@ export const getVerificationPlansForTypeSlug = async (
         frequency: true,
         name: true,
         description: true,
-        priceInCents: true,
-        currency: true,
+        priceUsdCents: true,
+        priceNgnKobo: true,
       },
     });
     logger.info(

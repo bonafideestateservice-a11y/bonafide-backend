@@ -148,7 +148,13 @@ beforeAll(async () => {
   ).id;
   planId = (
     await prismaClient.verificationPlan.create({
-      data: { verificationTypeId, frequency: "MONTHLY", name: "Monthly", priceInCents: 500000 },
+      data: {
+        verificationTypeId,
+        frequency: "MONTHLY",
+        name: "Monthly",
+        priceUsdCents: 500000,
+        priceNgnKobo: 800000000,
+      },
     })
   ).id;
 });

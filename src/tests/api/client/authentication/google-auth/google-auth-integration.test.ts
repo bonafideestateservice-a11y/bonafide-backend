@@ -61,6 +61,7 @@ describe("POST /api/v1/client/auth/google/token", () => {
         provider: "google",
         profilePhoto: "https://cdn.test/avatar.jpg",
         termsAndCondition: true,
+        countryCode: null,
       },
     });
     expect(response.body.user).not.toHaveProperty("password");
@@ -70,6 +71,14 @@ describe("POST /api/v1/client/auth/google/token", () => {
       .get("/api/v1/client/profile")
       .set("Authorization", `Bearer ${response.body.token}`);
     expect(profileResponse.status).toBe(200);
+    expect(profileResponse.body.countryCode).toBeNull();
+
+    const countryResponse = await request(app)
+      .patch("/api/v1/client/profile")
+      .set("Authorization", `Bearer ${response.body.token}`)
+      .send({ countryCode: "NG" });
+    expect(countryResponse.status).toBe(200);
+    expect(countryResponse.body.countryCode).toBe("NG");
   });
 
   it("signs the same Google account into the same user next time", async () => {

@@ -21,12 +21,10 @@ async function listAllPaystackPlans() {
 }
 
 /**
- * LIVE: creates a Paystack plan for each recurring verification plan, in the plan's own currency
- * (USD), and saves its plan code. The test account can't take USD; use
- * setup-paystack-test-plans.ts (`npm run paystack:test-plans`) there instead.
+ * Creates a Paystack plan in NGN for each recurring verification plan and saves its plan code.
  * Safe to re-run: a Paystack plan already made for a verification plan (matched by the
  * "verification_plan_id=..." description) is reused, and its code saved if missing.
-*/
+ */
 
 async function setupPaystackPlans() {
   if (!process.env.PAYSTACK_SECRET_KEY) {
@@ -49,7 +47,7 @@ async function setupPaystackPlans() {
       continue;
     }
 
-    const marker = `verification_plan_id=${verificationPlan.id}`;
+    const marker = `verification_plan_id=${verificationPlan.id};currency=NGN;interval=${interval}`;
     let planCode = codeByDescription.get(marker);
     if (planCode) {
       logger.info(`Paystack plan ${planCode} already exists for ${label}`);
@@ -57,19 +55,19 @@ async function setupPaystackPlans() {
       planCode = (
         await createPaystackPlan({
           name: `${verificationPlan.verificationType.name} - ${verificationPlan.name}`,
-          amount: verificationPlan.priceInCents,
+          amount: verificationPlan.priceNgnKobo,
           interval,
-          currency: verificationPlan.currency,
+          currency: "NGN",
           description: marker,
         })
       ).plan_code;
       logger.info(`Created Paystack plan ${planCode} for ${label}`);
     }
 
-    if (verificationPlan.paystackPlanCode !== planCode) {
+    if (verificationPlan.paystackNgnPlanCode !== planCode) {
       await prismaClient.verificationPlan.update({
         where: { id: verificationPlan.id },
-        data: { paystackPlanCode: planCode },
+        data: { paystackNgnPlanCode: planCode },
       });
     }
   }

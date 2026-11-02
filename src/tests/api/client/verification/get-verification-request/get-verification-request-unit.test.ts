@@ -51,8 +51,8 @@ describe("getVerificationRequest handler (unit)", () => {
       verificationPlan: {
         frequency: "ONE_TIME",
         name: "One time verification",
-        priceInCents: 4500,
-        currency: "USD",
+        priceUsdCents: 4500,
+        priceNgnKobo: 7200000,
       },
     });
     const { req, res, next } = buildMockReqRes("user-1");
@@ -69,8 +69,9 @@ describe("getVerificationRequest handler (unit)", () => {
       plan: {
         frequency: "ONE_TIME",
         name: "One time verification",
-        priceInCents: 4500,
-        currency: "USD",
+        priceUsdCents: 4500,
+        priceNgnKobo: 7200000,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
       createdAt: "2026-09-18T10:00:00.000Z",
     });

@@ -31,15 +31,14 @@ const mockedSession = createPaystackSession as jest.Mock;
 const env = { ...process.env };
 const plan = {
   frequency: "ONE_TIME",
-  priceInCents: 500000,
-  currency: "NGN",
-  paystackPlanCode: null,
+  priceNgnKobo: 500000,
+  paystackNgnPlanCode: null,
 };
 const verificationRequest = (overrides: object = {}) => ({
   id: "r1",
   userId: "u1",
   status: "DRAFT",
-  user: { email: "c@x.com", paystackCustomerCode: "CUS_1" },
+  user: { email: "c@x.com", countryCode: "NG", paystackCustomerCode: "CUS_1" },
   verificationPlan: plan,
   ...overrides,
 });
@@ -97,7 +96,9 @@ describe("initializeVerificationPaymentPaystack (unit)", () => {
 
   it("creates and saves a Paystack customer the first time", async () => {
     prisma.verificationRequest.findUnique.mockResolvedValue(
-      verificationRequest({ user: { email: "c@x.com", paystackCustomerCode: null } }),
+      verificationRequest({
+        user: { email: "c@x.com", countryCode: "NG", paystackCustomerCode: null },
+      }),
     );
     mockedCustomer.mockResolvedValue({ customer_code: "CUS_new" });
 
@@ -115,11 +116,11 @@ describe("initializeVerificationPaymentPaystack (unit)", () => {
     tx.transaction.findFirst.mockResolvedValue({
       id: "t0",
       status: "PENDING",
+      currency: "NGN",
       providerRef: "ref_0",
       authorizationUrl: "https://checkout.paystack.com/0",
       accessCode: "ac_0",
     });
-
     const { res } = await call();
 
     expect(mockedSession).not.toHaveBeenCalled();
@@ -128,6 +129,22 @@ describe("initializeVerificationPaymentPaystack (unit)", () => {
       access_code: "ac_0",
       reference: "ref_0",
     });
+  });
+
+  it("does not reuse a pending checkout created in another currency", async () => {
+    tx.transaction.findFirst.mockResolvedValue({
+      id: "t0",
+      status: "PENDING",
+      currency: "USD",
+      providerRef: "ref_0",
+      authorizationUrl: "https://checkout.paystack.com/0",
+      accessCode: "ac_0",
+    });
+
+    const { next } = await call();
+
+    expect(errorStatus(next)).toBe(409);
+    expect(mockedSession).not.toHaveBeenCalled();
   });
 
   it("retries a failed payment on the same transaction", async () => {
@@ -149,6 +166,8 @@ describe("initializeVerificationPaymentPaystack (unit)", () => {
     ["another client's request", { id: "u1" }, { userId: "u2" }, 403],
     ["a request that isn't payable", { id: "u1" }, { status: "SUBMITTED" }, 409],
     ["no plan selected", { id: "u1" }, { verificationPlan: null }, 400],
+    ["country not selected", { id: "u1" }, { user: { email: "c@x.com", countryCode: null } }, 400],
+    ["non-Nigerian country", { id: "u1" }, { user: { email: "c@x.com", countryCode: "US" } }, 400],
     [
       "a recurring plan with no Paystack plan",
       { id: "u1" },

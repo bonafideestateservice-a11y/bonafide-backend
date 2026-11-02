@@ -66,6 +66,31 @@ describe("client profile handlers (unit)", () => {
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
   });
 
+  it("saves a normalized country code from profile setup", async () => {
+    mockedUpdateProfile.mockResolvedValue({ id: "client-1", countryCode: "NG" });
+    const { req, res, next } = buildMockReqRes({ countryCode: " ng " });
+
+    await updateProfile(req, res, next);
+
+    expect(mockedUpdateProfile).toHaveBeenCalledWith("client-1", { countryCode: "NG" });
+    expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid profile country codes", async () => {
+    const { req, res, next } = buildMockReqRes({ countryCode: "Nigeria" });
+
+    await updateProfile(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatusCode.BAD_REQUEST,
+        message: "Country code must be a two-letter ISO 3166-1 alpha-2 code.",
+      }),
+    );
+    expect(mockedUpdateProfile).not.toHaveBeenCalled();
+  });
+
   it("changes the client email after password confirmation", async () => {
     const profile = { id: "client-1", email: "new@example.com" };
     mockedUpdateEmail.mockResolvedValue(profile);

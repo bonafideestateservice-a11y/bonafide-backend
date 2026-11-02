@@ -9,7 +9,7 @@ const prismaMock = {
     updateMany: jest.fn(),
   },
   user: { findUnique: jest.fn() },
-  verificationPlan: { findUnique: jest.fn() },
+  verificationPlan: { findFirst: jest.fn() },
   $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
 };
 const lifecycle = {
@@ -218,7 +218,7 @@ describe("paystackWebhook (unit)", () => {
 
     beforeEach(() => {
       prismaMock.user.findUnique.mockResolvedValue({ id: "user-1" });
-      prismaMock.verificationPlan.findUnique.mockResolvedValue({ id: "plan-1" });
+      prismaMock.verificationPlan.findFirst.mockResolvedValue({ id: "plan-1" });
       prismaMock.paystackSubscription.findUnique.mockResolvedValue(null);
     });
 
@@ -227,6 +227,9 @@ describe("paystackWebhook (unit)", () => {
 
       const res = await run(body);
 
+      expect(prismaMock.verificationPlan.findFirst).toHaveBeenCalledWith({
+        where: { OR: [{ paystackPlanCode: "PLN_1" }, { paystackNgnPlanCode: "PLN_1" }] },
+      });
       expect(prismaMock.transaction.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({

@@ -51,8 +51,8 @@ describe("GET /api/v1/client/verification-requests/:id (integration, real DB)", 
       frequency: "ONE_TIME",
       name: "One time verification",
       description: "A single inspection with a full report",
-      priceInCents: 4500,
-      currency: "USD",
+      priceUsdCents: 4500,
+      priceNgnKobo: 7200000,
     });
     verificationPlanId = verificationPlan.id;
 
@@ -112,8 +112,9 @@ describe("GET /api/v1/client/verification-requests/:id (integration, real DB)", 
       plan: {
         frequency: "ONE_TIME",
         name: "One time verification",
-        priceInCents: 4500,
-        currency: "USD",
+        priceUsdCents: 4500,
+        priceNgnKobo: 7200000,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
       createdAt: expect.any(String),
     });

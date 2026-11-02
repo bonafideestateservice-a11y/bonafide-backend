@@ -21,7 +21,13 @@ const buildReqRes = (body: unknown) => {
 };
 
 const profile = { provider: "google", providerId: "google-123", email: "ada@example.com" };
-const user = { id: "user-1", email: "ada@example.com", password: null, role: "CLIENT" };
+const user = {
+  id: "user-1",
+  email: "ada@example.com",
+  password: null,
+  role: "CLIENT",
+  countryCode: null,
+};
 
 describe("googleSignIn handler (unit)", () => {
   beforeEach(() => {
@@ -44,7 +50,7 @@ describe("googleSignIn handler (unit)", () => {
     expect(res.json).toHaveBeenCalledWith({
       message: "Login successful.",
       token: "api-jwt",
-      user: { id: "user-1", email: "ada@example.com", role: "CLIENT" },
+      user: { id: "user-1", email: "ada@example.com", role: "CLIENT", countryCode: null },
       isNewUser: true,
     });
   });

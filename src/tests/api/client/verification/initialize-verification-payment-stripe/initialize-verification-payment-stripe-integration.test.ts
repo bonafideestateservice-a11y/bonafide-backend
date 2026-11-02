@@ -24,8 +24,8 @@ beforeAll(async () => {
         verificationTypeId: typeId,
         frequency: "ONE_TIME",
         name: "One-time",
-        priceInCents: 4500,
-        currency: "USD",
+        priceUsdCents: 4500,
+        priceNgnKobo: 7200000,
         stripePriceId: `price_${fx.tag}`,
       },
     })
@@ -119,8 +119,8 @@ describe("POST /api/v1/client/verification-requests/:id/payment/initialize-strip
         verificationTypeId: typeId,
         frequency: "MONTHLY",
         name: "Monthly",
-        priceInCents: 3500,
-        currency: "USD",
+        priceUsdCents: 3500,
+        priceNgnKobo: 5600000,
       },
     });
     const response = await pay(await draftRequest(unconfigured.id));

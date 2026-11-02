@@ -84,7 +84,12 @@ const findSubscriptionForCharge = async (event: PaystackEvent) => {
   if (!customerCode || !planCode) return null;
 
   const candidates = await prismaClient.paystackSubscription.findMany({
-    where: { customerCode, verificationPlan: { paystackPlanCode: planCode } },
+    where: {
+      customerCode,
+      verificationPlan: {
+        OR: [{ paystackPlanCode: planCode }, { paystackNgnPlanCode: planCode }],
+      },
+    },
   });
   if (candidates.length <= 1) return candidates[0] ?? null;
 
@@ -277,8 +282,8 @@ const handleSubscriptionCreated = async (event: PaystackEvent) => {
   const user = await prismaClient.user.findUnique({
     where: { paystackCustomerCode: customerCode },
   });
-  const plan = await prismaClient.verificationPlan.findUnique({
-    where: { paystackPlanCode: planCode },
+  const plan = await prismaClient.verificationPlan.findFirst({
+    where: { OR: [{ paystackPlanCode: planCode }, { paystackNgnPlanCode: planCode }] },
   });
 
   if (!user || !plan) {

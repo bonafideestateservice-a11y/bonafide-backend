@@ -27,13 +27,14 @@ export const createFixtures = (prefix: string) => {
   let typeId: string | undefined;
   let serviceId: string | undefined;
 
-  const createUser = async (role: ROLE, label: string) => {
+  const createUser = async (role: ROLE, label: string, countryCode = "US") => {
     const user = await prismaClient.user.create({
       data: {
         fullName: `${label} ${tag}`,
         email: `${label}-${tag}@example.com`,
         password: "hash",
         role,
+        countryCode,
       },
     });
     userIds.push(user.id);

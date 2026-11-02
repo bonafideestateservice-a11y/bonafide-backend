@@ -30,10 +30,33 @@ describe("POST /api/v1/auth/sign-up (integration, real DB)", () => {
   it("returns 400 when email is missing", async () => {
     const res = await request(app)
       .post("/api/v1/client/sign-up")
-      .send({ password: TEST_PASSWORD, fullName: "Test User" });
+      .send({ password: TEST_PASSWORD, fullName: "Test User", countryCode: "NG" });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/email/i);
+  });
+
+  it("returns 400 when country code is missing", async () => {
+    const res = await request(app).post("/api/v1/client/sign-up").send({
+      email: TEST_EMAIL,
+      password: TEST_PASSWORD,
+      fullName: "Integration Test User",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/country code/i);
+  });
+
+  it("returns 400 when country code is invalid", async () => {
+    const res = await request(app).post("/api/v1/client/sign-up").send({
+      email: TEST_EMAIL,
+      password: TEST_PASSWORD,
+      fullName: "Integration Test User",
+      countryCode: "Nigeria",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/country code/i);
   });
 
   it("returns 201 and creates a user successfully", async () => {
@@ -42,11 +65,13 @@ describe("POST /api/v1/auth/sign-up (integration, real DB)", () => {
       password: TEST_PASSWORD,
       fullName: "Integration Test User",
       termsAndCondition: true,
+      countryCode: " ng ",
     });
 
     expect(res.status).toBe(201);
     expect(res.body.token).toBeDefined();
     expect(res.body.user.email).toBe(TEST_EMAIL);
+    expect(res.body.user.countryCode).toBe("NG");
     expect(res.body.user.password).toBeUndefined();
     testUserId = res.body.user.id;
   });
@@ -56,6 +81,7 @@ describe("POST /api/v1/auth/sign-up (integration, real DB)", () => {
       email: TEST_EMAIL,
       password: TEST_PASSWORD,
       fullName: "Integration Test User 2",
+      countryCode: "NG",
     });
 
     expect(res.status).toBe(409);

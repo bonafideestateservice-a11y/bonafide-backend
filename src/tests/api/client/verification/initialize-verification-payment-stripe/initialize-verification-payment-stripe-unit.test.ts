@@ -21,14 +21,15 @@ import { callHandler, errorStatus } from "../../../../helpers/http";
 const mockedSession = createStripeSession as jest.Mock;
 const plan = {
   frequency: "ONE_TIME",
-  priceInCents: 4500,
-  currency: "USD",
+  priceUsdCents: 4500,
+  priceNgnKobo: 7200000,
   stripePriceId: "price_1",
 };
 const verificationRequest = (overrides: object = {}) => ({
   id: "r1",
   userId: "u1",
   status: "DRAFT",
+  user: { countryCode: "US" },
   verificationPlan: plan,
   ...overrides,
 });
@@ -82,11 +83,26 @@ describe("initializeVerificationPaymentStripe (unit)", () => {
     tx.transaction.findFirst.mockResolvedValue({
       id: "t0",
       status: "PENDING",
+      currency: "USD",
       authorizationUrl: "https://checkout.stripe.com/c/pay/cs_0",
     });
     const { res } = await call();
     expect(mockedSession).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({ url: "https://checkout.stripe.com/c/pay/cs_0" });
+  });
+
+  it("does not reuse a pending checkout created in another currency", async () => {
+    tx.transaction.findFirst.mockResolvedValue({
+      id: "t0",
+      status: "PENDING",
+      currency: "NGN",
+      authorizationUrl: "https://checkout.stripe.com/c/pay/cs_0",
+    });
+
+    const { next } = await call();
+
+    expect(errorStatus(next)).toBe(409);
+    expect(mockedSession).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -95,6 +111,8 @@ describe("initializeVerificationPaymentStripe (unit)", () => {
     ["another client's request", { id: "u1" }, { userId: "u2" }, 403],
     ["a request that isn't payable", { id: "u1" }, { status: "COMPLETED" }, 409],
     ["no plan selected", { id: "u1" }, { verificationPlan: null }, 400],
+    ["country not selected", { id: "u1" }, { user: { countryCode: null } }, 400],
+    ["Nigerian country", { id: "u1" }, { user: { countryCode: "NG" } }, 400],
     [
       "a plan not set up in Stripe",
       { id: "u1" },
@@ -115,6 +133,7 @@ describe("initializeVerificationPaymentStripe (unit)", () => {
     tx.transaction.findFirst.mockResolvedValueOnce({
       id: "t0",
       status: "PENDING",
+      currency: "USD",
       authorizationUrl: null,
     });
     const { next } = await call();

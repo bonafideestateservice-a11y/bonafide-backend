@@ -81,14 +81,30 @@ export const initializeVerificationPaymentStripe = async (
               throw new ConflictError("This verification request has already been paid for.");
             }
             if (existingTransaction?.status === PaymentStatus.PENDING) {
+              if (existingTransaction.currency !== "USD") {
+                throw new ConflictError(
+                  "A payment is already pending in another currency; complete it before switching payment methods.",
+                );
+              }
               if (existingTransaction.authorizationUrl) return existingTransaction;
               throw new ConflictError("A payment is already being initialized for this request.");
+            }
+
+            if (!verificationRequest.user.countryCode) {
+              throw new BadRequestError(
+                "Set your country in your profile before making a payment.",
+              );
+            }
+            if (verificationRequest.user.countryCode.toUpperCase() === "NG") {
+              throw new BadRequestError("Stripe is not available for users in Nigeria.");
             }
 
             if (existingTransaction) {
               return tx.transaction.update({
                 where: { id: existingTransaction.id },
                 data: {
+                  amountInCents: verificationPlan.priceUsdCents,
+                  currency: "USD",
                   status: PaymentStatus.PENDING,
                   providerRef: null,
                   authorizationUrl: null,
@@ -101,8 +117,8 @@ export const initializeVerificationPaymentStripe = async (
             return tx.transaction.create({
               data: {
                 verificationRequestId,
-                amountInCents: verificationPlan.priceInCents,
-                currency: verificationPlan.currency,
+                amountInCents: verificationPlan.priceUsdCents,
+                currency: "USD",
                 method: PaymentMethod.CARD,
                 status: PaymentStatus.PENDING,
               },

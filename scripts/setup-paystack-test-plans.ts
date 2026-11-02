@@ -1,19 +1,13 @@
 import dotenv from "dotenv";
 import { VERIFICATION_FREQUENCY } from "@prisma/client";
-import {
-  createPaystackPlan,
-  listPaystackPlans,
-  paystackPriceOf,
-} from "../src/libs/paystack/paystack";
+import { createPaystackPlan, listPaystackPlans } from "../src/libs/paystack/paystack";
 import { prismaClient } from "../src/utils/prisma";
 import { logger } from "../src/utils/logger";
 
 dotenv.config({ path: "./.env" });
 
 /**
- * TEST MODE ONLY. The test Paystack account can't take USD, so this creates a naira copy of each
- * recurring plan (USD price × PAYSTACK_TEST_USD_TO_NGN_RATE) and saves its plan code. Live uses
- * USD plans from setup-paystack-plans.ts. Safe to re-run: existing test plans are reused.
+ * TEST MODE ONLY. Creates an NGN Paystack plan for each recurring verification plan.
  *
  * Monthly and quarterly test plans both renew every hour (Paystack's shortest interval), so
  * renewals can be tested without waiting a month.
@@ -36,10 +30,6 @@ async function setupPaystackTestPlans() {
   if (!process.env.PAYSTACK_SECRET_KEY?.startsWith("sk_test_")) {
     throw new Error("This script only runs with a Paystack test key (sk_test_...).");
   }
-  if (!(Number(process.env.PAYSTACK_TEST_USD_TO_NGN_RATE) > 0)) {
-    throw new Error("Set PAYSTACK_TEST_USD_TO_NGN_RATE (naira per dollar), e.g. 1600.");
-  }
-
   const verificationPlans = await prismaClient.verificationPlan.findMany({
     include: { verificationType: true },
     orderBy: [{ verificationType: { slug: "asc" } }, { frequency: "asc" }],
@@ -56,31 +46,29 @@ async function setupPaystackTestPlans() {
       continue;
     }
 
-    const price = paystackPriceOf(verificationPlan);
+    const amount = verificationPlan.priceNgnKobo;
     // The interval is part of the marker, so changing it creates new plans rather than reusing old ones.
-    const marker = `verification_plan_id=${verificationPlan.id};currency=${price.currency};interval=${interval}`;
+    const marker = `verification_plan_id=${verificationPlan.id};currency=NGN;interval=${interval}`;
     let planCode = codeByDescription.get(marker);
     if (planCode) {
       logger.info(`Test plan ${planCode} already exists for ${label}`);
     } else {
       planCode = (
         await createPaystackPlan({
-          name: `[TEST ${price.currency} ${interval}] ${verificationPlan.verificationType.name} - ${verificationPlan.name}`,
-          amount: price.amount,
+          name: `[TEST NGN ${interval}] ${verificationPlan.verificationType.name} - ${verificationPlan.name}`,
+          amount,
           interval,
-          currency: price.currency,
+          currency: "NGN",
           description: marker,
         })
       ).plan_code;
-      logger.info(
-        `Created test plan ${planCode} for ${label}: ${price.currency} ${price.amount / 100} ${interval}`,
-      );
+      logger.info(`Created test plan ${planCode} for ${label}: NGN ${amount / 100} ${interval}`);
     }
 
-    if (verificationPlan.paystackPlanCode !== planCode) {
+    if (verificationPlan.paystackNgnPlanCode !== planCode) {
       await prismaClient.verificationPlan.update({
         where: { id: verificationPlan.id },
-        data: { paystackPlanCode: planCode },
+        data: { paystackNgnPlanCode: planCode },
       });
     }
   }

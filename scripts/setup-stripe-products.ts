@@ -83,8 +83,8 @@ async function setupStripeProducts() {
     const price = await ensureStripePrice({
       productId: product.id,
       lookupKey,
-      unitAmount: verificationPlan.priceInCents,
-      currency: verificationPlan.currency,
+      unitAmount: verificationPlan.priceUsdCents,
+      currency: "USD",
       frequency: verificationPlan.frequency,
     });
 

@@ -10,7 +10,7 @@ import { appEvents, AppEventTypes } from "../../../../../events";
 
 export const signUp = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { fullName, email, password, role, termsAndCondition } = req.body;
+    const { fullName, email, password, role, termsAndCondition, countryCode } = req.body;
 
     // --- Validate required fields ---
     if (!fullName || typeof fullName !== "string" || !fullName.trim()) {
@@ -35,6 +35,16 @@ export const signUp = async (req: Request, res: Response, next: NextFunction): P
       );
     }
 
+    if (typeof countryCode !== "string" || !/^[A-Za-z]{2}$/.test(countryCode.trim())) {
+      return next(
+        new ApiError(
+          HttpStatusCode.BAD_REQUEST,
+          "Country code must be a two-letter ISO 3166-1 alpha-2 code.",
+        ),
+      );
+    }
+    const normalizedCountryCode = countryCode.trim().toUpperCase();
+
     // --- Check for existing user ---
     const existingUser = await findClient({ email: email.toLowerCase().trim() });
 
@@ -57,6 +67,7 @@ export const signUp = async (req: Request, res: Response, next: NextFunction): P
       password: hashedPassword,
       role: resolvedRole,
       termsAndCondition: termsAndCondition === true,
+      countryCode: normalizedCountryCode,
     });
 
     appEvents.emit(AppEventTypes.USER_REGISTERED, {

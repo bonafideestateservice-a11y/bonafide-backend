@@ -51,8 +51,8 @@ describe("PATCH /api/v1/client/verification-requests/:id/plan (integration, real
       frequency: "ONE_TIME",
       name: "One time verification",
       description: "A single inspection with a full report",
-      priceInCents: 4500,
-      currency: "USD",
+      priceUsdCents: 4500,
+      priceNgnKobo: 7200000,
     });
     verificationPlanId = verificationPlan.id;
 
@@ -116,8 +116,9 @@ describe("PATCH /api/v1/client/verification-requests/:id/plan (integration, real
       plan: {
         frequency: "ONE_TIME",
         name: "One time verification",
-        priceInCents: 4500,
-        currency: "USD",
+        priceUsdCents: 4500,
+        priceNgnKobo: 7200000,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
     });
 

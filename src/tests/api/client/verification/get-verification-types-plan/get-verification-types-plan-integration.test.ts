@@ -45,24 +45,24 @@ describe("GET /api/v1/client/verification-types/:slug/plans (integration, real D
       frequency: "ONE_TIME",
       name: "One time verification",
       description: "A single inspection with a full report",
-      priceInCents: 4500,
-      currency: "USD",
+      priceUsdCents: 4500,
+      priceNgnKobo: 7200000,
     });
     await createVerificationPlan({
       verificationTypeId,
       frequency: "MONTHLY",
       name: "Monthly Update",
       description: "Detailed report every month",
-      priceInCents: 3500,
-      currency: "USD",
+      priceUsdCents: 3500,
+      priceNgnKobo: 5600000,
     });
     await createVerificationPlan({
       verificationTypeId,
       frequency: "QUARTERLY",
       name: "Quarterly Update",
       description: null,
-      priceInCents: 3500,
-      currency: "USD",
+      priceUsdCents: 3500,
+      priceNgnKobo: 5600000,
     });
   });
 
@@ -95,24 +95,27 @@ describe("GET /api/v1/client/verification-types/:slug/plans (integration, real D
         frequency: "ONE_TIME",
         name: "One time verification",
         description: "A single inspection with a full report",
-        priceInCents: 4500,
-        currency: "USD",
+        priceUsdCents: 4500,
+        priceNgnKobo: 7200000,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
       {
         id: expect.any(String),
         frequency: "MONTHLY",
         name: "Monthly Update",
         description: "Detailed report every month",
-        priceInCents: 3500,
-        currency: "USD",
+        priceUsdCents: 3500,
+        priceNgnKobo: 5600000,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
       {
         id: expect.any(String),
         frequency: "QUARTERLY",
         name: "Quarterly Update",
         description: "",
-        priceInCents: 3500,
-        currency: "USD",
+        priceUsdCents: 3500,
+        priceNgnKobo: 5600000,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
     ]);
   });

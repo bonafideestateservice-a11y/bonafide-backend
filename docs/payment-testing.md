@@ -1,17 +1,15 @@
-# Testing Paystack payments, agent assignment and reports
+# Testing regional verification payments, agent assignment and reports
 
-How to test a verification from payment to report, for each plan: one-time, monthly and quarterly. Everything runs against the Render deployment with Paystack in **test mode**.
+How to test a verification from payment to report, for each plan: one-time, monthly and quarterly. Nigeria scenarios use Paystack in **test mode**.
 
 All paths start with `https://bonafide-backend-9mly.onrender.com/api/v1`. Send the token from a login as `Authorization: Bearer <token>`.
 
 ## 1. Before you start
 
 - **Render deployment:** it must include commit `46f3ab9` (naira test prices) or later.
-- **Render environment:**
-  - `PAYSTACK_SECRET_KEY` is the **test** key (`sk_test_…`), the same one as in `.env`.
-  - `PAYSTACK_TEST_USD_TO_NGN_RATE=1600`.
+- **Render environment:** `PAYSTACK_SECRET_KEY` is the **test** key (`sk_test_…`), the same one as in `.env`.
 - **Paystack dashboard (test mode)** → Settings → API Keys & Webhooks: set the Test Webhook URL to `https://bonafide-backend-9mly.onrender.com/api/v1/webhook/paystack`.
-- **Paystack test plans:** already created with `npm run paystack:test-plans`. In test mode, the monthly and quarterly plans both **renew every hour** (Paystack's shortest interval), so a real renewal arrives an hour after paying. Live plans renew monthly and quarterly as normal.
+- **Paystack test plans:** created with `npm run paystack:test-plans`. In test mode, the monthly and quarterly plans both **renew every hour** (Paystack's shortest interval), so a real renewal arrives an hour after paying. Live plans renew monthly and quarterly as normal.
 - **Logins:**
   - a client: any client account
   - an admin: your admin account
@@ -19,11 +17,13 @@ All paths start with `https://bonafide-backend-9mly.onrender.com/api/v1`. Send t
 
 ### Prices
 
-The plans list shows US dollar prices. In test mode, checkout charges them in naira at ₦1,600 per dollar:
+Plans store both USD and NGN prices. These initial sample prices use ₦1,600 per USD; update the plan records to set the final business prices:
 
 - One-time: $45, charged as ₦72,000.
 - Monthly: $35, charged as ₦56,000 (every hour in test mode).
 - Quarterly: $35, charged as ₦56,000 (every hour in test mode).
+
+The frontend reads `countryCode` from `GET /client/profile`. Use Paystack and the NGN price for `NG`; use Stripe and the USD price for all other countries. The plans endpoint returns both prices and provider mapping. If countryCode is null, ask the user to select a country and save it with `PATCH /client/profile` before checkout. The payment endpoints enforce the country/provider rule independently.
 
 ### Recurring plan IDs (for step 5)
 
@@ -49,9 +49,9 @@ Step 3 returns these IDs too.
 
 ### Client: create the request and pay
 
-1. `POST /client/login` with `{ "email", "password" }`. This gives the client token.
+1. `POST /client/login` with `{ "email", "password" }`. This gives the client token. Then `GET /client/profile` and confirm `countryCode` is `NG`; if needed, save `{"countryCode":"NG"}` using `PATCH /client/profile`.
 2. `GET /client/services/verification/verification-types`. Note a type's `id` and `slug` (e.g. `property-verification`).
-3. `GET /client/verification-types/:slug/plans`. Note the `ONE_TIME` plan's `id`.
+3. `GET /client/verification-types/:slug/plans`. Note the `ONE_TIME` plan's `id` and NGN price.
 4. `POST /client/verification-requests`. It returns the request `id`, with status `DRAFT`.
    ```json
    {
@@ -172,7 +172,7 @@ The same as the monthly plan, with the `QUARTERLY` plan in step 3. Checkout show
 
 ## 6. If something goes wrong
 
-- **Checkout shows USD, or Paystack rejects the currency:** `PAYSTACK_TEST_USD_TO_NGN_RATE` isn't set on Render, or Render uses a live key.
+- **Checkout shows USD or the wrong amount:** verify the user's `countryCode` and the plan's `priceNgnKobo`; the Nigerian checkout should use Paystack.
 - **The status stays `PENDING_PAYMENT` after paying:** the webhook didn't arrive. Check the webhook URL in the Paystack dashboard, and look in Render's logs for `POST /api/v1/webhook/paystack -> 200`.
 - **The simulator gets `401`:** Render's `PAYSTACK_SECRET_KEY` isn't the same as the one in `.env`.
 - **Monthly or quarterly checkout fails with "plan not configured":** run `npm run paystack:test-plans` again.

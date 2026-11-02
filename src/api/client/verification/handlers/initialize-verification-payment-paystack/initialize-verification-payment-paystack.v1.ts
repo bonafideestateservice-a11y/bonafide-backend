@@ -67,7 +67,7 @@ export const initializeVerificationPaymentPaystack = async (
     const verificationPlan = verificationRequest.verificationPlan;
     const price = paystackPriceOf(verificationPlan);
 
-    const planCode = verificationPlan.paystackPlanCode;
+    const planCode = verificationPlan.paystackNgnPlanCode;
     if (verificationPlan.frequency !== VERIFICATION_FREQUENCY.ONE_TIME && !planCode) {
       return next(new BadRequestError("The selected plan is not configured in Paystack."));
     }
@@ -86,6 +86,11 @@ export const initializeVerificationPaymentPaystack = async (
               throw new ConflictError("This verification request has already been paid for.");
             }
             if (existingTransaction?.status === PaymentStatus.PENDING) {
+              if (existingTransaction.currency !== "NGN") {
+                throw new ConflictError(
+                  "A payment is already pending in another currency; complete it before switching payment methods.",
+                );
+              }
               if (
                 existingTransaction.providerRef &&
                 existingTransaction.authorizationUrl &&
@@ -94,6 +99,15 @@ export const initializeVerificationPaymentPaystack = async (
                 return existingTransaction;
               }
               throw new ConflictError("A payment is already being initialized for this request.");
+            }
+
+            if (!verificationRequest.user.countryCode) {
+              throw new BadRequestError(
+                "Set your country in your profile before making a payment.",
+              );
+            }
+            if (verificationRequest.user.countryCode.toUpperCase() !== "NG") {
+              throw new BadRequestError("Paystack is only available for users in Nigeria.");
             }
 
             if (existingTransaction) {

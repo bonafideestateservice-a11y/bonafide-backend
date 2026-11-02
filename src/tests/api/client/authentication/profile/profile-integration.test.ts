@@ -43,6 +43,7 @@ describe("Client profile endpoints (integration, real DB)", () => {
         email: initialEmail,
         phone: null,
         location: null,
+        countryCode: null,
         profilePhoto: null,
         role: "CLIENT",
       }),
@@ -53,15 +54,41 @@ describe("Client profile endpoints (integration, real DB)", () => {
     const response = await request(app)
       .patch("/api/v1/client/profile")
       .set("Authorization", `Bearer ${token}`)
-      .send({ fullName: "Updated Client", phone: "+2347000000000", location: "Lagos" });
+      .send({
+        fullName: "Updated Client",
+        phone: "+2347000000000",
+        location: "Lagos",
+        countryCode: " ng ",
+      });
     expect(response.status).toBe(200);
     expect(response.body).toEqual(
       expect.objectContaining({
         fullName: "Updated Client",
         phone: "+2347000000000",
         location: "Lagos",
+        countryCode: "NG",
       }),
     );
+  });
+
+  it("clears the client country code when an empty value is sent", async () => {
+    const response = await request(app)
+      .patch("/api/v1/client/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ countryCode: "" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.countryCode).toBeNull();
+  });
+
+  it("rejects an invalid country code", async () => {
+    const response = await request(app)
+      .patch("/api/v1/client/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ countryCode: "Nigeria" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/country code/i);
   });
 
   it("changes the client email", async () => {

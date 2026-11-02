@@ -32,16 +32,16 @@ describe("getVerificationTypesPlan handler (unit)", () => {
         frequency: "ONE_TIME",
         name: "One time verification",
         description: "A single inspection with a full report",
-        priceInCents: 4500,
-        currency: "USD",
+        priceUsdCents: 4500,
+        priceNgnKobo: 7200000,
       },
       {
         id: "plan-2",
         frequency: "MONTHLY",
         name: "Monthly Update",
         description: null,
-        priceInCents: 3500,
-        currency: "USD",
+        priceUsdCents: 3500,
+        priceNgnKobo: 5600000,
       },
     ]);
     const { req, res, next } = buildMockReqRes();
@@ -56,16 +56,18 @@ describe("getVerificationTypesPlan handler (unit)", () => {
         frequency: "ONE_TIME",
         name: "One time verification",
         description: "A single inspection with a full report",
-        priceInCents: 4500,
-        currency: "USD",
+        priceUsdCents: 4500,
+        priceNgnKobo: 7200000,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
       {
         id: "plan-2",
         frequency: "MONTHLY",
         name: "Monthly Update",
         description: "",
-        priceInCents: 3500,
-        currency: "USD",
+        priceUsdCents: 3500,
+        priceNgnKobo: 5600000,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
     ]);
     expect(next).not.toHaveBeenCalled();

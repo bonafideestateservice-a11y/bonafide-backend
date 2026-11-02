@@ -56,8 +56,8 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
       frequency: "ONE_TIME",
       name: "Gold Plan",
       description: "A single inspection with a full report",
-      priceInCents: 4500,
-      currency: "USD",
+      priceUsdCents: 4500,
+      priceNgnKobo: 7200000,
     });
     verificationPlanId = verificationPlan.id;
 

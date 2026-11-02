@@ -28,12 +28,18 @@ export const updateProfile = async (
     const userId = (req as CustomRequest).user?.id;
     if (!userId) return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
 
-    const body = req.body as { fullName?: unknown; phone?: unknown; location?: unknown };
+    const body = req.body as {
+      fullName?: unknown;
+      phone?: unknown;
+      location?: unknown;
+      countryCode?: unknown;
+    };
     const file = (req as ProfileRequest).file;
     const data: {
       fullName?: string;
       phone?: string | null;
       location?: string | null;
+      countryCode?: string | null;
       profilePhoto?: string;
     } = {};
 
@@ -53,6 +59,20 @@ export const updateProfile = async (
         return next(new BadRequestError("Location must be a string."));
       }
       data.location = body.location.trim() || null;
+    }
+    if (body.countryCode !== undefined) {
+      if (typeof body.countryCode !== "string") {
+        return next(
+          new BadRequestError("Country code must be a two-letter ISO 3166-1 alpha-2 code."),
+        );
+      }
+      const countryCode = body.countryCode.trim();
+      if (countryCode && !/^[A-Za-z]{2}$/.test(countryCode)) {
+        return next(
+          new BadRequestError("Country code must be a two-letter ISO 3166-1 alpha-2 code."),
+        );
+      }
+      data.countryCode = countryCode ? countryCode.toUpperCase() : null;
     }
     if (file) {
       const fileType = file.mimetype || "application/octet-stream";

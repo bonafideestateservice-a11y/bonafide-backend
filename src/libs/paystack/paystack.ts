@@ -50,18 +50,10 @@ async function paystackRequest<T>(
 }
 
 /**
- * The amount (in the currency's minor unit) and currency Paystack charges for a plan.
- * The test Paystack account can't take USD, so with a test key and PAYSTACK_TEST_USD_TO_NGN_RATE
- * set, USD prices are charged in naira at that rate ($35 at 1600 = ₦56,000). Live keys always
- * charge the plan's own price and currency.
+ * The amount in kobo and currency Paystack charges for a Nigerian verification plan.
  */
-export function paystackPriceOf(plan: { priceInCents: number; currency: string }) {
-  const rate = Number(process.env.PAYSTACK_TEST_USD_TO_NGN_RATE);
-  const isTestKey = (process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_");
-  if (isTestKey && rate > 0 && plan.currency === "USD") {
-    return { amount: Math.round(plan.priceInCents * rate), currency: "NGN" };
-  }
-  return { amount: plan.priceInCents, currency: plan.currency };
+export function paystackPriceOf(plan: { priceNgnKobo: number }) {
+  return { amount: plan.priceNgnKobo, currency: "NGN" };
 }
 
 /**

@@ -1,9 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { ApiError, HttpStatusCode } from "../../../../../exceptions";
-import {
-  getVerificationPlansForTypeSlug,
-  VerificationPlanCard,
-} from "../../services/database/verification-plan";
+import { getVerificationPlansForTypeSlug } from "../../services/database/verification-plan";
 import { logger } from "../../../../../utils/logger";
 
 export const getVerificationTypesPlan = async (
@@ -13,11 +10,11 @@ export const getVerificationTypesPlan = async (
 ): Promise<void> => {
   try {
     const plans = await getVerificationPlansForTypeSlug(req.params.slug);
-    const response: Array<Omit<VerificationPlanCard, "description"> & { description: string }> =
-      plans.map((plan) => ({
-        ...plan,
-        description: plan.description ?? "",
-      }));
+    const response = plans.map((plan) => ({
+      ...plan,
+      description: plan.description ?? "",
+      paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
+    }));
 
     res.status(HttpStatusCode.OK).json(response);
   } catch (error) {

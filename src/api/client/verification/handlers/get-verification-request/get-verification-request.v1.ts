@@ -40,7 +40,10 @@ export const getVerificationRequest = async (
       status: verificationRequest.status,
       verificationType: verificationRequest.verificationType,
       details: verificationRequest.details,
-      plan: verificationRequest.verificationPlan,
+      plan: {
+        ...verificationRequest.verificationPlan,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
+      },
       createdAt: verificationRequest.createdAt.toISOString(),
     });
   } catch (error) {

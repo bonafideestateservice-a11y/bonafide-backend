@@ -101,7 +101,7 @@ const webHookRouter = express.Router();
  *           properties:
  *             plan_code:
  *               type: string
- *               description: Matched against VerificationPlan.paystackPlanCode (subscription.create, renewal charges).
+ *               description: Matched against VerificationPlan.paystackPlanCode (legacy subscriptions) or paystackNgnPlanCode (NGN subscriptions).
  *               example: PLN_gx2wn530m0i3w3m
  *     WebhookStripeEvent:
  *       type: object

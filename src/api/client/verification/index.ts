@@ -119,7 +119,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         icon: { type: string, nullable: true, example: home }
  *     ClientVerificationPlanCard:
  *       type: object
- *       required: [id, frequency, name, description, priceInCents, currency]
+ *       required: [id, frequency, name, description, priceUsdCents, priceNgnKobo, paymentProviders]
  *       properties:
  *         id: { type: string, example: cm1vplan0001 }
  *         frequency: { $ref: '#/components/schemas/ClientVerificationFrequency' }
@@ -128,16 +128,34 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           type: string
  *           description: Empty string when the plan has no description.
  *           example: A single inspection and report.
- *         priceInCents: { type: integer, example: 5000000 }
- *         currency: { type: string, example: NGN }
+ *         priceUsdCents:
+ *           type: integer
+ *           description: Independently configured USD price in cents; the NGN price is configured separately.
+ *           example: 4500
+ *         priceNgnKobo:
+ *           type: integer
+ *           description: NGN price in kobo.
+ *           example: 7200000
+ *         paymentProviders:
+ *           type: object
+ *           required: [USD, NGN]
+ *           properties:
+ *             USD: { type: string, enum: [STRIPE], example: STRIPE }
+ *             NGN: { type: string, enum: [PAYSTACK], example: PAYSTACK }
  *     ClientVerificationPlanPricing:
  *       type: object
- *       required: [frequency, name, priceInCents, currency]
+ *       required: [frequency, name, priceUsdCents, priceNgnKobo, paymentProviders]
  *       properties:
  *         frequency: { $ref: '#/components/schemas/ClientVerificationFrequency' }
  *         name: { type: string, example: One-time verification }
- *         priceInCents: { type: integer, example: 5000000 }
- *         currency: { type: string, example: NGN }
+ *         priceUsdCents: { type: integer, description: Independently configured USD price in cents., example: 4500 }
+ *         priceNgnKobo: { type: integer, description: Independently configured NGN price in kobo., example: 7200000 }
+ *         paymentProviders:
+ *           type: object
+ *           required: [USD, NGN]
+ *           properties:
+ *             USD: { type: string, enum: [STRIPE], example: STRIPE }
+ *             NGN: { type: string, enum: [PAYSTACK], example: PAYSTACK }
  *     ClientVerificationRequestCreated:
  *       type: object
  *       required: [id, status, verificationTypeId, details, additionalNote, createdAt]
@@ -529,7 +547,10 @@ router.get("/services/verification/verification-types", getVerificationTypes);
  *   get:
  *     tags: [Verification]
  *     summary: List the plans for a verification type
- *     description: Plans are ordered by creation date. An unknown slug returns an empty array, not 404.
+ *     description: >
+ *       Plans are ordered by creation date and include both regional prices. Read countryCode
+ *       from GET /profile, use NGN/Paystack when it is NG, and USD/Stripe otherwise. The server
+ *       enforces that mapping during checkout. An unknown slug returns an empty array, not 404.
  *     security: []
  *     parameters:
  *       - in: path
@@ -876,11 +897,13 @@ router.patch("/verification-requests/:id/plan", checkJwt, patchVerificationReque
  *     tags: [Verification]
  *     summary: Start a Paystack checkout for a verification request
  *     description: >
- *       Only requests in DRAFT, PENDING_PAYMENT or PAYMENT_FAILED can be paid. If the latest
+ *       Only users with countryCode NG can use Paystack. The server always charges the plan's
+ *       NGN price in kobo, regardless of client-supplied values. Users without a country must
+ *       set it through PATCH /profile first. Only requests in DRAFT, PENDING_PAYMENT or PAYMENT_FAILED can be paid. If the latest
  *       transaction is PENDING and already has a Paystack checkout, that existing checkout is
  *       returned instead of creating a new one. Otherwise a PENDING transaction is reserved
  *       (a previous FAILED one is reused), a Paystack customer is created for the user if needed,
- *       and a Paystack session is created (with the plan's paystackPlanCode for recurring plans);
+ *       and a Paystack session is created (with the plan's NGN paystack plan code for recurring plans);
  *       the request then moves to PENDING_PAYMENT. If initialization fails, the reserved
  *       transaction is marked FAILED.
  *     security:
@@ -905,7 +928,7 @@ router.patch("/verification-requests/:id/plan", checkJwt, patchVerificationReque
  *             schema: { $ref: '#/components/schemas/ClientVerificationPaystackCheckout' }
  *       400:
  *         description: >
- *           The id is blank, no plan is selected ("Select a verification plan before payment."),
+ *           The id is blank, the user has not set a country, the user is not in Nigeria, no plan is selected ("Select a verification plan before payment."),
  *           or the plan is recurring but has no Paystack plan code ("The selected plan is not
  *           configured in Paystack.").
  *         content:
@@ -929,9 +952,9 @@ router.patch("/verification-requests/:id/plan", checkJwt, patchVerificationReque
  *       409:
  *         description: >
  *           The request's status is not payable, the latest transaction already succeeded
- *           ("This verification request has already been paid for."), or a PENDING transaction
- *           without a complete checkout exists ("A payment is already being initialized for this
- *           request.").
+ *           ("This verification request has already been paid for."), a PENDING transaction
+ *           uses another currency/provider, or a PENDING transaction without a complete checkout
+ *           exists ("A payment is already being initialized for this request.").
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -955,7 +978,9 @@ router.post(
  *     tags: [Verification]
  *     summary: Start a Stripe Checkout session for a verification request
  *     description: >
- *       Only requests in DRAFT, PENDING_PAYMENT or PAYMENT_FAILED can be paid, and the plan must
+ *       Only users whose countryCode is not NG can use Stripe. The server always charges the
+ *       plan's USD price in cents, regardless of client-supplied values. Users without a country
+ *       must set it through PATCH /profile first. Only requests in DRAFT, PENDING_PAYMENT or PAYMENT_FAILED can be paid, and the plan must
  *       have a stripePriceId. If the latest transaction is PENDING and already has a checkout URL,
  *       that existing URL is returned. Otherwise a PENDING transaction is reserved (a previous
  *       FAILED one is reused) and a Stripe Checkout session is created in "payment" mode for
@@ -983,7 +1008,7 @@ router.post(
  *             schema: { $ref: '#/components/schemas/ClientVerificationStripeCheckout' }
  *       400:
  *         description: >
- *           The id is blank, no plan is selected ("Select a verification plan before payment."),
+ *           The id is blank, the user has not set a country, the user is in Nigeria, no plan is selected ("Select a verification plan before payment."),
  *           or the plan has no Stripe price ("The selected plan is not configured in Stripe.").
  *         content:
  *           application/json:
@@ -1005,8 +1030,9 @@ router.post(
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       409:
  *         description: >
- *           The request's status is not payable, the latest transaction already succeeded, or a
- *           PENDING transaction without a checkout URL exists (payment already being initialized).
+ *           The request's status is not payable, the latest transaction already succeeded, a
+ *           PENDING transaction uses another currency/provider, or a PENDING transaction without
+ *           a checkout URL exists (payment already being initialized).
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -1268,9 +1294,11 @@ router.patch(
  *     summary: Get a summary of the latest report for one of the user's verification requests
  *     description: >
  *       Recurring requests have one report per paid period; this summarises the most recently
- *       generated one. Returns 200 with empty insights and a null inspectionDate when no report
- *       exists yet. The report's review status is not checked, and the report is not marked as
- *       viewed. Requests owned by another user return 404.
+ *       generated one. The response includes the five fixed checklist sections and the uploaded
+ *       PDF's `reportDocument` metadata (null if no report document exists). Returns 200 with
+ *       empty insights and a null inspectionDate when no report exists yet. The report's review
+ *       status is not checked, and the report is not marked as viewed. Requests owned by another
+ *       user return 404.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1325,8 +1353,10 @@ router.get(
  *     summary: Get the full latest report for a verification request
  *     description: >
  *       Returns the most recently generated report (recurring requests have one report per paid
- *       period), for the client who owns the request. The report's review status is not checked
- *       and the report is not marked as viewed. The frontend builds the downloadable PDF from this.
+ *       period), for the client who owns the request. The response includes the five fixed
+ *       checklist sections and `reportDocument` metadata for the uploaded PDF (nullable for older
+ *       reports without a stored report document). The report's review status is not checked and
+ *       the report is not marked as viewed. The frontend builds the downloadable PDF from this.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -1451,7 +1481,9 @@ router.post(
  *     description: >
  *       Recurring (monthly or quarterly) requests get one report per paid period; one-time
  *       requests have at most one. Reports are returned newest first (by generatedAt, then
- *       createdAt), whatever their review status. Requests owned by another user return 404.
+ *       createdAt), whatever their review status. Each history item includes the five fixed
+ *       checklist sections and the uploaded PDF's `reportDocument` metadata (nullable when absent).
+ *       Requests owned by another user return 404.
  *     security:
  *       - bearerAuth: []
  *     parameters:

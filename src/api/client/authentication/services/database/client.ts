@@ -9,6 +9,7 @@ export interface CreateClientData {
   password?: string | null;
   role?: ROLE;
   termsAndCondition?: boolean;
+  countryCode?: string | null;
   provider?: string | null;
   providerId?: string | null;
   profilePhoto?: string | null;
@@ -20,6 +21,7 @@ export interface UpdateClientData {
   password?: string | null;
   phone?: string | null;
   location?: string | null;
+  countryCode?: string | null;
   profilePhoto?: string | null;
   role?: ROLE;
   termsAndCondition?: boolean;
@@ -35,7 +37,7 @@ export interface FindClientUnique {
 
 export type ClientProfile = Pick<
   User,
-  "id" | "fullName" | "email" | "phone" | "location" | "profilePhoto" | "role"
+  "id" | "fullName" | "email" | "phone" | "location" | "countryCode" | "profilePhoto" | "role"
 >;
 
 export const createClient = async (data: CreateClientData): Promise<User> => {
@@ -47,6 +49,7 @@ export const createClient = async (data: CreateClientData): Promise<User> => {
         password: data.password ?? null,
         role: data.role ?? ROLE.CLIENT,
         termsAndCondition: data.termsAndCondition ?? false,
+        countryCode: data.countryCode ?? null,
         provider: data.provider ?? "local",
         providerId: data.providerId ?? null,
         profilePhoto: data.profilePhoto ?? null,
@@ -100,6 +103,7 @@ export const getClientProfile = async (clientId: string): Promise<ClientProfile 
         email: true,
         phone: true,
         location: true,
+        countryCode: true,
         profilePhoto: true,
         role: true,
       },
@@ -126,7 +130,7 @@ export const updateClient = async (
 
 export const updateClientProfile = async (
   clientId: string,
-  data: Pick<UpdateClientData, "fullName" | "phone" | "location" | "profilePhoto">,
+  data: Pick<UpdateClientData, "fullName" | "phone" | "location" | "countryCode" | "profilePhoto">,
 ): Promise<ClientProfile> => {
   try {
     const updated = await prismaClient.user.update({
@@ -138,6 +142,7 @@ export const updateClientProfile = async (
         email: true,
         phone: true,
         location: true,
+        countryCode: true,
         profilePhoto: true,
         role: true,
       },
@@ -164,6 +169,7 @@ export const updateClientEmail = async (
         email: true,
         phone: true,
         location: true,
+        countryCode: true,
         profilePhoto: true,
         role: true,
       },

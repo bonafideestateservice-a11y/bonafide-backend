@@ -71,8 +71,8 @@ describe("patchVerificationRequestPlan handler (unit)", () => {
       verificationTypeId: "type-1",
       frequency: "ONE_TIME",
       name: "One time verification",
-      priceInCents: 4500,
-      currency: "USD",
+      priceUsdCents: 4500,
+      priceNgnKobo: 7200000,
     });
     mockedUpdateVerificationRequest.mockResolvedValue({
       id: "request-1",
@@ -96,8 +96,9 @@ describe("patchVerificationRequestPlan handler (unit)", () => {
       plan: {
         frequency: "ONE_TIME",
         name: "One time verification",
-        priceInCents: 4500,
-        currency: "USD",
+        priceUsdCents: 4500,
+        priceNgnKobo: 7200000,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
     });
     expect(next).not.toHaveBeenCalled();

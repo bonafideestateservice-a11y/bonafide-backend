@@ -21,8 +21,8 @@ let planId: string;
 const requestIds: string[] = [];
 
 beforeAll(async () => {
-  client = await fx.createUser("CLIENT", "client");
-  // A paid request gives us the fixture's verification type to hang a USD plan on.
+  client = await fx.createUser("CLIENT", "client", "NG");
+  // A paid request gives us the fixture's verification type to hang a dual-currency plan on.
   const { verificationTypeId } = await fx.createPaidRequest(client.id);
   planId = (
     await prismaClient.verificationPlan.create({
@@ -30,8 +30,8 @@ beforeAll(async () => {
         verificationTypeId,
         frequency: "ONE_TIME",
         name: "One-time",
-        priceInCents: 3500,
-        currency: "USD",
+        priceUsdCents: 3500,
+        priceNgnKobo: 5600000,
       },
     })
   ).id;
@@ -98,9 +98,8 @@ const pay = (id: string, token: string | null = client.token, key?: string) => {
 };
 
 describe("POST /api/v1/client/verification-requests/:id/payment/initialize-paystack", () => {
-  it("charges a USD plan in naira in test mode", async () => {
+  it("charges the Nigerian plan price in naira", async () => {
     process.env.PAYSTACK_SECRET_KEY = "sk_test_abc";
-    process.env.PAYSTACK_TEST_USD_TO_NGN_RATE = "1600";
 
     const { response, transaction } = await startPayment();
 
@@ -112,17 +111,16 @@ describe("POST /api/v1/client/verification-requests/:id/payment/initialize-payst
     expect(transaction).toMatchObject({ amountInCents: 5600000, currency: "NGN" });
   });
 
-  it("charges the plan's own USD price with a live key", async () => {
+  it("charges the same NGN plan price with a live key", async () => {
     process.env.PAYSTACK_SECRET_KEY = "sk_live_abc";
-    process.env.PAYSTACK_TEST_USD_TO_NGN_RATE = "1600";
 
     const { response, transaction } = await startPayment();
 
     expect(response.status).toBe(200);
     expect(createPaystackSession).toHaveBeenLastCalledWith(
-      expect.objectContaining({ amount: 3500, currency: "USD" }),
+      expect.objectContaining({ amount: 5600000, currency: "NGN" }),
     );
-    expect(transaction).toMatchObject({ amountInCents: 3500, currency: "USD" });
+    expect(transaction).toMatchObject({ amountInCents: 5600000, currency: "NGN" });
   });
 
   it("saves the Paystack customer, marks the request PENDING_PAYMENT and reuses the open checkout", async () => {

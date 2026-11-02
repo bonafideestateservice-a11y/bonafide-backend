@@ -49,7 +49,11 @@ async function main() {
             amount: price.amount,
             currency: price.currency,
             paid_at: new Date().toISOString(),
-            plan: { plan_code: subscription.verificationPlan.paystackPlanCode },
+            plan: {
+              plan_code:
+                subscription.verificationPlan.paystackNgnPlanCode ??
+                subscription.verificationPlan.paystackPlanCode,
+            },
           },
         }
       : kind === "renewal-failed"

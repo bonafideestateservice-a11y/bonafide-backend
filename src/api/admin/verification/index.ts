@@ -107,19 +107,22 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *           description: ACCEPTED if the assignment was ASSIGNED; otherwise its current status is kept.
  *         checklist:
  *           type: array
+ *           description: The five fixed verification sections, in sortOrder order.
  *           items:
  *             type: object
  *             required: [id, label, status, requiresMedia]
  *             properties:
  *               id: { type: string, example: cm9item0001 }
- *               label: { type: string, example: Photograph the property frontage }
+ *               label:
+ *                 type: string
+ *                 enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification]
  *               status:
  *                 type: string
  *                 enum: [PENDING]
  *                 description: Always PENDING in this response, even for items already completed.
  *               requiresMedia:
  *                 type: boolean
- *                 description: From the checklist template item with the same sortOrder; false if none matches.
+ *                 description: Always true; media is required for every checklist section.
  *                 example: true
  *     AdminVerificationReportSubmitted:
  *       type: object
@@ -148,13 +151,13 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *           type: array
  *           description: Labels of checklist items that are not COMPLETE.
  *           items: { type: string }
- *           example: [Photograph the property frontage, Confirm survey plan number]
+ *           example: [Physical verification, Valuation verification]
  *     AdminVerificationReportPhoto:
  *       type: object
  *       required: [url, label]
  *       properties:
  *         url: { type: string, format: uri, example: "https://res.cloudinary.com/demo/image/upload/frontage.jpg" }
- *         label: { type: string, description: Label of the checklist item the media belongs to., example: Photograph the property frontage }
+ *         label: { type: string, description: Label of the checklist section the media belongs to., enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification], example: Physical verification }
  *     AdminVerificationReportChecklistItem:
  *       type: object
  *       required: [label, status]
@@ -228,7 +231,9 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *       required: [id, label, status, media]
  *       properties:
  *         id: { type: string, example: cm9item0001 }
- *         label: { type: string, example: Photograph the property frontage }
+ *         label:
+ *           type: string
+ *           enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification]
  *         status: { $ref: '#/components/schemas/AdminVerificationChecklistItemStatus' }
  *         media:
  *           type: array
@@ -243,7 +248,9 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *       properties:
  *         checklistItems:
  *           type: array
- *           description: Ordered by sortOrder. Empty until the assignment is started.
+ *           description: >
+ *             The five fixed verification sections ordered by sortOrder after the assignment is
+ *             started; empty before it is started. Each section can have its own status and media.
  *           items: { $ref: '#/components/schemas/AdminVerificationChecklistItem' }
  *         clientDocuments:
  *           type: array
@@ -390,8 +397,9 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *     AdminVerificationRequestReport:
  *       type: object
  *       description: >
- *         The raw VerificationReport record with its relations, as Prisma returns it.
- *       required: [id, verificationRequestId, transactionId, submittedByAgentId, summary, findings, reportUrl, viewedAt, generatedAt, reviewStatus, rating, revisionNote, additionalNotes, createdAt, updatedAt, media, checklist, reportDocument, verificationRequest, agent]
+ *         The latest VerificationReport for the request, including its report document, raw
+ *         checklistItems, normalized five-section checklist, request and agent relations.
+ *       required: [id, verificationRequestId, transactionId, submittedByAgentId, summary, findings, reportUrl, viewedAt, generatedAt, reviewStatus, rating, revisionNote, additionalNotes, createdAt, updatedAt, media, checklistItems, checklist, reportDocument, verificationRequest, agent]
  *       properties:
  *         id: { type: string, example: cm9report0001 }
  *         verificationRequestId: { type: string, example: cm9request0001 }
@@ -419,6 +427,22 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *         checklist:
  *           type: array
  *           items: { $ref: '#/components/schemas/AdminVerificationReportChecklistItem' }
+ *         checklistItems:
+ *           type: array
+ *           description: Raw report-linked checklist records, including their checklist media.
+ *           items:
+ *             type: object
+ *             required: [id, label, status, sortOrder, media]
+ *             properties:
+ *               id: { type: string, example: cm9item0001 }
+ *               label:
+ *                 type: string
+ *                 enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification]
+ *               status: { $ref: '#/components/schemas/AdminVerificationChecklistItemStatus' }
+ *               sortOrder: { type: integer, minimum: 0, maximum: 4, example: 0 }
+ *               media:
+ *                 type: array
+ *                 items: { $ref: '#/components/schemas/AdminVerificationDocument' }
  *         reportDocument:
  *           allOf:
  *             - $ref: '#/components/schemas/AdminVerificationReportDocument'
@@ -598,10 +622,12 @@ router.delete(
  *     tags: [Admin Verification]
  *     summary: Start (accept) one of the caller's agent assignments
  *     description: >
- *       Creates the assignment's checklist from the verification type's checklist template the
- *       first time it is called (and sets progressPercent to 0), and moves an ASSIGNED assignment
- *       to ACCEPTED, which notifies the client that the inspection has started. Calling it again
- *       is idempotent: the checklist is not recreated and other statuses are left unchanged.
+ *       Creates the five fixed checklist sections (Physical verification, Court/crime
+ *       verification, Title deeds and documentation verification, Valuation verification, and
+ *       Amenities and environment verification) the first time it is called (and sets
+ *       progressPercent to 0), and moves an ASSIGNED assignment to ACCEPTED, which notifies the
+ *       client that the inspection has started. Calling it again is idempotent: the checklist is
+ *       not recreated and other statuses are left unchanged.
  *       Only the caller's own assignments are found; callers without a VerificationAgent record
  *       (e.g. admins) get 404.
  *     x-no-body: true
@@ -653,11 +679,13 @@ router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent,
  *     tags: [Admin Verification]
  *     summary: Submit the verification report for one of the caller's assignments
  *     description: >
- *       Requires a PDF report_document upload and every checklist item to be COMPLETE. An
- *       assignment without initialized checklist items is treated as incomplete.
- *       Creates a PENDING report for the assignment's paid period (or returns the existing one
- *       if already created), saves the uploaded file as a report document, copies the
- *       assignment's notes and links its checklist items to the report, and notifies the client.
+ *       Requires a valid PDF file in the multipart `report_document` field and all five checklist
+ *       sections to be COMPLETE. An assignment without initialized checklist items is treated as
+ *       incomplete; the 409 response lists every remaining section and current progress.
+ *       Creates a PENDING report for the assignment's paid period, or updates the existing report
+ *       and replaces its report document if already created. The uploaded file is saved as a
+ *       report document, assignment notes are copied, checklist items are linked to the report,
+ *       and the client is notified.
  *       One-time requests: the assignment becomes REPORT_SUBMITTED and the request COMPLETED
  *       (unless CANCELLED). Recurring plans: the assignment is deleted (so
  *       GET /verification/agent-assignments/{id}/report and the other assignment endpoints then
@@ -687,10 +715,10 @@ router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent,
  *               report_document:
  *                 type: string
  *                 format: binary
- *                 description: The agent's written report as a PDF.
+ *                 description: A valid PDF file (application/pdf with a PDF signature).
  *     responses:
  *       201:
- *         description: Report submitted (or the existing report for this period re-confirmed).
+ *         description: Report submitted or the existing report for this paid period updated.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/AdminVerificationReportSubmitted' }
@@ -811,7 +839,7 @@ router.get(
  *         schema: { type: string }
  *     responses:
  *       200:
- *         description: The assignment checklist.
+ *         description: The assignment checklist, with the five fixed sections after inspection starts.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/AdminVerificationAssignmentChecklist' }
@@ -850,8 +878,11 @@ router.get(
  *     tags: [Admin Verification]
  *     summary: Update a checklist item's status and optionally attach media
  *     description: >
- *       Uploads any `media` files to Cloudinary, sets the item's status (if sent), attaches the files to
- *       the item, and recomputes the assignment's progressPercent. Media files are uploaded
+ *       Updates one of the five fixed sections (Physical verification, Court/crime verification,
+ *       Title deeds and documentation verification, Valuation verification, or Amenities and
+ *       environment verification). Uploads any `media` files to Cloudinary, sets the item's status
+ *       (if sent), attaches the files to the item, and recomputes the assignment's progressPercent.
+ *       Media files are uploaded
  *       before the item is looked up, so they are uploaded even when the request then 404s.
  *     security:
  *       - bearerAuth: []
@@ -1269,8 +1300,11 @@ router.get("/verification/agents/reports/:id", checkJwt, adminOrAgent, getAgentR
  *     summary: Get the caller's latest report for a verification request
  *     description: >
  *       Returns the most recent report (by generatedAt) that the caller submitted for the
- *       request, as the raw database record with its media, request (with verification type
- *       and full client user record) and agent.
+ *       request, with its checklist sections normalized to the five fixed labels and
+ *       `reportDocument` set to the uploaded PDF metadata (or null if no document exists).
+ *       The response also includes the report's media, request (with verification type and full
+ *       client user record) and agent. `checklistItems` contains the raw report-linked entries;
+ *       `checklist` is the normalized five-section representation.
  *     security:
  *       - bearerAuth: []
  *     parameters:

@@ -13,6 +13,7 @@ model User {
   email                 String                 @unique
   phone                 String?
   location              String?
+  countryCode           String?                @db.VarChar(2)
   profilePhoto          String?
   termsAndCondition     Boolean                @default(false)
   password              String?
@@ -126,16 +127,17 @@ model VerificationType {
 }
 
 model VerificationPlan {
-  id                 String                 @id @default(cuid())
-  verificationTypeId String
-  verificationType   VerificationType       @relation(fields: [verificationTypeId], references: [id], onDelete: Cascade)
-  frequency          VERIFICATION_FREQUENCY
-  name               String
-  description        String?
-  priceInCents       Int
-  currency           String                 @default("NGN")
-  paystackPlanCode   String?                @unique
-  stripePriceId      String?                @unique
+  id                  String                 @id @default(cuid())
+  verificationTypeId  String
+  verificationType    VerificationType       @relation(fields: [verificationTypeId], references: [id], onDelete: Cascade)
+  frequency           VERIFICATION_FREQUENCY
+  name                String
+  description         String?
+  priceUsdCents       Int
+  priceNgnKobo        Int
+  paystackPlanCode    String?                @unique
+  paystackNgnPlanCode String?                @unique
+  stripePriceId       String?                @unique
 
   verificationRequests  VerificationRequest[]
   paystackSubscriptions PaystackSubscription[]

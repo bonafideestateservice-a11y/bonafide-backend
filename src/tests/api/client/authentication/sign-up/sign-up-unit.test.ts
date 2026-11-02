@@ -68,12 +68,74 @@ describe("signUp handler (unit)", () => {
       fullName: "Test User",
       email: "test@test.com",
       password: "password123",
+      countryCode: "NG",
     });
 
     await signUp(req, res, next);
 
     expect(mockedFindClient).toHaveBeenCalledWith({ email: "test@test.com" });
     expect(next).toHaveBeenCalledWith(expect.any(ConflictError));
+  });
+
+  it("returns 400 when country code is missing", async () => {
+    const { req, res, next } = buildMockReqRes({
+      fullName: "Test User",
+      email: "test@test.com",
+      password: "password123",
+    });
+
+    await signUp(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatusCode.BAD_REQUEST,
+        message: "Country code must be a two-letter ISO 3166-1 alpha-2 code.",
+      }),
+    );
+    expect(mockedCreateClient).not.toHaveBeenCalled();
+  });
+
+  it("requires and normalizes a country code", async () => {
+    mockedFindClient.mockResolvedValue(null);
+    mockedBcrypt.hash.mockResolvedValue("hashed_password" as never);
+    mockedCreateClient.mockResolvedValue({
+      id: "u1",
+      email: "test@test.com",
+      password: "hashed_password",
+      fullName: "Test User",
+      role: ROLE.CLIENT,
+    });
+
+    const { req, res, next } = buildMockReqRes({
+      fullName: "Test User",
+      email: "test@test.com",
+      password: "password123",
+      countryCode: " ng ",
+    });
+
+    await signUp(req, res, next);
+
+    expect(mockedCreateClient).toHaveBeenCalledWith(expect.objectContaining({ countryCode: "NG" }));
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects a country code that is not two letters", async () => {
+    const { req, next } = buildMockReqRes({
+      fullName: "Test User",
+      email: "test@test.com",
+      password: "password123",
+      countryCode: "Nigeria",
+    });
+
+    await signUp(req, {} as Response, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatusCode.BAD_REQUEST,
+        message: "Country code must be a two-letter ISO 3166-1 alpha-2 code.",
+      }),
+    );
+    expect(mockedCreateClient).not.toHaveBeenCalled();
   });
 
   it("returns 201 with token and user on success", async () => {
@@ -93,6 +155,7 @@ describe("signUp handler (unit)", () => {
       email: "test@test.com",
       password: "password123",
       termsAndCondition: true,
+      countryCode: "NG",
     });
 
     await signUp(req, res, next);

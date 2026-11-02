@@ -24,7 +24,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *   schemas:
  *     ClientAuthSignUpRequest:
  *       type: object
- *       required: [fullName, email, password]
+ *       required: [fullName, email, password, countryCode]
  *       properties:
  *         fullName:
  *           type: string
@@ -50,6 +50,13 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           type: boolean
  *           default: false
  *           description: Stored as true only when exactly `true`; anything else stores false.
+ *         countryCode:
+ *           type: string
+ *           pattern: '^[A-Za-z]{2}$'
+ *           minLength: 2
+ *           maxLength: 2
+ *           description: Required ISO 3166-1 alpha-2 country code. Trimmed and upper-cased before saving.
+ *           example: NG
  *     ClientAuthLoginRequest:
  *       type: object
  *       required: [email, password]
@@ -75,7 +82,17 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           description: "API JWT; send as `Authorization: Bearer <token>`."
  *           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyMyJ9.signature
  *         user:
- *           $ref: '#/components/schemas/User'
+ *           $ref: '#/components/schemas/ClientAuthUser'
+ *     ClientAuthUser:
+ *       allOf:
+ *         - $ref: '#/components/schemas/User'
+ *         - type: object
+ *           properties:
+ *             countryCode:
+ *               type: string
+ *               nullable: true
+ *               description: ISO 3166-1 alpha-2 country code; null until provided.
+ *               example: NG
  *     ClientAuthSocialSignInResponse:
  *       type: object
  *       required: [message, token, user, isNewUser]
@@ -88,7 +105,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           description: "API JWT; send as `Authorization: Bearer <token>`."
  *           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyMyJ9.signature
  *         user:
- *           $ref: '#/components/schemas/User'
+ *           $ref: '#/components/schemas/ClientAuthUser'
  *         isNewUser:
  *           type: boolean
  *           description: True when this sign-in created the account.
@@ -177,7 +194,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           example: newPassword456
  *     ClientAuthProfile:
  *       type: object
- *       required: [id, fullName, email, phone, location, profilePhoto, role]
+ *       required: [id, fullName, email, phone, location, countryCode, profilePhoto, role]
  *       properties:
  *         id:
  *           type: string
@@ -198,6 +215,11 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           type: string
  *           nullable: true
  *           example: Lagos
+ *         countryCode:
+ *           type: string
+ *           nullable: true
+ *           description: ISO 3166-1 alpha-2 country code; null until provided.
+ *           example: NG
  *         profilePhoto:
  *           type: string
  *           format: uri
@@ -221,6 +243,13 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           type: string
  *           description: Trimmed; an empty string clears it (stored as null).
  *           example: Lagos
+ *         countryCode:
+ *           type: string
+ *           pattern: '^([A-Za-z]{2})?$'
+ *           minLength: 0
+ *           maxLength: 2
+ *           description: ISO 3166-1 alpha-2 code, trimmed and upper-cased; an empty string clears it.
+ *           example: NG
  *     ClientAuthChangeEmailRequest:
  *       type: object
  *       required: [newEmail]
@@ -331,6 +360,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *                 email: ada@example.com
  *                 phone: null
  *                 location: null
+ *                 countryCode: null
  *                 profilePhoto: null
  *                 termsAndCondition: true
  *                 provider: local
@@ -343,7 +373,8 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         description: >
  *           fullName missing/blank ("Full name is required."), email missing/blank ("Email is required."),
  *           password missing ("Password is required.") or shorter than 8 characters
- *           ("Password must be at least 8 characters.").
+ *           ("Password must be at least 8 characters."), or countryCode is missing or is not a
+ *           two-letter ISO 3166-1 alpha-2 code.
  *         content:
  *           application/json:
  *             schema:
@@ -539,9 +570,11 @@ router.post("/change-password", checkJwt, changePassword);
  *               $ref: '#/components/schemas/ErrorResponse'
  *   patch:
  *     tags: [Client Profile]
- *     summary: Update the authenticated user's profile (name, phone, location, photo)
+ *     summary: Update the authenticated user's profile (name, phone, location, country, photo)
  *     description: >
- *       Partial update; send any of the fields. Use multipart/form-data to upload a photo (it is
+ *       Partial update; send any of the fields. Use this endpoint after Google sign-in to save
+ *       the country selected in the profile-setup screen. Send a two-letter ISO 3166-1 alpha-2
+ *       countryCode such as NG; an empty string clears it. Use multipart/form-data to upload a photo (it is
  *       uploaded to Cloudinary and its secure URL stored as profilePhoto); JSON works for the text
  *       fields only. No file size or type limits are enforced by the API; Cloudinary rejects
  *       non-images (which surfaces as a 500). Returns the updated profile directly (no envelope).
@@ -577,8 +610,8 @@ router.post("/change-password", checkJwt, changePassword);
  *               $ref: '#/components/schemas/ClientAuthProfile'
  *       400:
  *         description: >
- *           fullName is blank or not a string, phone or location is not a string, or nothing to
- *           update was sent ("No profile changes provided.").
+ *           fullName is blank or not a string, phone/location is not a string, countryCode is not
+ *           a two-letter code, or nothing to update was sent ("No profile changes provided.").
  *         content:
  *           application/json:
  *             schema:
@@ -962,7 +995,9 @@ router.post("/reset-password", resetPassword);
  *       Sign-In SDK (mobile) and posts the ID token here. The API verifies it with Google and
  *       returns its own JWT. Signs in the account already linked to this Google ID; otherwise
  *       links an existing client account with the same, Google-verified email; otherwise creates
- *       a client account (emitting USER_REGISTERED).
+ *       a client account (emitting USER_REGISTERED). Google ID tokens do not provide a reliable
+ *       country. A newly created account therefore has `user.countryCode: null`; after sign-in,
+ *       collect the user's country in the profile-setup screen and save it with PATCH /profile.
  *     security: []
  *     parameters:
  *       - in: path
@@ -991,7 +1026,7 @@ router.post("/reset-password", resetPassword);
  *             schema:
  *               $ref: '#/components/schemas/ClientAuthSocialSignInResponse'
  *       400:
- *         description: idToken missing/blank ("idToken is required."), or the Google account shared no email.
+ *         description: idToken missing/blank ("idToken is required."), or the Google account shared no email. Country is not inferred from Google.
  *         content:
  *           application/json:
  *             schema:

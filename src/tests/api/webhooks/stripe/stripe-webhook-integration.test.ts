@@ -173,7 +173,8 @@ beforeAll(async () => {
         verificationTypeId,
         frequency: "MONTHLY",
         name: "Monthly",
-        priceInCents: 500000,
+        priceUsdCents: 500000,
+        priceNgnKobo: 800000000,
         stripePriceId: `price_${suffix}`,
       },
     })

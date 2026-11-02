@@ -79,8 +79,9 @@ export const patchVerificationRequestPlan = async (
       plan: {
         frequency: verificationPlan.frequency,
         name: verificationPlan.name,
-        priceInCents: verificationPlan.priceInCents,
-        currency: verificationPlan.currency,
+        priceUsdCents: verificationPlan.priceUsdCents,
+        priceNgnKobo: verificationPlan.priceNgnKobo,
+        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
       },
     });
   } catch (error) {

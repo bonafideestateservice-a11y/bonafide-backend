@@ -53,8 +53,8 @@ export type VerificationRequestDetails = Prisma.VerificationRequestGetPayload<{
       select: {
         frequency: true;
         name: true;
-        priceInCents: true;
-        currency: true;
+        priceUsdCents: true;
+        priceNgnKobo: true;
       };
     };
   };
@@ -77,8 +77,8 @@ export const getVerificationRequestDetailsForUser = async (
           select: {
             frequency: true,
             name: true,
-            priceInCents: true,
-            currency: true,
+            priceUsdCents: true,
+            priceNgnKobo: true,
           },
         },
       },
