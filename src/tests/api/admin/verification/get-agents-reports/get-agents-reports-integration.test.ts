@@ -100,6 +100,14 @@ describe("GET /api/v1/admin/verification/agents/reports", () => {
         reviewStatus: "APPROVED",
         rating: 4,
         reportUrl: "https://example.com/report.pdf",
+        checklist: [
+          { label: "Physical verification", status: null },
+          { label: "Court/crime verification", status: null },
+          { label: "Title deeds and documentation verification", status: null },
+          { label: "Valuation verification", status: null },
+          { label: "Amenities and environment verification", status: null },
+        ],
+        reportDocument: null,
       },
     ]);
   });

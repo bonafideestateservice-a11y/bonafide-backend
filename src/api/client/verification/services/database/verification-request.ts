@@ -1,4 +1,4 @@
-import { Prisma, VerificationRequest, VerificationStatus } from "@prisma/client";
+import { DocumentType, Prisma, VerificationRequest, VerificationStatus } from "@prisma/client";
 import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
@@ -329,7 +329,26 @@ export type VerificationRequestReportSummary = Prisma.VerificationRequestGetPayl
         generatedAt: true;
         findings: true;
         agent: { select: { name: true } };
-        checklistItems: { select: { media: { select: { url: true }; take: 3 } } };
+        checklistItems: {
+          select: {
+            label: true;
+            status: true;
+            sortOrder: true;
+            media: { select: { url: true }; take: 3 };
+          };
+          orderBy: { sortOrder: "asc" };
+        };
+        media: {
+          where: { documentType: "REPORT_DOCUMENT" };
+          select: {
+            id: true;
+            url: true;
+            fileName: true;
+            fileType: true;
+            fileSizeBytes: true;
+          };
+          take: 1;
+        };
       };
       orderBy: { generatedAt: "desc" };
       take: 1;
@@ -343,6 +362,9 @@ export type VerificationRequestReportSummary = Prisma.VerificationRequestGetPayl
         };
         checklistItems: {
           select: {
+            label: true;
+            status: true;
+            sortOrder: true;
             media: {
               select: {
                 url: true;
@@ -378,7 +400,26 @@ export const getVerificationRequestReportSummaryForUser = async (
             generatedAt: true,
             findings: true,
             agent: { select: { name: true } },
-            checklistItems: { select: { media: { select: { url: true }, take: 3 } } },
+            checklistItems: {
+              select: {
+                label: true,
+                status: true,
+                sortOrder: true,
+                media: { select: { url: true }, take: 3 },
+              },
+              orderBy: { sortOrder: "asc" },
+            },
+            media: {
+              where: { documentType: DocumentType.REPORT_DOCUMENT },
+              select: {
+                id: true,
+                url: true,
+                fileName: true,
+                fileType: true,
+                fileSizeBytes: true,
+              },
+              take: 1,
+            },
           },
           orderBy: { generatedAt: "desc" },
           take: 1,
@@ -392,6 +433,9 @@ export const getVerificationRequestReportSummaryForUser = async (
             },
             checklistItems: {
               select: {
+                label: true,
+                status: true,
+                sortOrder: true,
                 media: {
                   select: {
                     url: true,
@@ -434,7 +478,26 @@ export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload
         clientComment: true;
         ratedAt: true;
         agent: { select: { name: true } };
-        checklistItems: { select: { label: true; media: { select: { url: true } } } };
+        checklistItems: {
+          select: {
+            label: true;
+            status: true;
+            sortOrder: true;
+            media: { select: { url: true } };
+          };
+          orderBy: { sortOrder: "asc" };
+        };
+        media: {
+          where: { documentType: "REPORT_DOCUMENT" };
+          select: {
+            id: true;
+            url: true;
+            fileName: true;
+            fileType: true;
+            fileSizeBytes: true;
+          };
+          take: 1;
+        };
       };
       orderBy: { generatedAt: "desc" };
       take: 1;
@@ -450,6 +513,8 @@ export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload
         checklistItems: {
           select: {
             label: true;
+            status: true;
+            sortOrder: true;
             media: {
               select: {
                 url: true;
@@ -487,7 +552,26 @@ export const getVerificationRequestFullReportData = async (
             clientComment: true,
             ratedAt: true,
             agent: { select: { name: true } },
-            checklistItems: { select: { label: true, media: { select: { url: true } } } },
+            checklistItems: {
+              select: {
+                label: true,
+                status: true,
+                sortOrder: true,
+                media: { select: { url: true } },
+              },
+              orderBy: { sortOrder: "asc" },
+            },
+            media: {
+              where: { documentType: DocumentType.REPORT_DOCUMENT },
+              select: {
+                id: true,
+                url: true,
+                fileName: true,
+                fileType: true,
+                fileSizeBytes: true,
+              },
+              take: 1,
+            },
           },
           orderBy: { generatedAt: "desc" },
           take: 1,
@@ -503,6 +587,8 @@ export const getVerificationRequestFullReportData = async (
             checklistItems: {
               select: {
                 label: true,
+                status: true,
+                sortOrder: true,
                 media: {
                   select: {
                     url: true,
@@ -547,6 +633,18 @@ export type VerificationRequestReportHistoryItem = Prisma.VerificationReportGetP
     viewedAt: true;
     agent: { select: { name: true } };
     transaction: { select: { paidAt: true; amountInCents: true; currency: true } };
+    checklistItems: { select: { sortOrder: true; status: true } };
+    media: {
+      where: { documentType: "REPORT_DOCUMENT" };
+      select: {
+        id: true;
+        url: true;
+        fileName: true;
+        fileType: true;
+        fileSizeBytes: true;
+      };
+      take: 1;
+    };
   };
 }>;
 
@@ -568,6 +666,21 @@ export const getVerificationRequestReportsForUser = async (
             viewedAt: true,
             agent: { select: { name: true } },
             transaction: { select: { paidAt: true, amountInCents: true, currency: true } },
+            checklistItems: {
+              select: { sortOrder: true, status: true },
+              orderBy: { sortOrder: "asc" },
+            },
+            media: {
+              where: { documentType: DocumentType.REPORT_DOCUMENT },
+              select: {
+                id: true,
+                url: true,
+                fileName: true,
+                fileType: true,
+                fileSizeBytes: true,
+              },
+              take: 1,
+            },
           },
         },
       },

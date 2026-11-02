@@ -23,7 +23,7 @@ model User {
   status                UserStatus             @default(ACTIVE)
   // Set when an admin creates the account with a password; cleared when the user changes it.
   mustChangePassword    Boolean                @default(false)
-  createdAt            DateTime               @default(now())
+  createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   passwordResetTokens   PasswordResetToken[]
   verificationRequests  VerificationRequest[]
@@ -189,6 +189,12 @@ enum ChecklistItemStatus {
   COMPLETE
 }
 
+enum DocumentType {
+  VERIFICATION_DOCUMENT
+  CHECKLIST_MEDIA
+  REPORT_DOCUMENT
+}
+
 model VerificationRequest {
   id                      String             @id @default(cuid())
   userId                  String
@@ -227,6 +233,7 @@ model Document {
   verificationReport    VerificationReport?        @relation(fields: [verificationReportId], references: [id], onDelete: SetNull)
   checklistItemId       String?
   checklistItem         VerificationChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  documentType          DocumentType               @default(VERIFICATION_DOCUMENT)
   url                   String
   fileName              String
   fileType              String
@@ -237,6 +244,7 @@ model Document {
   @@index([verificationRequestId])
   @@index([verificationReportId])
   @@index([checklistItemId])
+  @@index([verificationReportId, documentType])
 }
 
 model ChecklistTemplateItem {

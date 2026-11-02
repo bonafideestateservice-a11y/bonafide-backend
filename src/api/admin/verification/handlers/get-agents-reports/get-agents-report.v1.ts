@@ -8,6 +8,7 @@ import {
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationAgentByUserId } from "../../../authentication/services/database/agent";
 import { getAgentReports } from "../../services/database/verification-report";
+import { toVerificationReportChecklist } from "../../../../services/verification-report-checklist";
 import { logger } from "../../../../../utils/logger";
 
 const getNames = (fullName: string) => {
@@ -58,6 +59,8 @@ export const getAgentsReports = async (
         reviewStatus: report.reviewStatus,
         rating: report.rating,
         reportUrl: report.reportUrl ?? "",
+        checklist: toVerificationReportChecklist(report.checklistItems),
+        reportDocument: report.media[0] ?? null,
       })),
     );
   } catch (error) {

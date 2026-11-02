@@ -12,17 +12,21 @@ const ADMIN_EMAIL = process.env.ADMIN_SEED_EMAIL || "admin@bonafide.com";
 const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD || "Admin@123";
 const ADMIN_NAME = process.env.ADMIN_SEED_NAME || "Super Admin";
 
+const verificationChecklist = [
+  { label: "Physical verification", requiresMedia: true },
+  { label: "Court/crime verification", requiresMedia: true },
+  { label: "Title deeds and documentation verification", requiresMedia: true },
+  { label: "Valuation verification", requiresMedia: true },
+  { label: "Amenities and environment verification", requiresMedia: true },
+] as const;
+
 const verificationTypes = [
   {
     slug: "property-verification",
     name: "Property Verification",
     description: "Verify ownership, condition and legal standing",
     icon: "property",
-    checklist: [
-      { label: "Property structure verified", requiresMedia: true },
-      { label: "Property Deed", requiresMedia: true },
-      { label: "Survey Plan", requiresMedia: true },
-    ],
+    checklist: verificationChecklist,
     plans: [
       {
         frequency: VERIFICATION_FREQUENCY.ONE_TIME,
@@ -52,11 +56,7 @@ const verificationTypes = [
     name: "Construction Progress",
     description: "Track milestones with photo, videos, & agent report",
     icon: "construction",
-    checklist: [
-      { label: "Land documentation verified", requiresMedia: true },
-      { label: "Foundation inspected", requiresMedia: true },
-      { label: "Construction stage confirmed", requiresMedia: true },
-    ],
+    checklist: verificationChecklist,
     plans: [
       {
         frequency: VERIFICATION_FREQUENCY.ONE_TIME,
@@ -86,11 +86,7 @@ const verificationTypes = [
     name: "Business Verification",
     description: "Confirm business legitimacy, operations & ownership",
     icon: "business",
-    checklist: [
-      { label: "Business registration verified", requiresMedia: true },
-      { label: "Business premises inspected", requiresMedia: true },
-      { label: "Business operations confirmed", requiresMedia: true },
-    ],
+    checklist: verificationChecklist,
     plans: [
       {
         frequency: VERIFICATION_FREQUENCY.ONE_TIME,

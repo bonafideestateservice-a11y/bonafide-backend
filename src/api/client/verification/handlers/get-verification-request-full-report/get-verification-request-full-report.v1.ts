@@ -3,6 +3,7 @@ import { ForbiddenError, HttpStatusCode, NotFoundError } from "../../../../../ex
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationRequestFullReportData } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
+import { toVerificationReportChecklist } from "../../../../services/verification-report-checklist";
 
 /** One finding the agent recorded, e.g. { label: "Ownership", value: "Verified" }. */
 type Finding = { label?: string; value?: string; status?: string };
@@ -75,6 +76,7 @@ export const getVerificationRequestFullReport = async (
     const checklistItems = report.checklistItems.length
       ? report.checklistItems
       : fullReport.agentAssignment?.checklistItems;
+    const checklist = toVerificationReportChecklist(checklistItems ?? []);
     if (checklistItems) {
       for (const item of checklistItems) {
         if (item.media) {
@@ -133,6 +135,8 @@ export const getVerificationRequestFullReport = async (
       summary: report.summary || "",
       ownershipFindings,
       findings: rawFindings, // Returning raw findings directly for frontend flexibility
+      checklist,
+      reportDocument: report.media[0] ?? null,
       photos,
       agentNotes,
       agent: agentData,

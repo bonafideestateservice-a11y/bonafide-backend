@@ -64,9 +64,20 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
           clientComment: null,
           ratedAt: null,
           checklistItems: [
-            { label: "Front Door", media: [{ url: "http://example.com/photo1.jpg" }] },
-            { label: "Backyard", media: [{ url: "http://example.com/photo2.jpg" }] },
+            {
+              label: "Front Door",
+              status: "COMPLETE",
+              sortOrder: 0,
+              media: [{ url: "http://example.com/photo1.jpg" }],
+            },
+            {
+              label: "Backyard",
+              status: "PENDING",
+              sortOrder: 1,
+              media: [{ url: "http://example.com/photo2.jpg" }],
+            },
           ],
+          media: [],
         },
       ],
       // Recurring assignments are deleted once their period is reported.
@@ -102,6 +113,14 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
           { label: "Ownership", value: "Fully Verified", status: "good" },
           { label: "Physical Condition", value: "Needs paint", status: "warning" },
         ],
+        checklist: [
+          { label: "Physical verification", status: "COMPLETE" },
+          { label: "Court/crime verification", status: "PENDING" },
+          { label: "Title deeds and documentation verification", status: null },
+          { label: "Valuation verification", status: null },
+          { label: "Amenities and environment verification", status: null },
+        ],
+        reportDocument: null,
         photos: [
           { url: "http://example.com/photo1.jpg", label: "Front Door" },
           { url: "http://example.com/photo2.jpg", label: "Backyard" },
@@ -147,6 +166,7 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
           rating: 4,
           clientComment: "Thorough inspection.",
           ratedAt,
+          media: [],
         },
       ],
       agentAssignment: null,

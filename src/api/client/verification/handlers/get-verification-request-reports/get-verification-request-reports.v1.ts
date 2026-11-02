@@ -3,6 +3,7 @@ import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptio
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationRequestReportsForUser } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
+import { toVerificationReportChecklist } from "../../../../services/verification-report-checklist";
 
 const getNames = (fullName: string) => {
   const names = fullName.trim().split(/\s+/);
@@ -33,6 +34,8 @@ export const getVerificationRequestReports = async (
         generatedAt: report.generatedAt?.toISOString() ?? null,
         reviewStatus: report.reviewStatus,
         viewed: report.viewedAt !== null,
+        checklist: toVerificationReportChecklist(report.checklistItems),
+        reportDocument: report.media[0] ?? null,
         agent: getNames(report.agent.name),
         payment: report.transaction
           ? {

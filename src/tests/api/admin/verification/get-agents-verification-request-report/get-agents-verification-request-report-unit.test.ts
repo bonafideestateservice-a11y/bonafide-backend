@@ -37,6 +37,19 @@ describe("getAgentsVerificationRequestReport handler (unit)", () => {
       id: "report-1",
       reviewStatus: "APPROVED",
       reportUrl: "https://example.com/report.pdf",
+      checklistItems: [],
+      media: [],
+    };
+    const expected = {
+      ...report,
+      checklist: [
+        { label: "Physical verification", status: null },
+        { label: "Court/crime verification", status: null },
+        { label: "Title deeds and documentation verification", status: null },
+        { label: "Valuation verification", status: null },
+        { label: "Amenities and environment verification", status: null },
+      ],
+      reportDocument: null,
     };
     mockedGetReport.mockResolvedValue(report);
     const { req, res, next } = buildMockReqRes();
@@ -45,7 +58,7 @@ describe("getAgentsVerificationRequestReport handler (unit)", () => {
 
     expect(mockedGetReport).toHaveBeenCalledWith("agent-1", "request-1");
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
-    expect(res.json).toHaveBeenCalledWith(report);
+    expect(res.json).toHaveBeenCalledWith(expected);
     expect(next).not.toHaveBeenCalled();
   });
 

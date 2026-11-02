@@ -22,7 +22,8 @@ let serviceId: string;
 let agentUserId: string;
 let verificationReportId: string;
 
-const endpoint = () => `/api/v1/client/verification-requests/${verificationRequestId}/report-summary`;
+const endpoint = () =>
+  `/api/v1/client/verification-requests/${verificationRequestId}/report-summary`;
 
 describe("GET /api/v1/client/verification-requests/:id/report-summary (integration, real DB)", () => {
   beforeAll(async () => {
@@ -77,7 +78,7 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
         email: agentEmail,
         fullName: "Agent Summary",
         role: "AGENT",
-      }
+      },
     });
     agentUserId = agentUser.id;
 
@@ -85,7 +86,7 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
       data: {
         userId: agentUserId,
         name: "Agent Summary",
-      }
+      },
     });
 
     // Create AgentAssignment
@@ -95,8 +96,8 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
         agentId: agent.id,
         status: "REPORT_SUBMITTED",
         completedAt: new Date(),
-        progressPercent: 100
-      }
+        progressPercent: 100,
+      },
     });
 
     // Create ChecklistItems
@@ -112,10 +113,10 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
             url: "http://example.com/door-summary.png",
             fileName: "door.png",
             fileType: "image/png",
-            fileSizeBytes: 1024
-          }
-        }
-      }
+            fileSizeBytes: 1024,
+          },
+        },
+      },
     });
 
     // Create VerificationReport
@@ -124,37 +125,34 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
         verificationRequestId,
         submittedByAgentId: agent.id,
         generatedAt: new Date(),
-        findings: [
-          { label: "Ownership Status", value: "Verified", status: "good" }
-        ],
-        reviewStatus: "APPROVED"
-      }
+        findings: [{ label: "Ownership Status", value: "Verified", status: "good" }],
+        reviewStatus: "APPROVED",
+      },
     });
     verificationReportId = report.id;
-
   });
 
   afterAll(async () => {
     if (verificationReportId) {
       await prismaClient.verificationReport.delete({
-        where: { id: verificationReportId }
+        where: { id: verificationReportId },
       });
     }
     // Delete documents first
     await prismaClient.document.deleteMany({
-      where: { verificationRequestId }
+      where: { verificationRequestId },
     });
     // Delete checklist items
     await prismaClient.verificationChecklistItem.deleteMany({
-      where: { agentAssignment: { verificationRequestId } }
+      where: { agentAssignment: { verificationRequestId } },
     });
     // Delete assignments
     // Checklist items no longer cascade with their assignment.
     await prismaClient.verificationChecklistItem.deleteMany({
-      where: { agentAssignment: { verificationRequestId } }
+      where: { agentAssignment: { verificationRequestId } },
     });
     await prismaClient.agentAssignment.deleteMany({
-      where: { verificationRequestId }
+      where: { verificationRequestId },
     });
     if (verificationRequestId) {
       await prismaClient.verificationRequest.delete({
@@ -177,15 +175,15 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
     if (testUserId) {
       await deleteClient({ id: testUserId });
     }
-    
+
     // Clean up agent
     if (agentUserId) {
       await prismaClient.verificationAgent.deleteMany({
-        where: { userId: agentUserId }
+        where: { userId: agentUserId },
       });
-      await prismaClient.user.delete({ where: { id: agentUserId }});
+      await prismaClient.user.delete({ where: { id: agentUserId } });
     }
-    
+
     await prismaClient.$disconnect();
   });
 
@@ -195,7 +193,9 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
   });
 
   it("returns 404 for a non-existent request id", async () => {
-    const res = await request(app).get(`/api/v1/client/verification-requests/req-99999/report-summary`).set("Authorization", `Bearer ${authToken}`);
+    const res = await request(app)
+      .get(`/api/v1/client/verification-requests/req-99999/report-summary`)
+      .set("Authorization", `Bearer ${authToken}`);
     expect(res.status).toBe(404);
   });
 
@@ -215,5 +215,14 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
     expect(res.body.data.insights).toHaveLength(1);
     expect(res.body.data.insights[0].label).toBe("Ownership Status");
     expect(res.body.data.insights[0].status).toBe("good");
+    expect(res.body.data.checklist).toHaveLength(5);
+    expect(res.body.data.checklist.map((item: { label: string }) => item.label)).toEqual([
+      "Physical verification",
+      "Court/crime verification",
+      "Title deeds and documentation verification",
+      "Valuation verification",
+      "Amenities and environment verification",
+    ]);
+    expect(res.body.data.reportDocument).toBeNull();
   });
 });

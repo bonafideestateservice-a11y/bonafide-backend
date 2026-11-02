@@ -3,6 +3,19 @@ import app from "../../../../../app";
 import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";
 
+jest.mock("cloudinary", () => ({
+  v2: {
+    config: jest.fn(),
+    uploader: {
+      upload: jest.fn().mockResolvedValue({
+        public_id: "integration-report-document",
+        secure_url: "https://cdn.test/agent-report.pdf",
+      }),
+      destroy: jest.fn().mockResolvedValue({ result: "ok" }),
+    },
+  },
+}));
+
 const suffix = Date.now();
 let agentUserId: string;
 let agentId: string;
@@ -13,6 +26,7 @@ let verificationRequestId: string;
 let assignmentId: string;
 let completeItemId: string;
 let pendingItemId: string;
+const otherItemIds: string[] = [];
 let reportId: string;
 let agentToken: string;
 
@@ -79,7 +93,7 @@ beforeAll(async () => {
   const completeItem = await prismaClient.verificationChecklistItem.create({
     data: {
       agentAssignmentId: assignmentId,
-      label: "Front View",
+      label: "Physical verification",
       status: "COMPLETE",
       sortOrder: 0,
     },
@@ -88,12 +102,27 @@ beforeAll(async () => {
   const pendingItem = await prismaClient.verificationChecklistItem.create({
     data: {
       agentAssignmentId: assignmentId,
-      label: "Main Bedroom",
+      label: "Court/crime verification",
       status: "PENDING",
       sortOrder: 1,
     },
   });
   pendingItemId = pendingItem.id;
+  for (const [sortOrder, label] of [
+    [2, "Title deeds and documentation verification"],
+    [3, "Valuation verification"],
+    [4, "Amenities and environment verification"],
+  ] as const) {
+    const item = await prismaClient.verificationChecklistItem.create({
+      data: {
+        agentAssignmentId: assignmentId,
+        label,
+        status: "COMPLETE",
+        sortOrder,
+      },
+    });
+    otherItemIds.push(item.id);
+  }
 
   await prismaClient.document.create({
     data: {
@@ -111,7 +140,7 @@ afterAll(async () => {
   await prismaClient.document.deleteMany({ where: { verificationRequestId } });
   // Checklist items outlive their assignment (they move to the report), so delete them directly.
   await prismaClient.verificationChecklistItem.deleteMany({
-    where: { id: { in: [completeItemId, pendingItemId] } },
+    where: { id: { in: [completeItemId, pendingItemId, ...otherItemIds] } },
   });
   if (reportId) await prismaClient.verificationReport.delete({ where: { id: reportId } });
   await prismaClient.agentAssignment.delete({ where: { id: assignmentId } });
@@ -127,13 +156,17 @@ describe("Agent assignment report workflow", () => {
   it("returns incomplete checklist details", async () => {
     const response = await request(app)
       .post(`/api/v1/admin/verification/agent-assignments/${assignmentId}/report`)
+      .attach("report_document", Buffer.from("%PDF-1.4 test report"), {
+        filename: "agent-report.pdf",
+        contentType: "application/pdf",
+      })
       .set("Authorization", `Bearer ${agentToken}`);
 
     expect(response.status).toBe(409);
     expect(response.body).toEqual({
       error: "INCOMPLETE_CHECKLIST",
-      progressPercent: 50,
-      remainingItems: ["Main Bedroom"],
+      progressPercent: 80,
+      remainingItems: ["Court/crime verification"],
     });
   });
 
@@ -145,6 +178,10 @@ describe("Agent assignment report workflow", () => {
 
     const response = await request(app)
       .post(`/api/v1/admin/verification/agent-assignments/${assignmentId}/report`)
+      .attach("report_document", Buffer.from("%PDF-1.4 test report"), {
+        filename: "agent-report.pdf",
+        contentType: "application/pdf",
+      })
       .set("Authorization", `Bearer ${agentToken}`);
 
     expect(response.status).toBe(201);
@@ -152,6 +189,13 @@ describe("Agent assignment report workflow", () => {
       id: expect.any(String),
       reviewStatus: "PENDING",
       generatedAt: expect.any(String),
+      reportDocument: {
+        id: expect.any(String),
+        url: "https://cdn.test/agent-report.pdf",
+        fileName: "agent-report.pdf",
+        fileType: "application/pdf",
+        fileSizeBytes: 20,
+      },
     });
     reportId = response.body.id;
 
@@ -170,7 +214,17 @@ describe("Agent assignment report workflow", () => {
     expect(report.additionalNotes).toBe("Inspection completed.");
     expect(report.submittedByAgentId).toBe(agentId);
     expect(report.checklistItems.map((item) => item.id).sort()).toEqual(
-      [completeItemId, pendingItemId].sort(),
+      [completeItemId, pendingItemId, ...otherItemIds].sort(),
+    );
+    await expect(
+      prismaClient.document.findFirst({
+        where: { verificationReportId: reportId, documentType: "REPORT_DOCUMENT" },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        url: "https://cdn.test/agent-report.pdf",
+        fileName: "agent-report.pdf",
+      }),
     );
   });
 
@@ -188,9 +242,23 @@ describe("Agent assignment report workflow", () => {
         email: `report-workflow-client-${suffix}@example.com`,
       },
       address: "Plot 45, Lagos",
-      photos: [{ url: "https://cdn.test/front.jpg", label: "Front View" }],
+      photos: [{ url: "https://cdn.test/front.jpg", label: "Physical verification" }],
+      checklist: [
+        { label: "Physical verification", status: "COMPLETE" },
+        { label: "Court/crime verification", status: "COMPLETE" },
+        { label: "Title deeds and documentation verification", status: null },
+        { label: "Valuation verification", status: null },
+        { label: "Amenities and environment verification", status: null },
+      ],
       additionalNotes: "Inspection completed.",
-      reportUrl: null,
+      reportUrl: "https://cdn.test/agent-report.pdf",
+      reportDocument: {
+        id: expect.any(String),
+        url: "https://cdn.test/agent-report.pdf",
+        fileName: "agent-report.pdf",
+        fileType: "application/pdf",
+        fileSizeBytes: 20,
+      },
     });
   });
 });

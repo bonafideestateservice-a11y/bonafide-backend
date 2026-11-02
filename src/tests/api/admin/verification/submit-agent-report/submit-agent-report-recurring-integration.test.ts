@@ -4,6 +4,19 @@ import app from "../../../../../app";
 import { generateToken } from "../../../../../utils/jwt";
 import { prismaClient } from "../../../../../utils/prisma";
 
+jest.mock("cloudinary", () => ({
+  v2: {
+    config: jest.fn(),
+    uploader: {
+      upload: jest.fn().mockResolvedValue({
+        public_id: "recurring-report-document",
+        secure_url: "https://cdn.test/recurring-report.pdf",
+      }),
+      destroy: jest.fn().mockResolvedValue({ result: "ok" }),
+    },
+  },
+}));
+
 const suffix = Date.now();
 const userIds: string[] = [];
 const requestIds: string[] = [];
@@ -61,14 +74,26 @@ const createInspectedRequest = async () => {
       additionalNotes: "September inspection notes.",
     },
   });
-  const checklistItem = await prismaClient.verificationChecklistItem.create({
-    data: {
-      agentAssignmentId: assignment.id,
-      label: "Perimeter",
-      status: "COMPLETE",
-      sortOrder: 0,
-    },
-  });
+  const checklistLabels = [
+    "Physical verification",
+    "Court/crime verification",
+    "Title deeds and documentation verification",
+    "Valuation verification",
+    "Amenities and environment verification",
+  ];
+  const checklistItems = await Promise.all(
+    checklistLabels.map((label, sortOrder) =>
+      prismaClient.verificationChecklistItem.create({
+        data: {
+          agentAssignmentId: assignment.id,
+          label,
+          status: "COMPLETE",
+          sortOrder,
+        },
+      }),
+    ),
+  );
+  const checklistItem = checklistItems[0];
   await prismaClient.document.create({
     data: {
       verificationRequestId: verificationRequest.id,
@@ -89,6 +114,10 @@ const createInspectedRequest = async () => {
 const submitReport = (assignmentId: string) =>
   request(app)
     .post(`/api/v1/admin/verification/agent-assignments/${assignmentId}/report`)
+    .attach("report_document", Buffer.from("%PDF-1.4 test report"), {
+      filename: "recurring-report.pdf",
+      contentType: "application/pdf",
+    })
     .set("Authorization", `Bearer ${agentToken}`);
 
 const requestStatus = async (id: string) =>
@@ -173,7 +202,22 @@ describe("Recurring verification report workflow", () => {
         additionalNotes: "September inspection notes.",
       });
       // The checklist outlives the deleted assignment.
-      expect(report.checklistItems).toEqual([{ label: "Perimeter", agentAssignmentId: null }]);
+      expect(report.checklistItems).toEqual(
+        [
+          "Physical verification",
+          "Court/crime verification",
+          "Title deeds and documentation verification",
+          "Valuation verification",
+          "Amenities and environment verification",
+        ].map((label) => ({ label, agentAssignmentId: null })),
+      );
+      await expect(
+        prismaClient.document.findFirst({
+          where: { verificationReportId: reportId, documentType: "REPORT_DOCUMENT" },
+        }),
+      ).resolves.toEqual(
+        expect.objectContaining({ fileName: "recurring-report.pdf", fileType: "application/pdf" }),
+      );
       await expect(
         prismaClient.agentAssignment.findUnique({ where: { id: assignmentId } }),
       ).resolves.toBeNull();
@@ -203,9 +247,23 @@ describe("Recurring verification report workflow", () => {
           email: `recurring-report-client-${suffix}@example.com`,
         },
         address: "Plot 7, Abuja",
-        photos: [{ url: "https://cdn.test/perimeter.jpg", label: "Perimeter" }],
+        photos: [{ url: "https://cdn.test/perimeter.jpg", label: "Physical verification" }],
+        checklist: [
+          { label: "Physical verification", status: "COMPLETE" },
+          { label: "Court/crime verification", status: "COMPLETE" },
+          { label: "Title deeds and documentation verification", status: "COMPLETE" },
+          { label: "Valuation verification", status: "COMPLETE" },
+          { label: "Amenities and environment verification", status: "COMPLETE" },
+        ],
         additionalNotes: "September inspection notes.",
-        reportUrl: null,
+        reportUrl: "https://cdn.test/recurring-report.pdf",
+        reportDocument: {
+          id: expect.any(String),
+          url: "https://cdn.test/recurring-report.pdf",
+          fileName: "recurring-report.pdf",
+          fileType: "application/pdf",
+          fileSizeBytes: 20,
+        },
       });
     });
 

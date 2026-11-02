@@ -39,7 +39,9 @@ describe("GET /verification-requests/:id/report-summary - Unit", () => {
   });
 
   it("should return 404 if request is not found", async () => {
-    (databaseService.getVerificationRequestReportSummaryForUser as jest.Mock).mockResolvedValue(null);
+    (databaseService.getVerificationRequestReportSummaryForUser as jest.Mock).mockResolvedValue(
+      null,
+    );
     await getVerificationRequestReportSummary(req as Request, res as Response, next);
     expect(next).toHaveBeenCalledWith(expect.any(NotFoundError));
   });
@@ -50,23 +52,24 @@ describe("GET /verification-requests/:id/report-summary - Unit", () => {
       reports: [
         {
           generatedAt: new Date("2023-12-16T10:00:00Z"),
-          findings: [
-            { label: "Ownership", value: "Verified", status: "good" }
-          ],
+          findings: [{ label: "Ownership", value: "Verified", status: "good" }],
           agent: { name: "John Doe" },
           checklistItems: [
-            { media: [{ url: "http://example.com/photo1.jpg" }] },
-            { media: [{ url: "http://example.com/photo2.jpg" }] }
-          ]
-        }
+            { sortOrder: 0, status: "COMPLETE", media: [{ url: "http://example.com/photo1.jpg" }] },
+            { sortOrder: 1, status: "PENDING", media: [{ url: "http://example.com/photo2.jpg" }] },
+          ],
+          media: [],
+        },
       ],
       agentAssignment: null,
       verificationPlan: {
-        name: "Standard Plan"
-      }
+        name: "Standard Plan",
+      },
     };
 
-    (databaseService.getVerificationRequestReportSummaryForUser as jest.Mock).mockResolvedValue(mockSummary);
+    (databaseService.getVerificationRequestReportSummaryForUser as jest.Mock).mockResolvedValue(
+      mockSummary,
+    );
 
     await getVerificationRequestReportSummary(req as Request, res as Response, next);
 
@@ -79,18 +82,24 @@ describe("GET /verification-requests/:id/report-summary - Unit", () => {
         inspectionDate: "2023-12-16T10:00:00.000Z",
         agent: {
           firstName: "John",
-          lastName: "Doe"
+          lastName: "Doe",
         },
         location: "123 Main St",
         reportType: "Standard Plan",
-        insights: [
-          { label: "Ownership", value: "Verified", status: "good" }
+        insights: [{ label: "Ownership", value: "Verified", status: "good" }],
+        checklist: [
+          { label: "Physical verification", status: "COMPLETE" },
+          { label: "Court/crime verification", status: "PENDING" },
+          { label: "Title deeds and documentation verification", status: null },
+          { label: "Valuation verification", status: null },
+          { label: "Amenities and environment verification", status: null },
         ],
+        reportDocument: null,
         mediaPreview: [
           { url: "http://example.com/photo1.jpg" },
-          { url: "http://example.com/photo2.jpg" }
-        ]
-      }
+          { url: "http://example.com/photo2.jpg" },
+        ],
+      },
     });
   });
 });

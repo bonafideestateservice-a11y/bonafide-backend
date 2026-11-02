@@ -37,6 +37,8 @@ describe("getAgentsReports handler (unit)", () => {
         reviewStatus: "APPROVED",
         rating: 4,
         reportUrl: "https://example.com/report.pdf",
+        checklistItems: [],
+        media: [],
         verificationRequest: {
           details: { businessAddress: "Garki District, Abuja" },
           user: { fullName: "Client Williams" },
@@ -66,6 +68,14 @@ describe("getAgentsReports handler (unit)", () => {
         reviewStatus: "APPROVED",
         rating: 4,
         reportUrl: "https://example.com/report.pdf",
+        checklist: [
+          { label: "Physical verification", status: null },
+          { label: "Court/crime verification", status: null },
+          { label: "Title deeds and documentation verification", status: null },
+          { label: "Valuation verification", status: null },
+          { label: "Amenities and environment verification", status: null },
+        ],
+        reportDocument: null,
       },
     ]);
   });

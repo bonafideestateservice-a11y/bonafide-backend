@@ -123,11 +123,20 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *                 example: true
  *     AdminVerificationReportSubmitted:
  *       type: object
- *       required: [id, reviewStatus, generatedAt]
+ *       required: [id, reviewStatus, generatedAt, reportDocument]
  *       properties:
  *         id: { type: string, description: Verification report ID., example: cm9report0001 }
  *         reviewStatus: { $ref: '#/components/schemas/AdminVerificationReportReviewStatus' }
  *         generatedAt: { type: string, format: date-time, example: "2026-10-07T12:00:00.000Z" }
+ *         reportDocument:
+ *           type: object
+ *           required: [id, url, fileName, fileType, fileSizeBytes]
+ *           properties:
+ *             id: { type: string, example: cm9document0001 }
+ *             url: { type: string, format: uri, example: "https://res.cloudinary.com/demo/raw/upload/report.pdf" }
+ *             fileName: { type: string, example: verification-report.pdf }
+ *             fileType: { type: string, example: application/pdf }
+ *             fileSizeBytes: { type: integer, example: 245760 }
  *     AdminVerificationIncompleteChecklist:
  *       type: object
  *       description: Written directly by the handler (not the ErrorResponse shape).
@@ -146,9 +155,29 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *       properties:
  *         url: { type: string, format: uri, example: "https://res.cloudinary.com/demo/image/upload/frontage.jpg" }
  *         label: { type: string, description: Label of the checklist item the media belongs to., example: Photograph the property frontage }
+ *     AdminVerificationReportChecklistItem:
+ *       type: object
+ *       required: [label, status]
+ *       properties:
+ *         label:
+ *           type: string
+ *           enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification]
+ *         status:
+ *           type: string
+ *           nullable: true
+ *           enum: [PENDING, COMPLETE]
+ *     AdminVerificationReportDocument:
+ *       type: object
+ *       required: [id, url, fileName, fileType, fileSizeBytes]
+ *       properties:
+ *         id: { type: string, example: cm9document0001 }
+ *         url: { type: string, format: uri, example: "https://res.cloudinary.com/demo/raw/upload/report.pdf" }
+ *         fileName: { type: string, example: verification-report.pdf }
+ *         fileType: { type: string, example: application/pdf }
+ *         fileSizeBytes: { type: integer, example: 245760 }
  *     AdminVerificationAssignmentReport:
  *       type: object
- *       required: [client, address, photos, additionalNotes, reportUrl]
+ *       required: [client, address, photos, checklist, additionalNotes, reportUrl, reportDocument]
  *       properties:
  *         client: { $ref: '#/components/schemas/AdminVerificationClientContact' }
  *         address:
@@ -159,11 +188,18 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *           type: array
  *           description: Every media file of every checklist item, ordered by checklist item sortOrder.
  *           items: { $ref: '#/components/schemas/AdminVerificationReportPhoto' }
+ *         checklist:
+ *           type: array
+ *           items: { $ref: '#/components/schemas/AdminVerificationReportChecklistItem' }
  *         additionalNotes: { type: string, description: Empty string when no notes were saved., example: Owner was present during inspection. }
  *         reportUrl: { type: string, format: uri, nullable: true, example: null }
+ *         reportDocument:
+ *           allOf:
+ *             - $ref: '#/components/schemas/AdminVerificationReportDocument'
+ *           nullable: true
  *     AdminVerificationReportDetail:
  *       type: object
- *       required: [id, verificationRequestId, generatedAt, reviewStatus, client, address, photos, additionalNotes, reportUrl]
+ *       required: [id, verificationRequestId, generatedAt, reviewStatus, client, address, photos, checklist, additionalNotes, reportUrl, reportDocument]
  *       properties:
  *         id: { type: string, example: cm9report0001 }
  *         verificationRequestId: { type: string, example: cm9request0001 }
@@ -178,8 +214,15 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *           type: array
  *           description: Media of the checklist items saved with this report, ordered by sortOrder.
  *           items: { $ref: '#/components/schemas/AdminVerificationReportPhoto' }
+ *         checklist:
+ *           type: array
+ *           items: { $ref: '#/components/schemas/AdminVerificationReportChecklistItem' }
  *         additionalNotes: { type: string, description: Notes copied from the assignment at submission (empty string if none)., example: Owner was present during inspection. }
  *         reportUrl: { type: string, format: uri, nullable: true, example: null }
+ *         reportDocument:
+ *           allOf:
+ *             - $ref: '#/components/schemas/AdminVerificationReportDocument'
+ *           nullable: true
  *     AdminVerificationChecklistItem:
  *       type: object
  *       required: [id, label, status, media]
@@ -307,7 +350,7 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *         avgRating: { type: number, description: Average report rating rounded to 1 decimal; 0 when unrated., example: 4.6 }
  *     AdminVerificationReportSummary:
  *       type: object
- *       required: [id, verificationType, client, district, generatedAt, reviewStatus, rating, reportUrl]
+ *       required: [id, verificationType, client, district, generatedAt, reviewStatus, rating, reportUrl, checklist, reportDocument]
  *       properties:
  *         id: { type: string, description: Verification report ID., example: cm9report0001 }
  *         verificationType: { $ref: '#/components/schemas/AdminVerificationTypeName' }
@@ -323,6 +366,13 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *         reviewStatus: { $ref: '#/components/schemas/AdminVerificationReportReviewStatus' }
  *         rating: { type: number, nullable: true, example: 4.5 }
  *         reportUrl: { type: string, description: Empty string when no report file exists., example: "" }
+ *         checklist:
+ *           type: array
+ *           items: { $ref: '#/components/schemas/AdminVerificationReportChecklistItem' }
+ *         reportDocument:
+ *           allOf:
+ *             - $ref: '#/components/schemas/AdminVerificationReportDocument'
+ *           nullable: true
  *     AdminVerificationDocument:
  *       type: object
  *       required: [id, verificationRequestId, verificationReportId, checklistItemId, url, fileName, fileType, fileSizeBytes, createdAt]
@@ -335,12 +385,13 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *         fileName: { type: string, example: report.pdf }
  *         fileType: { type: string, example: application/pdf }
  *         fileSizeBytes: { type: integer, example: 482113 }
+ *         documentType: { type: string, enum: [VERIFICATION_DOCUMENT, CHECKLIST_MEDIA, REPORT_DOCUMENT] }
  *         createdAt: { type: string, format: date-time }
  *     AdminVerificationRequestReport:
  *       type: object
  *       description: >
  *         The raw VerificationReport record with its relations, as Prisma returns it.
- *       required: [id, verificationRequestId, transactionId, submittedByAgentId, summary, findings, reportUrl, viewedAt, generatedAt, reviewStatus, rating, revisionNote, additionalNotes, createdAt, updatedAt, media, verificationRequest, agent]
+ *       required: [id, verificationRequestId, transactionId, submittedByAgentId, summary, findings, reportUrl, viewedAt, generatedAt, reviewStatus, rating, revisionNote, additionalNotes, createdAt, updatedAt, media, checklist, reportDocument, verificationRequest, agent]
  *       properties:
  *         id: { type: string, example: cm9report0001 }
  *         verificationRequestId: { type: string, example: cm9request0001 }
@@ -365,6 +416,13 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *             Documents attached directly to the report (verificationReportId). Checklist
  *             photos are linked to checklist items instead, so they do not appear here.
  *           items: { $ref: '#/components/schemas/AdminVerificationDocument' }
+ *         checklist:
+ *           type: array
+ *           items: { $ref: '#/components/schemas/AdminVerificationReportChecklistItem' }
+ *         reportDocument:
+ *           allOf:
+ *             - $ref: '#/components/schemas/AdminVerificationReportDocument'
+ *           nullable: true
  *         verificationRequest:
  *           type: object
  *           required: [id, userId, verificationTypeId, verificationPlanId, status, details, additionalNote, notifyOnInspectionStart, notifyOnReportReady, createdAt, updatedAt, verificationType, user]
@@ -595,17 +653,17 @@ router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent,
  *     tags: [Admin Verification]
  *     summary: Submit the verification report for one of the caller's assignments
  *     description: >
- *       Requires every checklist item to be COMPLETE (an assignment with no checklist items,
- *       i.e. never started, passes this check). Creates a PENDING report for the assignment's
- *       paid period (or returns the existing one if already created), copies the assignment's
- *       notes and links its checklist items to the report, and notifies the client.
+ *       Requires a PDF report_document upload and every checklist item to be COMPLETE. An
+ *       assignment without initialized checklist items is treated as incomplete.
+ *       Creates a PENDING report for the assignment's paid period (or returns the existing one
+ *       if already created), saves the uploaded file as a report document, copies the
+ *       assignment's notes and links its checklist items to the report, and notifies the client.
  *       One-time requests: the assignment becomes REPORT_SUBMITTED and the request COMPLETED
  *       (unless CANCELLED). Recurring plans: the assignment is deleted (so
  *       GET /verification/agent-assignments/{id}/report and the other assignment endpoints then
  *       return 404, while GET /verification/agents/reports/{reportId} keeps working) and the
  *       request moves to SUBMITTED (next period already paid), AWAITING_RENEWAL, or COMPLETED
  *       (subscription ended).
- *     x-no-body: true
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -618,12 +676,29 @@ router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent,
  *         required: true
  *         description: Agent assignment ID
  *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [report_document]
+ *             properties:
+ *               report_document:
+ *                 type: string
+ *                 format: binary
+ *                 description: The agent's written report as a PDF.
  *     responses:
  *       201:
  *         description: Report submitted (or the existing report for this period re-confirmed).
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/AdminVerificationReportSubmitted' }
+ *       400:
+ *         description: report_document is missing or is not a valid PDF.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       401:
  *         description: No token, or the token is invalid, expired, malformed or for a user that no longer exists.
  *         content:
@@ -640,7 +715,7 @@ router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent,
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       409:
- *         description: Some checklist items are not COMPLETE. Note this body is not the ErrorResponse shape.
+ *         description: Some checklist items are not COMPLETE or the checklist was not initialized. Note this body is not the ErrorResponse shape.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/AdminVerificationIncompleteChecklist' }
@@ -654,6 +729,7 @@ router.post(
   "/verification/agent-assignments/:id/report",
   checkJwt,
   adminOrAgent,
+  upload.single("report_document"),
   submitAgentReport,
 );
 

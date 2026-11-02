@@ -1,5 +1,6 @@
 import {
   AgentAssignmentStatus,
+  DocumentType,
   Prisma,
   ReportReviewStatus,
   VerificationStatus,
@@ -7,6 +8,10 @@ import {
 import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
+import {
+  toVerificationReportChecklist,
+  verificationReportChecklistLabels,
+} from "../../../../services/verification-report-checklist";
 import {
   isRecurringRequest,
   nextStatusAfterRecurringReport,
@@ -24,6 +29,24 @@ export type AgentReportSummary = Prisma.VerificationReportGetPayload<{
     reviewStatus: true;
     rating: true;
     reportUrl: true;
+    checklistItems: {
+      select: {
+        sortOrder: true;
+        status: true;
+      };
+      orderBy: { sortOrder: "asc" };
+    };
+    media: {
+      where: { documentType: "REPORT_DOCUMENT" };
+      select: {
+        id: true;
+        url: true;
+        fileName: true;
+        fileType: true;
+        fileSizeBytes: true;
+      };
+      take: 1;
+    };
     verificationRequest: {
       select: {
         details: true;
@@ -104,6 +127,15 @@ export const getAgentReports = async (
         reviewStatus: true,
         rating: true,
         reportUrl: true,
+        checklistItems: {
+          select: { sortOrder: true, status: true },
+          orderBy: { sortOrder: "asc" },
+        },
+        media: {
+          where: { documentType: DocumentType.REPORT_DOCUMENT },
+          select: { id: true, url: true, fileName: true, fileType: true, fileSizeBytes: true },
+          take: 1,
+        },
         verificationRequest: {
           select: {
             details: true,
@@ -131,7 +163,11 @@ export const getAgentVerificationRequestReport = async (
       },
       orderBy: { generatedAt: "desc" },
       include: {
-        media: true,
+        media: { where: { documentType: DocumentType.REPORT_DOCUMENT } },
+        checklistItems: {
+          orderBy: { sortOrder: "asc" },
+          include: { media: true },
+        },
         verificationRequest: {
           include: {
             verificationType: true,
@@ -160,7 +196,21 @@ export type SubmitAgentReportResult =
       id: string;
       reviewStatus: ReportReviewStatus;
       generatedAt: Date;
+      reportDocument: {
+        id: string;
+        url: string;
+        fileName: string;
+        fileType: string;
+        fileSizeBytes: number;
+      };
     };
+
+export interface AgentReportDocumentData {
+  url: string;
+  fileName: string;
+  fileType: string;
+  fileSizeBytes: number;
+}
 
 /**
  * Submit the report for an assignment's period. The report records the period's payment, the
@@ -173,6 +223,7 @@ export type SubmitAgentReportResult =
 export const submitAgentAssignmentReport = async (
   agentId: string,
   assignmentId: string,
+  reportDocument: AgentReportDocumentData,
 ): Promise<SubmitAgentReportResult | null> => {
   try {
     let uploadedReport: { reportId: string; verificationRequestId: string } | undefined;
@@ -195,9 +246,11 @@ export const submitAgentAssignmentReport = async (
         (item) => item.status === "COMPLETE",
       ).length;
       const progressPercent = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
-      const remainingItems = assignment.checklistItems
-        .filter((item) => item.status !== "COMPLETE")
-        .map((item) => item.label);
+      const remainingItems = totalItems
+        ? assignment.checklistItems
+            .filter((item) => item.status !== "COMPLETE")
+            .map((item) => item.label)
+        : [...verificationReportChecklistLabels];
 
       if (remainingItems.length > 0) {
         return { kind: "INCOMPLETE_CHECKLIST" as const, progressPercent, remainingItems };
@@ -226,6 +279,7 @@ export const submitAgentAssignmentReport = async (
               ? { transaction: { connect: { id: assignment.transactionId } } }
               : {}),
             additionalNotes: assignment.additionalNotes,
+            reportUrl: reportDocument.url,
             reviewStatus: ReportReviewStatus.PENDING,
             generatedAt,
           },
@@ -234,7 +288,34 @@ export const submitAgentAssignmentReport = async (
 
       if (!existingReport) {
         uploadedReport = { reportId: report.id, verificationRequestId };
+      } else {
+        await transaction.verificationReport.update({
+          where: { id: report.id },
+          data: { reportUrl: reportDocument.url },
+        });
       }
+
+      await transaction.document.deleteMany({
+        where: {
+          verificationReportId: report.id,
+          documentType: DocumentType.REPORT_DOCUMENT,
+        },
+      });
+      const savedReportDocument = await transaction.document.create({
+        data: {
+          verificationRequestId,
+          verificationReportId: report.id,
+          documentType: DocumentType.REPORT_DOCUMENT,
+          ...reportDocument,
+        },
+        select: {
+          id: true,
+          url: true,
+          fileName: true,
+          fileType: true,
+          fileSizeBytes: true,
+        },
+      });
 
       await transaction.verificationChecklistItem.updateMany({
         where: { agentAssignmentId: assignment.id },
@@ -268,6 +349,7 @@ export const submitAgentAssignmentReport = async (
         id: report.id,
         reviewStatus: report.reviewStatus,
         generatedAt: report.generatedAt ?? generatedAt,
+        reportDocument: savedReportDocument,
       };
     });
 
@@ -294,16 +376,36 @@ export type AgentAssignmentReport = {
   };
   address: string;
   photos: { url: string; label: string }[];
+  checklist: ReturnType<typeof toVerificationReportChecklist>;
   additionalNotes: string;
   reportUrl: string | null;
+  reportDocument: {
+    id: string;
+    url: string;
+    fileName: string;
+    fileType: string;
+    fileSizeBytes: number;
+  } | null;
 };
 
 type ReportViewSource = {
   details: Prisma.JsonValue;
   user: { fullName: string; phone: string | null; email: string };
-  checklistItems: { label: string; media: { url: string }[] }[];
+  checklistItems: {
+    label: string;
+    status: "PENDING" | "COMPLETE";
+    sortOrder: number;
+    media: { url: string }[];
+  }[];
   additionalNotes: string | null;
   reportUrl: string | null;
+  reportDocument: {
+    id: string;
+    url: string;
+    fileName: string;
+    fileType: string;
+    fileSizeBytes: number;
+  } | null;
 };
 
 const toReportView = (source: ReportViewSource): AgentAssignmentReport => {
@@ -324,13 +426,15 @@ const toReportView = (source: ReportViewSource): AgentAssignmentReport => {
     photos: source.checklistItems.flatMap((item) =>
       item.media.map((media) => ({ url: media.url, label: item.label })),
     ),
+    checklist: toVerificationReportChecklist(source.checklistItems),
     additionalNotes: source.additionalNotes ?? "",
-    reportUrl: source.reportUrl,
+    reportUrl: source.reportUrl ?? source.reportDocument?.url ?? null,
+    reportDocument: source.reportDocument,
   };
 };
 
 const reportChecklistSelect = {
-  select: { label: true, media: { select: { url: true } } },
+  select: { label: true, status: true, sortOrder: true, media: { select: { url: true } } },
   orderBy: { sortOrder: "asc" },
 } satisfies Prisma.VerificationChecklistItemFindManyArgs;
 
@@ -343,13 +447,45 @@ export const getAgentAssignmentReport = async (
       where: { id: assignmentId, agentId },
       select: {
         additionalNotes: true,
-        transaction: { select: { report: { select: { reportUrl: true } } } },
+        transaction: {
+          select: {
+            report: {
+              select: {
+                reportUrl: true,
+                media: {
+                  where: { documentType: DocumentType.REPORT_DOCUMENT },
+                  select: {
+                    id: true,
+                    url: true,
+                    fileName: true,
+                    fileType: true,
+                    fileSizeBytes: true,
+                  },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
         verificationRequest: {
           select: {
             details: true,
             user: { select: { fullName: true, phone: true, email: true } },
             reports: {
-              select: { reportUrl: true },
+              select: {
+                reportUrl: true,
+                media: {
+                  where: { documentType: DocumentType.REPORT_DOCUMENT },
+                  select: {
+                    id: true,
+                    url: true,
+                    fileName: true,
+                    fileType: true,
+                    fileSizeBytes: true,
+                  },
+                  take: 1,
+                },
+              },
               orderBy: { generatedAt: "desc" },
               take: 1,
             },
@@ -369,6 +505,10 @@ export const getAgentAssignmentReport = async (
       reportUrl:
         assignment.transaction?.report?.reportUrl ??
         assignment.verificationRequest.reports[0]?.reportUrl ??
+        null,
+      reportDocument:
+        assignment.transaction?.report?.media[0] ??
+        assignment.verificationRequest.reports[0]?.media[0] ??
         null,
     });
   } catch (error) {
@@ -404,6 +544,17 @@ export const getAgentReportById = async (
         reportUrl: true,
         additionalNotes: true,
         checklistItems: reportChecklistSelect,
+        media: {
+          where: { documentType: DocumentType.REPORT_DOCUMENT },
+          select: {
+            id: true,
+            url: true,
+            fileName: true,
+            fileType: true,
+            fileSizeBytes: true,
+          },
+          take: 1,
+        },
         verificationRequest: {
           select: {
             details: true,
@@ -426,6 +577,7 @@ export const getAgentReportById = async (
         checklistItems: report.checklistItems,
         additionalNotes: report.additionalNotes,
         reportUrl: report.reportUrl,
+        reportDocument: report.media[0] ?? null,
       }),
     };
   } catch (error) {

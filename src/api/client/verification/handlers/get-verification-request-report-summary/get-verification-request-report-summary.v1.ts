@@ -3,6 +3,7 @@ import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptio
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationRequestReportSummaryForUser } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
+import { toVerificationReportChecklist } from "../../../../services/verification-report-checklist";
 
 export const getVerificationRequestReportSummary = async (
   req: Request,
@@ -22,10 +23,7 @@ export const getVerificationRequestReportSummary = async (
       return next(new NotFoundError("Verification request not found."));
     }
 
-    const summary = await getVerificationRequestReportSummaryForUser(
-      verificationRequestId,
-      userId,
-    );
+    const summary = await getVerificationRequestReportSummaryForUser(verificationRequestId, userId);
 
     if (!summary) {
       return next(new NotFoundError("Verification request not found."));
@@ -34,7 +32,7 @@ export const getVerificationRequestReportSummary = async (
     // Default values if data is missing
     let propertyAddress = "Address not provided";
     let propertyName = "Property";
-    
+
     if (summary.details && typeof summary.details === "object" && !Array.isArray(summary.details)) {
       propertyAddress = (summary.details as any).propertyAddress || propertyAddress;
       propertyName = (summary.details as any).propertyName || propertyName;
@@ -49,7 +47,7 @@ export const getVerificationRequestReportSummary = async (
       const agentNameParts = reportAgent.name.split(" ");
       const firstName = agentNameParts[0] || "";
       const lastName = agentNameParts.slice(1).join(" ") || "";
-      
+
       agentData = {
         firstName,
         lastName,
@@ -60,6 +58,7 @@ export const getVerificationRequestReportSummary = async (
     const checklistItems = report?.checklistItems.length
       ? report.checklistItems
       : summary.agentAssignment?.checklistItems;
+    const checklist = toVerificationReportChecklist(checklistItems ?? []);
     if (checklistItems) {
       for (const item of checklistItems) {
         if (item.media) {
@@ -84,6 +83,8 @@ export const getVerificationRequestReportSummary = async (
       location: propertyAddress,
       reportType: summary.verificationPlan?.name || "Standard Report",
       insights,
+      checklist,
+      reportDocument: report?.media[0] ?? null,
       mediaPreview,
     };
 

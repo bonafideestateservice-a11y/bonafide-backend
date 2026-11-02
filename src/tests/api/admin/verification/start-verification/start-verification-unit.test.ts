@@ -39,7 +39,7 @@ describe("startVerification handler (unit)", () => {
       checklist: [
         {
           id: "item-1",
-          label: "Property structure verified",
+          label: "Physical verification",
           status: "PENDING",
           requiresMedia: true,
         },
@@ -58,7 +58,7 @@ describe("startVerification handler (unit)", () => {
       checklist: [
         {
           id: "item-1",
-          label: "Property structure verified",
+          label: "Physical verification",
           status: "PENDING",
           requiresMedia: true,
         },

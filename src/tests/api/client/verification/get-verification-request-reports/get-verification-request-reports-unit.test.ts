@@ -35,6 +35,8 @@ describe("getVerificationRequestReports handler (unit)", () => {
         reviewStatus: "PENDING",
         viewedAt: null,
         agent: { name: "Tunde Bello" },
+        checklistItems: [{ sortOrder: 0, status: "COMPLETE" }],
+        media: [],
         transaction: {
           paidAt: new Date("2026-10-01T08:00:00Z"),
           amountInCents: 500000,
@@ -47,6 +49,8 @@ describe("getVerificationRequestReports handler (unit)", () => {
         reviewStatus: "APPROVED",
         viewedAt: new Date("2026-09-10T10:00:00Z"),
         agent: { name: "Ada" },
+        checklistItems: [],
+        media: [],
         transaction: null,
       },
     ]);
@@ -65,6 +69,14 @@ describe("getVerificationRequestReports handler (unit)", () => {
           generatedAt: "2026-10-05T10:00:00.000Z",
           reviewStatus: "PENDING",
           viewed: false,
+          checklist: [
+            { label: "Physical verification", status: "COMPLETE" },
+            { label: "Court/crime verification", status: null },
+            { label: "Title deeds and documentation verification", status: null },
+            { label: "Valuation verification", status: null },
+            { label: "Amenities and environment verification", status: null },
+          ],
+          reportDocument: null,
           agent: { firstName: "Tunde", lastName: "Bello" },
           payment: {
             paidAt: "2026-10-01T08:00:00.000Z",
@@ -77,6 +89,14 @@ describe("getVerificationRequestReports handler (unit)", () => {
           generatedAt: null,
           reviewStatus: "APPROVED",
           viewed: true,
+          checklist: [
+            { label: "Physical verification", status: null },
+            { label: "Court/crime verification", status: null },
+            { label: "Title deeds and documentation verification", status: null },
+            { label: "Valuation verification", status: null },
+            { label: "Amenities and environment verification", status: null },
+          ],
+          reportDocument: null,
           agent: { firstName: "Ada", lastName: "" },
           payment: null,
         },

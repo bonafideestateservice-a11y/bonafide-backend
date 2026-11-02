@@ -321,7 +321,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         notificationPreferences: { $ref: '#/components/schemas/ClientVerificationNotificationPreferences' }
  *     ClientVerificationReportSummary:
  *       type: object
- *       required: [property, inspectionDate, agent, location, reportType, insights, mediaPreview]
+ *       required: [property, inspectionDate, agent, location, reportType, insights, checklist, reportDocument, mediaPreview]
  *       properties:
  *         property:
  *           type: string
@@ -351,6 +351,13 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           type: array
  *           description: The latest report's raw findings array (empty if none).
  *           items: { $ref: '#/components/schemas/ClientVerificationFinding' }
+ *         checklist:
+ *           type: array
+ *           items: { $ref: '#/components/schemas/ClientVerificationReportChecklistItem' }
+ *         reportDocument:
+ *           allOf:
+ *             - $ref: '#/components/schemas/ClientVerificationReportDocument'
+ *           nullable: true
  *         mediaPreview:
  *           type: array
  *           maxItems: 3
@@ -360,9 +367,30 @@ const upload = multer({ storage: multer.memoryStorage() });
  *             required: [url]
  *             properties:
  *               url: { type: string, example: "https://res.cloudinary.com/demo/image/upload/front.jpg" }
+ *     ClientVerificationReportChecklistItem:
+ *       type: object
+ *       required: [label, status]
+ *       properties:
+ *         label:
+ *           type: string
+ *           enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification]
+ *         status:
+ *           type: string
+ *           nullable: true
+ *           enum: [PENDING, COMPLETE]
+ *           description: Null when older reports do not contain this checklist section.
+ *     ClientVerificationReportDocument:
+ *       type: object
+ *       required: [id, url, fileName, fileType, fileSizeBytes]
+ *       properties:
+ *         id: { type: string, example: cm9document0001 }
+ *         url: { type: string, format: uri, example: "https://res.cloudinary.com/demo/raw/upload/report.pdf" }
+ *         fileName: { type: string, example: verification-report.pdf }
+ *         fileType: { type: string, example: application/pdf }
+ *         fileSizeBytes: { type: integer, example: 245760 }
  *     ClientVerificationFullReport:
  *       type: object
- *       required: [id, reportId, generatedAt, reviewStatus, client, property, summary, ownershipFindings, findings, photos, agentNotes, agent, feedback]
+ *       required: [id, reportId, generatedAt, reviewStatus, client, property, summary, ownershipFindings, findings, checklist, reportDocument, photos, agentNotes, agent, feedback]
  *       properties:
  *         id: { type: string, description: The verification request id., example: cm1vreq0001 }
  *         reportId: { type: string, description: The latest report's id., example: cm1vrep0001 }
@@ -400,6 +428,14 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         findings:
  *           type: array
  *           items: { $ref: '#/components/schemas/ClientVerificationFinding' }
+ *         checklist:
+ *           type: array
+ *           description: The five fixed verification sections and their completion status.
+ *           items: { $ref: '#/components/schemas/ClientVerificationReportChecklistItem' }
+ *         reportDocument:
+ *           allOf:
+ *             - $ref: '#/components/schemas/ClientVerificationReportDocument'
+ *           nullable: true
  *         photos:
  *           type: array
  *           description: Every media file on the report's checklist (or the assignment's checklist when the report has none), labelled with its checklist item.
@@ -433,12 +469,19 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         ratedAt: { type: string, format: date-time, example: "2026-10-08T14:02:11.000Z" }
  *     ClientVerificationReportHistoryItem:
  *       type: object
- *       required: [id, generatedAt, reviewStatus, viewed, agent, payment]
+ *       required: [id, generatedAt, reviewStatus, viewed, checklist, reportDocument, agent, payment]
  *       properties:
  *         id: { type: string, example: cm1vrep0001 }
  *         generatedAt: { type: string, format: date-time, nullable: true, example: "2026-10-05T12:00:00.000Z" }
  *         reviewStatus: { $ref: '#/components/schemas/ClientVerificationReportReviewStatus' }
  *         viewed: { type: boolean, description: True when the report's viewedAt is set., example: false }
+ *         checklist:
+ *           type: array
+ *           items: { $ref: '#/components/schemas/ClientVerificationReportChecklistItem' }
+ *         reportDocument:
+ *           allOf:
+ *             - $ref: '#/components/schemas/ClientVerificationReportDocument'
+ *           nullable: true
  *         agent: { $ref: '#/components/schemas/ClientVerificationAgentName' }
  *         payment:
  *           type: object

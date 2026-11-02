@@ -1,4 +1,5 @@
 import {
+  DocumentType,
   AgentAssignmentStatus,
   AgentStatus,
   Prisma,
@@ -8,6 +9,7 @@ import {
 import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
+import { verificationReportChecklistLabels } from "../../../../services/verification-report-checklist";
 import { findUnreportedPaidTransaction } from "../../../../services/database/verification-lifecycle";
 import {
   MAX_ACTIVE_ASSIGNMENTS,
@@ -411,18 +413,6 @@ export const startAgentAssignment = async (
           id: true,
           verificationRequestId: true,
           status: true,
-          verificationRequest: {
-            select: {
-              verificationType: {
-                select: {
-                  checklistTemplateItems: {
-                    select: { label: true, requiresMedia: true, sortOrder: true },
-                    orderBy: { sortOrder: "asc" },
-                  },
-                },
-              },
-            },
-          },
           checklistItems: {
             select: { id: true, label: true, status: true, sortOrder: true },
             orderBy: { sortOrder: "asc" },
@@ -434,13 +424,11 @@ export const startAgentAssignment = async (
 
       if (assignment.checklistItems.length === 0) {
         await transaction.verificationChecklistItem.createMany({
-          data: assignment.verificationRequest.verificationType.checklistTemplateItems.map(
-            (item) => ({
-              agentAssignmentId: assignment.id,
-              label: item.label,
-              sortOrder: item.sortOrder,
-            }),
-          ),
+          data: verificationReportChecklistLabels.map((label, sortOrder) => ({
+            agentAssignmentId: assignment.id,
+            label,
+            sortOrder,
+          })),
         });
       }
 
@@ -477,10 +465,7 @@ export const startAgentAssignment = async (
           id: item.id,
           label: item.label,
           status: "PENDING" as const,
-          requiresMedia:
-            assignment.verificationRequest.verificationType.checklistTemplateItems.find(
-              (templateItem) => templateItem.sortOrder === item.sortOrder,
-            )?.requiresMedia ?? false,
+          requiresMedia: true,
         })),
       };
     });
@@ -646,6 +631,7 @@ export const updateAgentChecklistItem = async (
             ...file,
             verificationRequestId,
             checklistItemId: item.id,
+            documentType: DocumentType.CHECKLIST_MEDIA,
           })),
         });
       }

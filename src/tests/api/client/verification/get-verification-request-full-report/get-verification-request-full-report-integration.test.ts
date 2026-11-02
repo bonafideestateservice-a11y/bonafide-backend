@@ -109,9 +109,9 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
     await prismaClient.verificationChecklistItem.create({
       data: {
         agentAssignmentId: assignment.id,
-        label: "Front Door",
+        label: "Physical verification",
         status: "COMPLETE",
-        sortOrder: 1,
+        sortOrder: 0,
         media: {
           create: {
             verificationRequestId,
@@ -122,6 +122,19 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
           },
         },
       },
+    });
+    await prismaClient.verificationChecklistItem.createMany({
+      data: [
+        "Court/crime verification",
+        "Title deeds and documentation verification",
+        "Valuation verification",
+        "Amenities and environment verification",
+      ].map((label, index) => ({
+        agentAssignmentId: assignment.id,
+        label,
+        status: "COMPLETE" as const,
+        sortOrder: index + 1,
+      })),
     });
 
     // Create VerificationReport
@@ -136,6 +149,17 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
       },
     });
     verificationReportId = report.id;
+    await prismaClient.document.create({
+      data: {
+        verificationRequestId,
+        verificationReportId,
+        documentType: "REPORT_DOCUMENT",
+        url: "https://cdn.test/client-report.pdf",
+        fileName: "client-report.pdf",
+        fileType: "application/pdf",
+        fileSizeBytes: 2400,
+      },
+    });
   });
 
   afterAll(async () => {
@@ -254,6 +278,20 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
     expect(res.body.data.findings[0].status).toBe("good");
     expect(res.body.data.photos).toHaveLength(1);
     expect(res.body.data.photos[0].url).toBe("http://example.com/door-full.png");
-    expect(res.body.data.photos[0].label).toBe("Front Door");
+    expect(res.body.data.photos[0].label).toBe("Physical verification");
+    expect(res.body.data.checklist).toEqual([
+      { label: "Physical verification", status: "COMPLETE" },
+      { label: "Court/crime verification", status: "COMPLETE" },
+      { label: "Title deeds and documentation verification", status: "COMPLETE" },
+      { label: "Valuation verification", status: "COMPLETE" },
+      { label: "Amenities and environment verification", status: "COMPLETE" },
+    ]);
+    expect(res.body.data.reportDocument).toEqual(
+      expect.objectContaining({
+        url: "https://cdn.test/client-report.pdf",
+        fileName: "client-report.pdf",
+        fileType: "application/pdf",
+      }),
+    );
   });
 });

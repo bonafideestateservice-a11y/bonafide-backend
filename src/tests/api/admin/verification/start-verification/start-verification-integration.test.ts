@@ -94,7 +94,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   // Checklist items no longer cascade with their assignment.
-  await prismaClient.verificationChecklistItem.deleteMany({ where: { agentAssignmentId: assignmentId } });
+  await prismaClient.verificationChecklistItem.deleteMany({
+    where: { agentAssignmentId: assignmentId },
+  });
   await prismaClient.agentAssignment.delete({ where: { id: assignmentId } });
   await prismaClient.verificationRequest.delete({ where: { id: verificationRequestId } });
   await prismaClient.verificationAgent.delete({ where: { id: agentId } });
@@ -125,15 +127,33 @@ describe("POST /api/v1/admin/verification/agent-assignments/:id/start", () => {
       checklist: [
         {
           id: expect.any(String),
-          label: "Property structure verified",
+          label: "Physical verification",
           status: "PENDING",
           requiresMedia: true,
         },
         {
           id: expect.any(String),
-          label: "Property deed reviewed",
+          label: "Court/crime verification",
           status: "PENDING",
-          requiresMedia: false,
+          requiresMedia: true,
+        },
+        {
+          id: expect.any(String),
+          label: "Title deeds and documentation verification",
+          status: "PENDING",
+          requiresMedia: true,
+        },
+        {
+          id: expect.any(String),
+          label: "Valuation verification",
+          status: "PENDING",
+          requiresMedia: true,
+        },
+        {
+          id: expect.any(String),
+          label: "Amenities and environment verification",
+          status: "PENDING",
+          requiresMedia: true,
         },
       ],
     });
@@ -143,6 +163,6 @@ describe("POST /api/v1/admin/verification/agent-assignments/:id/start", () => {
     ).resolves.toEqual(expect.objectContaining({ status: "ACCEPTED" }));
     await expect(
       prismaClient.verificationChecklistItem.count({ where: { agentAssignmentId: assignmentId } }),
-    ).resolves.toBe(2);
+    ).resolves.toBe(5);
   });
 });

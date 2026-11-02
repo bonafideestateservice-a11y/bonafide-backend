@@ -36,8 +36,16 @@ describe("getAgentAssignmentReportHandler (unit)", () => {
       },
       address: "Plot 45, Lagos",
       photos: [{ url: "https://cdn.test/front.jpg", label: "Front View" }],
+      checklist: [
+        { label: "Physical verification", status: null },
+        { label: "Court/crime verification", status: null },
+        { label: "Title deeds and documentation verification", status: null },
+        { label: "Valuation verification", status: null },
+        { label: "Amenities and environment verification", status: null },
+      ],
       additionalNotes: "All good.",
       reportUrl: null,
+      reportDocument: null,
     };
     mockedGetAgent.mockResolvedValue({ id: "agent-1" });
     mockedGetReport.mockResolvedValue(report);

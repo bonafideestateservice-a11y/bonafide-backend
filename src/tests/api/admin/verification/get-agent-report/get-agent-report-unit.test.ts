@@ -36,8 +36,16 @@ describe("getAgentReport handler (unit)", () => {
       client: { firstName: "Ada", lastName: "Okafor", phone: "", email: "ada@example.com" },
       address: "Plot 7, Abuja",
       photos: [{ url: "https://cdn.test/perimeter.jpg", label: "Perimeter" }],
+      checklist: [
+        { label: "Physical verification", status: null },
+        { label: "Court/crime verification", status: null },
+        { label: "Title deeds and documentation verification", status: null },
+        { label: "Valuation verification", status: null },
+        { label: "Amenities and environment verification", status: null },
+      ],
       additionalNotes: "Notes",
       reportUrl: null,
+      reportDocument: null,
     };
     mockedGetReport.mockResolvedValue({
       id: "report-1",
