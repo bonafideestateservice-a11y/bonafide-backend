@@ -77,7 +77,7 @@ describe("submitAgentReport handler (unit)", () => {
     mockedSubmit.mockResolvedValue({
       kind: "SUBMITTED",
       id: "report-1",
-      reviewStatus: "PENDING",
+      reviewStatus: "APPROVED",
       generatedAt: new Date("2026-09-19T18:00:00.000Z"),
       reportDocument: {
         id: "document-1",
@@ -100,7 +100,7 @@ describe("submitAgentReport handler (unit)", () => {
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.CREATED);
     expect(res.json).toHaveBeenCalledWith({
       id: "report-1",
-      reviewStatus: "PENDING",
+      reviewStatus: "APPROVED",
       generatedAt: "2026-09-19T18:00:00.000Z",
       reportDocument: {
         id: "document-1",

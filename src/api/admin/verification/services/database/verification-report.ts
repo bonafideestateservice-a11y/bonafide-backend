@@ -281,7 +281,7 @@ export const submitAgentAssignmentReport = async (
                 : {}),
               additionalNotes: assignment.additionalNotes,
               reportUrl: reportDocument.url,
-              reviewStatus: ReportReviewStatus.PENDING,
+              reviewStatus: ReportReviewStatus.APPROVED,
               generatedAt,
             },
             select: reportSelect,
@@ -292,7 +292,7 @@ export const submitAgentAssignmentReport = async (
         } else {
           await transaction.verificationReport.update({
             where: { id: report.id },
-            data: { reportUrl: reportDocument.url },
+            data: { reportUrl: reportDocument.url, reviewStatus: ReportReviewStatus.APPROVED },
           });
         }
 

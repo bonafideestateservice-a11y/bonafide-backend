@@ -245,7 +245,7 @@ describe("Recurring verification report workflow", () => {
         id: reportId,
         verificationRequestId,
         generatedAt: expect.any(String),
-        reviewStatus: "PENDING",
+        reviewStatus: "APPROVED",
         client: {
           firstName: "Recurring",
           lastName: "client",
@@ -328,7 +328,7 @@ describe("Recurring verification report workflow", () => {
         {
           id: reportId,
           generatedAt: expect.any(String),
-          reviewStatus: "PENDING",
+          reviewStatus: "APPROVED",
           viewed: false,
           agent: { firstName: "Recurring", lastName: "Agent" },
           payment: {

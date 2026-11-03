@@ -187,7 +187,7 @@ describe("Agent assignment report workflow", () => {
     expect(response.status).toBe(201);
     expect(response.body).toEqual({
       id: expect.any(String),
-      reviewStatus: "PENDING",
+      reviewStatus: "APPROVED",
       generatedAt: expect.any(String),
       reportDocument: {
         id: expect.any(String),
