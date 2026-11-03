@@ -193,7 +193,7 @@ export const assignAgentToVerificationRequest = async (
         data: { assignedAt: new Date() },
       });
       return { kind: "ASSIGNED" as const, assignment };
-    });
+    }, { maxWait: 5000, timeout: 20000 });
 
     if (result.kind === "ASSIGNED") {
       appEvents.emit(AppEventTypes.AGENT_ASSIGNED, {
@@ -468,7 +468,7 @@ export const startAgentAssignment = async (
           requiresMedia: true,
         })),
       };
-    });
+    }, { maxWait: 5000, timeout: 20000 });
 
     if (startedEvent) {
       appEvents.emit(AppEventTypes.INSPECTION_STARTED, {

@@ -227,131 +227,137 @@ export const submitAgentAssignmentReport = async (
 ): Promise<SubmitAgentReportResult | null> => {
   try {
     let uploadedReport: { reportId: string; verificationRequestId: string } | undefined;
-    const result = await prismaClient.$transaction(async (transaction) => {
-      const assignment = await transaction.agentAssignment.findFirst({
-        where: { id: assignmentId, agentId },
-        select: {
-          id: true,
-          verificationRequestId: true,
-          transactionId: true,
-          additionalNotes: true,
-          checklistItems: { select: { label: true, status: true } },
-        },
-      });
+    const result = await prismaClient.$transaction(
+      async (transaction) => {
+        const assignment = await transaction.agentAssignment.findFirst({
+          where: { id: assignmentId, agentId },
+          select: {
+            id: true,
+            verificationRequestId: true,
+            transactionId: true,
+            additionalNotes: true,
+            checklistItems: { select: { label: true, status: true } },
+          },
+        });
 
-      if (!assignment) return null;
+        if (!assignment) return null;
 
-      const totalItems = assignment.checklistItems.length;
-      const completedItems = assignment.checklistItems.filter(
-        (item) => item.status === "COMPLETE",
-      ).length;
-      const progressPercent = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
-      const remainingItems = totalItems
-        ? assignment.checklistItems
-            .filter((item) => item.status !== "COMPLETE")
-            .map((item) => item.label)
-        : [...verificationReportChecklistLabels];
+        const totalItems = assignment.checklistItems.length;
+        const completedItems = assignment.checklistItems.filter(
+          (item) => item.status === "COMPLETE",
+        ).length;
+        const progressPercent = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
+        const remainingItems = totalItems
+          ? assignment.checklistItems
+              .filter((item) => item.status !== "COMPLETE")
+              .map((item) => item.label)
+          : [...verificationReportChecklistLabels];
 
-      if (remainingItems.length > 0) {
-        return { kind: "INCOMPLETE_CHECKLIST" as const, progressPercent, remainingItems };
-      }
+        if (remainingItems.length > 0) {
+          return { kind: "INCOMPLETE_CHECKLIST" as const, progressPercent, remainingItems };
+        }
 
-      const { verificationRequestId } = assignment;
-      const reportSelect = { id: true, reviewStatus: true, generatedAt: true } as const;
-      const existingReport = assignment.transactionId
-        ? await transaction.verificationReport.findUnique({
-            where: { transactionId: assignment.transactionId },
+        const { verificationRequestId } = assignment;
+        const reportSelect = { id: true, reviewStatus: true, generatedAt: true } as const;
+        const existingReport = assignment.transactionId
+          ? await transaction.verificationReport.findUnique({
+              where: { transactionId: assignment.transactionId },
+              select: reportSelect,
+            })
+          : await transaction.verificationReport.findFirst({
+              where: { verificationRequestId, transactionId: null },
+              select: reportSelect,
+            });
+
+        const generatedAt = new Date();
+        const report =
+          existingReport ??
+          (await transaction.verificationReport.create({
+            data: {
+              verificationRequest: { connect: { id: verificationRequestId } },
+              agent: { connect: { id: agentId } },
+              ...(assignment.transactionId
+                ? { transaction: { connect: { id: assignment.transactionId } } }
+                : {}),
+              additionalNotes: assignment.additionalNotes,
+              reportUrl: reportDocument.url,
+              reviewStatus: ReportReviewStatus.PENDING,
+              generatedAt,
+            },
             select: reportSelect,
-          })
-        : await transaction.verificationReport.findFirst({
-            where: { verificationRequestId, transactionId: null },
-            select: reportSelect,
+          }));
+
+        if (!existingReport) {
+          uploadedReport = { reportId: report.id, verificationRequestId };
+        } else {
+          await transaction.verificationReport.update({
+            where: { id: report.id },
+            data: { reportUrl: reportDocument.url },
           });
+        }
 
-      const generatedAt = new Date();
-      const report =
-        existingReport ??
-        (await transaction.verificationReport.create({
-          data: {
-            verificationRequest: { connect: { id: verificationRequestId } },
-            agent: { connect: { id: agentId } },
-            ...(assignment.transactionId
-              ? { transaction: { connect: { id: assignment.transactionId } } }
-              : {}),
-            additionalNotes: assignment.additionalNotes,
-            reportUrl: reportDocument.url,
-            reviewStatus: ReportReviewStatus.PENDING,
-            generatedAt,
-          },
-          select: reportSelect,
-        }));
-
-      if (!existingReport) {
-        uploadedReport = { reportId: report.id, verificationRequestId };
-      } else {
-        await transaction.verificationReport.update({
-          where: { id: report.id },
-          data: { reportUrl: reportDocument.url },
-        });
-      }
-
-      await transaction.document.deleteMany({
-        where: {
-          verificationReportId: report.id,
-          documentType: DocumentType.REPORT_DOCUMENT,
-        },
-      });
-      const savedReportDocument = await transaction.document.create({
-        data: {
-          verificationRequestId,
-          verificationReportId: report.id,
-          documentType: DocumentType.REPORT_DOCUMENT,
-          ...reportDocument,
-        },
-        select: {
-          id: true,
-          url: true,
-          fileName: true,
-          fileType: true,
-          fileSizeBytes: true,
-        },
-      });
-
-      await transaction.verificationChecklistItem.updateMany({
-        where: { agentAssignmentId: assignment.id },
-        data: { reportId: report.id },
-      });
-
-      if (await isRecurringRequest(transaction, verificationRequestId)) {
-        await transaction.agentAssignment.delete({ where: { id: assignment.id } });
-        await transaction.verificationRequest.update({
-          where: { id: verificationRequestId },
-          data: {
-            status: await nextStatusAfterRecurringReport(transaction, verificationRequestId),
+        await transaction.document.deleteMany({
+          where: {
+            verificationReportId: report.id,
+            documentType: DocumentType.REPORT_DOCUMENT,
           },
         });
-      } else {
-        await transaction.agentAssignment.update({
-          where: { id: assignment.id },
+        const savedReportDocument = await transaction.document.create({
           data: {
-            status: AgentAssignmentStatus.REPORT_SUBMITTED,
-            completedAt: existingReport ? undefined : generatedAt,
+            verificationRequestId,
+            verificationReportId: report.id,
+            documentType: DocumentType.REPORT_DOCUMENT,
+            ...reportDocument,
+          },
+          select: {
+            id: true,
+            url: true,
+            fileName: true,
+            fileType: true,
+            fileSizeBytes: true,
           },
         });
-        await transaction.verificationRequest.updateMany({
-          where: { id: verificationRequestId, status: { not: VerificationStatus.CANCELLED } },
-          data: { status: VerificationStatus.COMPLETED },
-        });
-      }
 
-      return {
-        kind: "SUBMITTED" as const,
-        id: report.id,
-        reviewStatus: report.reviewStatus,
-        generatedAt: report.generatedAt ?? generatedAt,
-        reportDocument: savedReportDocument,
-      };
-    });
+        await transaction.verificationChecklistItem.updateMany({
+          where: { agentAssignmentId: assignment.id },
+          data: { reportId: report.id },
+        });
+
+        if (await isRecurringRequest(transaction, verificationRequestId)) {
+          await transaction.agentAssignment.delete({ where: { id: assignment.id } });
+          await transaction.verificationRequest.update({
+            where: { id: verificationRequestId },
+            data: {
+              status: await nextStatusAfterRecurringReport(transaction, verificationRequestId),
+            },
+          });
+        } else {
+          await transaction.agentAssignment.update({
+            where: { id: assignment.id },
+            data: {
+              status: AgentAssignmentStatus.REPORT_SUBMITTED,
+              completedAt: existingReport ? undefined : generatedAt,
+            },
+          });
+          await transaction.verificationRequest.updateMany({
+            where: { id: verificationRequestId, status: { not: VerificationStatus.CANCELLED } },
+            data: { status: VerificationStatus.COMPLETED },
+          });
+        }
+
+        return {
+          kind: "SUBMITTED" as const,
+          id: report.id,
+          reviewStatus: report.reviewStatus,
+          generatedAt: report.generatedAt ?? generatedAt,
+          reportDocument: savedReportDocument,
+        };
+      },
+      {
+        maxWait: 5000,
+        timeout: 20000,
+      },
+    );
 
     if (uploadedReport) {
       appEvents.emit(AppEventTypes.REPORT_UPLOADED, {

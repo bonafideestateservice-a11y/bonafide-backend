@@ -1,2 +1,2 @@
 Email: bonafideestateservice@gmail.com
-Password: @B828futFUiCYduP
+Password: Admin@Bonafide2026!

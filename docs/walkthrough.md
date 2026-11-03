@@ -14,7 +14,7 @@ Full request and response details are at `https://bonafide-backend-cze7.onrender
 
 ## 1. Firebase console (one time)
 
-Use the **same Firebase project as the backend** (ask the backend team which one).
+Firebase project: **`bonafide-services`** (the same project the backend uses).
 
 1. **Project settings → General → Your apps → Add app → Web.** Copy the config:
    `apiKey`, `authDomain`, `projectId`, `messagingSenderId`, `appId`.
@@ -24,12 +24,12 @@ Use the **same Firebase project as the backend** (ask the backend team which one
 Put these in your env file (none of them are secret):
 
 ```
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-VITE_FIREBASE_VAPID_KEY=...
+VITE_FIREBASE_API_KEY=AIzaSyC1EsGdEtBVOlJ88RXgIp3iKBLqQ8MRgA4
+VITE_FIREBASE_AUTH_DOMAIN=bonafide-services.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=bonafide-services
+VITE_FIREBASE_MESSAGING_SENDER_ID=300505061394
+VITE_FIREBASE_APP_ID=1:300505061394:web:88071b99cb31a453fd60cb
+VITE_FIREBASE_VAPID_KEY=BIat4TQlBsjfZWDCbjfR-YM-AE3aW0h-9o5JCQp5MI0RXFd_TshxVBfXNzE538mojZIJopUqI7CDWr00bwhehVQ
 ```
 
 (Use your framework's prefix, e.g. `NEXT_PUBLIC_` for Next.js.)
@@ -74,11 +74,11 @@ importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js
 importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
 
 firebase.initializeApp({
-  apiKey: "...",
-  authDomain: "...",
-  projectId: "...",
-  messagingSenderId: "...",
-  appId: "...",
+  apiKey: "AIzaSyC1EsGdEtBVOlJ88RXgIp3iKBLqQ8MRgA4",
+  authDomain: "bonafide-services.firebaseapp.com",
+  projectId: "bonafide-services",
+  messagingSenderId: "300505061394",
+  appId: "1:300505061394:web:88071b99cb31a453fd60cb",
 });
 
 // Displays the push's title and body automatically when the app isn't in focus.
