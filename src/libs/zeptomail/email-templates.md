@@ -59,6 +59,11 @@ Verification payment problems
 - [x] `PAYMENT_FAILED`: created, key in templates.ts
 - [x] `SUBSCRIPTION_ENDED`: created, key in templates.ts
 
+Premium quotes
+
+- [x] `PREMIUM_QUOTE_ISSUED`: client quote-review link, configured with `ZEPTO_TEMPLATE_PREMIUM_QUOTE_ISSUED`
+- [x] `PREMIUM_QUOTE_ACCEPTED`: provider checkout link, configured with `ZEPTO_TEMPLATE_PREMIUM_QUOTE_ACCEPTED`
+
 Property purchases and consultations
 
 - [x] `PROPERTY_REQUEST_CREATED`: created, key in templates.ts
@@ -477,6 +482,47 @@ Fields:
 
 ---
 
+# Premium quotes
+
+## PREMIUM_QUOTE_ISSUED
+
+- **Sent to:** the client whose Premium quote was issued
+- **Variable:** `ZEPTO_TEMPLATE_PREMIUM_QUOTE_ISSUED`
+- **Includes:** USD and NGN quote amounts, expiry, Bonafide name, and a quote review link
+- **Link configuration:** `CLIENT_APP_URL` is the HTTPS client application base URL.
+
+Fields:
+
+- `firstName`: client's full name
+- `companyName`: `Bonafide`
+- `quoteId`: issued quote
+- `verificationRequestId`: request to review
+- `amountUsd`: quoted USD amount in major units
+- `amountNgn`: locked NGN amount in major units
+- `expiresAt`: quote expiry timestamp
+- `reviewUrl`: authenticated quote review screen
+
+## PREMIUM_QUOTE_ACCEPTED
+
+- **Sent to:** the client after provider-hosted checkout has been created
+- **Variable:** `ZEPTO_TEMPLATE_PREMIUM_QUOTE_ACCEPTED`
+- **Includes:** the country-applicable quote amount, Bonafide name, and direct provider checkout link
+
+Fields:
+
+- `firstName`: client's full name
+- `companyName`: `Bonafide`
+- `quoteId`: accepted quote
+- `verificationRequestId`: paid request
+- `amount`: quoted amount in major units
+- `currency`: `NGN` or `USD`
+- `checkoutUrl`: provider-hosted Stripe or Paystack checkout
+
+Both quote emails are queued through the notification workers. Missing template keys or delivery
+failures are recorded by the failed notification jobs; the API reports `QUEUED`, not `SENT`.
+
+---
+
 # Testing in ZeptoMail
 
 Paste this into ZeptoMail's merge data preview to test `INSPECTION_STARTED_ADMIN`.
@@ -504,6 +550,4 @@ Ask a developer if a design needs any of these:
 
 - **Report download link:** stored on the report, easy to add to the report emails.
 - **Inspection scheduled date:** stored on the assignment, easy to add to the agent and inspection emails.
-- **Links to the dashboard or a specific request:** needs the frontend URL for each app
-  (only the agent login link exists, from `ADMIN_APP_URL`).
 - **A separate first name:** only the full name is stored.

@@ -3,7 +3,11 @@ import { ForbiddenError, HttpStatusCode, NotFoundError } from "../../../../../ex
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationRequestFullReportData } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
-import { toVerificationReportChecklist } from "../../../../services/verification-report-checklist";
+import {
+  toClientReportChecklist,
+  toClientReportDocument,
+  toClientVerificationReportView,
+} from "../../../../services/client-verification-report";
 
 /** One finding the agent recorded, e.g. { label: "Ownership", value: "Verified" }. */
 type Finding = { label?: string; value?: string; status?: string };
@@ -55,28 +59,12 @@ export const getVerificationRequestFullReport = async (
       };
     }
 
-    // The report keeps its own agent, notes and checklist (recurring assignments are removed
-    // after each period); older reports fall back to the assignment.
-    const reportAgent = report.agent ?? fullReport.agentAssignment?.agent;
-    let agentData = null;
-    let agentNotes = "";
-    if (reportAgent) {
-      const agentNameParts = reportAgent.name.split(" ");
-      const firstName = agentNameParts[0] || "";
-      const lastName = agentNameParts.slice(1).join(" ") || "";
-
-      agentData = {
-        firstName,
-        lastName,
-      };
-      agentNotes = report.additionalNotes ?? fullReport.agentAssignment?.additionalNotes ?? "";
-    }
-
     const photos: Array<{ url: string; label: string }> = [];
     const checklistItems = report.checklistItems.length
       ? report.checklistItems
       : fullReport.agentAssignment?.checklistItems;
-    const checklist = toVerificationReportChecklist(checklistItems ?? []);
+    const checklist = toClientReportChecklist(checklistItems ?? []);
+    const clientReport = toClientVerificationReportView(report);
     if (checklistItems) {
       for (const item of checklistItems) {
         if (item.media) {
@@ -134,12 +122,13 @@ export const getVerificationRequestFullReport = async (
       property: propertyDetails,
       summary: report.summary || "",
       ownershipFindings,
-      findings: rawFindings, // Returning raw findings directly for frontend flexibility
+      findings: clientReport.findings ?? rawFindings,
+      verificationTier: clientReport.verificationTier,
+      subscriptionPeriod: clientReport.subscriptionPeriod,
+      providerName: "Bonafide",
       checklist,
-      reportDocument: report.media[0] ?? null,
+      reportDocument: toClientReportDocument(report.media[0]),
       photos,
-      agentNotes,
-      agent: agentData,
       // The client's "Leave a Comment" feedback; null until they leave some.
       feedback: report.ratedAt
         ? {

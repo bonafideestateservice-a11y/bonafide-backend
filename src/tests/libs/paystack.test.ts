@@ -3,6 +3,7 @@ import {
   createPaystackCheckout,
   createPaystackSession,
   paystackPriceOf,
+  syncPaystackPlan,
 } from "../../libs/paystack/paystack";
 
 describe("paystackPriceOf", () => {
@@ -63,5 +64,132 @@ describe("Paystack redirect after paying", () => {
     delete process.env.SERVER_URL;
     await checkout();
     expect(sentBody()).not.toHaveProperty("callback_url");
+  });
+});
+
+describe("Paystack plan synchronization", () => {
+  let request: jest.SpyInstance;
+
+  beforeEach(() => {
+    request = jest.spyOn(axios, "request");
+  });
+
+  afterEach(() => {
+    request.mockRestore();
+  });
+
+  const marker = "bonafide:monitoring:monthly:v2:NGN";
+
+  it("creates a recurring plan using the stable marker", async () => {
+    request.mockResolvedValueOnce({ data: { status: true, data: [] } }).mockResolvedValueOnce({
+      data: {
+        status: true,
+        data: {
+          plan_code: "PLN_monthly_v2",
+          description: marker,
+          amount: 600000,
+          currency: "NGN",
+          interval: "monthly",
+        },
+      },
+    });
+
+    await expect(
+      syncPaystackPlan({
+        name: "Monthly Monitoring",
+        amount: 600000,
+        interval: "monthly",
+        description: marker,
+      }),
+    ).resolves.toEqual({ planCode: "PLN_monthly_v2" });
+    expect(request.mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        url: "https://api.paystack.co/plan",
+        data: expect.objectContaining({
+          amount: 600000,
+          currency: "NGN",
+          interval: "monthly",
+          description: marker,
+        }),
+      }),
+    );
+  });
+
+  it("reuses a matching plan and rejects a marker whose terms differ", async () => {
+    request.mockResolvedValueOnce({
+      data: {
+        status: true,
+        data: [
+          {
+            plan_code: "PLN_monthly_v2",
+            description: marker,
+            amount: "600000",
+            currency: "NGN",
+            interval: "monthly",
+          },
+        ],
+      },
+    });
+    await expect(
+      syncPaystackPlan({
+        name: "Monthly Monitoring",
+        amount: 600000,
+        interval: "monthly",
+        description: marker,
+      }),
+    ).resolves.toEqual({ planCode: "PLN_monthly_v2" });
+    expect(request).toHaveBeenCalledTimes(1);
+
+    request.mockReset().mockResolvedValueOnce({
+      data: {
+        status: true,
+        data: [
+          {
+            plan_code: "PLN_monthly_v2",
+            description: marker,
+            amount: 500000,
+            currency: "NGN",
+            interval: "monthly",
+          },
+        ],
+      },
+    });
+    await expect(
+      syncPaystackPlan({
+        name: "Monthly Monitoring",
+        amount: 600000,
+        interval: "monthly",
+        description: marker,
+      }),
+    ).rejects.toThrow("does not match local price version");
+    expect(request).toHaveBeenCalledTimes(1);
+
+    for (const mismatch of [{ currency: "USD" }, { interval: "annually" }]) {
+      request.mockReset().mockResolvedValueOnce({
+        data: {
+          status: true,
+          data: [
+            {
+              plan_code: "PLN_monthly_v2",
+              description: marker,
+              amount: 600000,
+              currency: "NGN",
+              interval: "monthly",
+              ...mismatch,
+            },
+          ],
+        },
+      });
+      await expect(
+        syncPaystackPlan({
+          name: "Monthly Monitoring",
+          amount: 600000,
+          interval: "monthly",
+          description: marker,
+        }),
+      ).rejects.toThrow("does not match local price version");
+      expect(request).toHaveBeenCalledTimes(1);
+    }
   });
 });

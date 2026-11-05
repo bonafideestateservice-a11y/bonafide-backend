@@ -62,17 +62,38 @@ export const submitAgentReport = async (
       fileSizeBytes: file.size,
     });
 
-    if (!result || result.kind === "INCOMPLETE_CHECKLIST") {
+    if (
+      !result ||
+      result.kind === "INCOMPLETE_CHECKLIST" ||
+      result.kind === "INCOMPLETE_REPORT_DATA" ||
+      result.kind === "INCOMPLETE_SITE_VISITS"
+    ) {
       await cloudinary.uploader.destroy(uploadedPublicId, { resource_type: "raw" });
       uploadedPublicId = undefined;
     }
 
     if (!result) return next(new NotFoundError("Assignment not found."));
+    if (result.kind === "INCOMPLETE_REPORT_DATA") {
+      res.status(HttpStatusCode.CONFLICT).json({
+        error: result.kind,
+        progressPercent: result.progressPercent,
+        remainingFields: result.remainingFields,
+      });
+      return;
+    }
     if (result.kind === "INCOMPLETE_CHECKLIST") {
       res.status(HttpStatusCode.CONFLICT).json({
         error: result.kind,
         progressPercent: result.progressPercent,
         remainingItems: result.remainingItems,
+      });
+      return;
+    }
+    if (result.kind === "INCOMPLETE_SITE_VISITS") {
+      res.status(HttpStatusCode.CONFLICT).json({
+        error: result.kind,
+        progressPercent: result.progressPercent,
+        remainingSiteVisits: result.remainingSiteVisits,
       });
       return;
     }

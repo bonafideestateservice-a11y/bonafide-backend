@@ -137,18 +137,30 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await prismaClient.document.deleteMany({ where: { verificationRequestId } });
-  // Checklist items outlive their assignment (they move to the report), so delete them directly.
-  await prismaClient.verificationChecklistItem.deleteMany({
-    where: { id: { in: [completeItemId, pendingItemId, ...otherItemIds] } },
-  });
-  if (reportId) await prismaClient.verificationReport.delete({ where: { id: reportId } });
-  await prismaClient.agentAssignment.delete({ where: { id: assignmentId } });
-  await prismaClient.verificationRequest.delete({ where: { id: verificationRequestId } });
-  await prismaClient.verificationAgent.delete({ where: { id: agentId } });
-  await prismaClient.verificationType.delete({ where: { id: verificationTypeId } });
-  await prismaClient.service.delete({ where: { id: serviceId } });
-  await prismaClient.user.deleteMany({ where: { id: { in: [agentUserId, clientId] } } });
+  if (verificationRequestId) {
+    await prismaClient.document.deleteMany({ where: { verificationRequestId } });
+    const checklistIds = [completeItemId, pendingItemId, ...otherItemIds].filter(
+      (id): id is string => Boolean(id),
+    );
+    if (checklistIds.length > 0) {
+      await prismaClient.verificationChecklistItem.deleteMany({
+        where: { id: { in: checklistIds } },
+      });
+    }
+    if (reportId) await prismaClient.verificationReport.delete({ where: { id: reportId } });
+    if (assignmentId) await prismaClient.agentAssignment.delete({ where: { id: assignmentId } });
+    await prismaClient.transaction.deleteMany({ where: { verificationRequestId } });
+    await prismaClient.verificationRequest.deleteMany({ where: { id: verificationRequestId } });
+  }
+  if (agentId) await prismaClient.verificationAgent.deleteMany({ where: { id: agentId } });
+  if (verificationTypeId) {
+    await prismaClient.verificationType.deleteMany({ where: { id: verificationTypeId } });
+  }
+  if (serviceId) await prismaClient.service.deleteMany({ where: { id: serviceId } });
+  const userIds = [agentUserId, clientId].filter((id): id is string => Boolean(id));
+  if (userIds.length > 0) {
+    await prismaClient.user.deleteMany({ where: { id: { in: userIds } } });
+  }
   await prismaClient.$disconnect();
 });
 

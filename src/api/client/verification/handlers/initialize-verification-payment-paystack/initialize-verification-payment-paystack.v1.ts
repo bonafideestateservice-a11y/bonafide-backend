@@ -1,10 +1,4 @@
-import {
-  PaymentMethod,
-  PaymentStatus,
-  Prisma,
-  VERIFICATION_FREQUENCY,
-  VerificationStatus,
-} from "@prisma/client";
+import { VerificationStatus } from "@prisma/client";
 import { NextFunction, Request, Response } from "express";
 import {
   ApiError,
@@ -16,20 +10,59 @@ import {
 } from "../../../../../exceptions";
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import {
-  createPaystackCustomer,
-  createPaystackSession,
-  paystackPriceOf,
-} from "../../../../../libs/paystack/paystack";
+  findVerificationCheckoutPricing,
+  PricingRecordError,
+} from "../../../../services/database/pricing";
+import { createPaystackVerificationCheckout } from "../../services/verification-checkout";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
+
+const payableStatuses: VerificationStatus[] = [
+  VerificationStatus.DRAFT,
+  VerificationStatus.PENDING_PAYMENT,
+  VerificationStatus.PAYMENT_FAILED,
+];
+
+const toApiError = (error: PricingRecordError) => {
+  switch (error.code) {
+    case "NOT_FOUND":
+      return new NotFoundError(error.message);
+    case "INVALID_SELECTION":
+      return new BadRequestError(error.message);
+    case "QUOTE_EXPIRED":
+    case "QUOTE_OUT_OF_RANGE":
+    case "INVALID_STATE":
+      return new ConflictError(error.message);
+  }
+};
+
+const toPricingResponse = (
+  pricing: Awaited<ReturnType<typeof findVerificationCheckoutPricing>>,
+) => ({
+  verificationAmountUsdCents: pricing.verificationAmountUsdCents,
+  monitoringFirstPeriodUsdCents: pricing.monitoringAmountUsdCents,
+  totalUsdCents: pricing.totalUsdCents,
+  verificationAmountNgnKobo: pricing.verificationAmountNgnKobo,
+  monitoringFirstPeriodNgnKobo: pricing.monitoringAmountNgnKobo,
+  totalNgnKobo: pricing.totalNgnKobo,
+  chargedAmountMinor: pricing.amountMinor,
+  currency: pricing.currency,
+  ...(pricing.currency === "NGN"
+    ? {
+        exchangeRate:
+          pricing.pricingSettings?.usdToNgnRate.toString() ??
+          pricing.quote?.usdToNgnRate?.toString() ??
+          null,
+        exchangeRateVersion: pricing.pricingSettings?.version ?? pricing.quote?.rateVersion ?? null,
+      }
+    : {}),
+});
 
 export const initializeVerificationPaymentPaystack = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  let transactionId: string | undefined;
-
   try {
     const customReq = req as CustomRequest;
     const userId = customReq.user?.id ?? customReq.token?.id;
@@ -42,195 +75,37 @@ export const initializeVerificationPaymentPaystack = async (
       return next(new BadRequestError("Verification request id is required."));
     }
 
-    const verificationRequest = await prismaClient.verificationRequest.findUnique({
+    const request = await prismaClient.verificationRequest.findUnique({
       where: { id: verificationRequestId },
-      include: { user: true, verificationPlan: true },
+      select: { userId: true, status: true },
     });
-
-    if (!verificationRequest) {
+    if (!request) {
       return next(new NotFoundError("Verification request not found."));
     }
-    if (verificationRequest.userId !== userId) {
+    if (request.userId !== userId) {
       return next(new ForbiddenError("You cannot pay for this request."));
     }
-    const payableStatuses: VerificationStatus[] = [
-      VerificationStatus.DRAFT,
-      VerificationStatus.PENDING_PAYMENT,
-      VerificationStatus.PAYMENT_FAILED,
-    ];
-    if (!payableStatuses.includes(verificationRequest.status)) {
+    if (!payableStatuses.includes(request.status)) {
       return next(new ConflictError("This verification request is not available for payment."));
     }
-    if (!verificationRequest.verificationPlan) {
-      return next(new BadRequestError("Select a verification plan before payment."));
-    }
-    const verificationPlan = verificationRequest.verificationPlan;
-    const price = paystackPriceOf(verificationPlan);
 
-    const planCode = verificationPlan.paystackNgnPlanCode;
-    if (verificationPlan.frequency !== VERIFICATION_FREQUENCY.ONE_TIME && !planCode) {
-      return next(new BadRequestError("The selected plan is not configured in Paystack."));
-    }
-
-    let transaction;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        transaction = await prismaClient.$transaction(
-          async (tx) => {
-            const existingTransaction = await tx.transaction.findFirst({
-              where: { verificationRequestId },
-              orderBy: { createdAt: "desc" },
-            });
-
-            if (existingTransaction?.status === PaymentStatus.SUCCESS) {
-              throw new ConflictError("This verification request has already been paid for.");
-            }
-            if (existingTransaction?.status === PaymentStatus.PENDING) {
-              if (existingTransaction.currency !== "NGN") {
-                throw new ConflictError(
-                  "A payment is already pending in another currency; complete it before switching payment methods.",
-                );
-              }
-              if (
-                existingTransaction.providerRef &&
-                existingTransaction.authorizationUrl &&
-                existingTransaction.accessCode
-              ) {
-                return existingTransaction;
-              }
-              throw new ConflictError("A payment is already being initialized for this request.");
-            }
-
-            if (!verificationRequest.user.countryCode) {
-              throw new BadRequestError(
-                "Set your country in your profile before making a payment.",
-              );
-            }
-            if (verificationRequest.user.countryCode.toUpperCase() !== "NG") {
-              throw new BadRequestError("Paystack is only available for users in Nigeria.");
-            }
-
-            if (existingTransaction) {
-              return tx.transaction.update({
-                where: { id: existingTransaction.id },
-                data: {
-                  amountInCents: price.amount,
-                  currency: price.currency,
-                  status: PaymentStatus.PENDING,
-                  providerRef: null,
-                  authorizationUrl: null,
-                  accessCode: null,
-                  paidAt: null,
-                },
-              });
-            }
-
-            return tx.transaction.create({
-              data: {
-                verificationRequestId,
-                amountInCents: price.amount,
-                currency: price.currency,
-                method: PaymentMethod.CARD,
-                status: PaymentStatus.PENDING,
-              },
-            });
-          },
-          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-        );
-        break;
-      } catch (error) {
-        if (
-          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-          error.code !== "P2034" ||
-          attempt === 2
-        ) {
-          throw error;
-        }
-      }
-    }
-
-    if (!transaction) {
-      throw new Error("Unable to reserve payment transaction");
-    }
-    transactionId = transaction.id;
-
-    if (transaction.providerRef && transaction.authorizationUrl && transaction.accessCode) {
-      res.status(HttpStatusCode.OK).json({
-        authorization_url: transaction.authorizationUrl,
-        access_code: transaction.accessCode,
-        reference: transaction.providerRef,
-      });
-      return;
-    }
-
-    let customerCode = verificationRequest.user.paystackCustomerCode;
-    if (!customerCode) {
-      const customer = await createPaystackCustomer(verificationRequest.user.email);
-      customerCode = customer.customer_code;
-
-      try {
-        await prismaClient.user.update({
-          where: { id: userId },
-          data: { paystackCustomerCode: customerCode },
-        });
-      } catch (error) {
-        logger.warn(`Paystack customer created but could not be saved userId=${userId}: ${error}`);
-        throw error;
-      }
-    }
-
-    if (!customerCode) {
-      throw new Error("Paystack customer code was not returned");
-    }
-
-    const session = await createPaystackSession({
-      userId,
-      email: verificationRequest.user.email,
-      customer: customerCode,
-      plan: planCode || undefined,
-      amount: price.amount,
-      currency: price.currency,
-      paymentMethod: PaymentMethod.CARD,
-      verificationRequestId,
-      transactionId,
-    });
-
-    if (!session?.reference || !session.authorization_url || !session.access_code) {
-      throw new Error("Paystack returned an invalid transaction session");
-    }
-
-    await prismaClient.$transaction([
-      prismaClient.transaction.update({
-        where: { id: transactionId },
-        data: {
-          providerRef: session.reference,
-          authorizationUrl: session.authorization_url,
-          accessCode: session.access_code,
-        },
-      }),
-      prismaClient.verificationRequest.update({
-        where: { id: verificationRequestId },
-        data: { status: VerificationStatus.PENDING_PAYMENT },
-      }),
-    ]);
+    const checkout = await createPaystackVerificationCheckout(verificationRequestId, userId);
 
     res.status(HttpStatusCode.OK).json({
-      authorization_url: session.authorization_url,
-      access_code: session.access_code,
-      reference: session.reference,
+      authorization_url: checkout.checkoutUrl,
+      access_code: checkout.accessCode,
+      reference: checkout.reference,
+      transactionId: checkout.transactionId,
+      pricing: toPricingResponse(checkout.pricing),
     });
   } catch (error) {
-    if (transactionId) {
-      await prismaClient.transaction.updateMany({
-        where: { id: transactionId, status: PaymentStatus.PENDING, providerRef: null },
-        data: { status: PaymentStatus.FAILED },
-      });
-    }
     logger.error(`Error initializing verification payment: ${error}`);
     next(
-      error instanceof ApiError
-        ? error
-        : new ApiError(HttpStatusCode.INTERNAL_SERVER, "Unable to initialize payment."),
+      error instanceof PricingRecordError
+        ? toApiError(error)
+        : error instanceof ApiError
+          ? error
+          : new ApiError(HttpStatusCode.INTERNAL_SERVER, "Unable to initialize payment."),
     );
   }
 };

@@ -1,6 +1,7 @@
 const getAdminNotificationRecipients = jest.fn();
 const getNotificationRecipient = jest.fn();
 const getVerificationRequestNotificationContext = jest.fn();
+const getPremiumQuoteNotificationContext = jest.fn();
 const getPropertyRequestNotificationContext = jest.fn();
 const getPropertyPaymentNotificationContext = jest.fn();
 
@@ -8,6 +9,7 @@ jest.mock("../../../api/services/database/notifications", () => ({
   getAdminNotificationRecipients,
   getNotificationRecipient,
   getVerificationRequestNotificationContext,
+  getPremiumQuoteNotificationContext,
   getPropertyRequestNotificationContext,
   getPropertyPaymentNotificationContext,
 }));
@@ -90,6 +92,15 @@ describe("notification event handlers", () => {
     jest.clearAllMocks();
     getAdminNotificationRecipients.mockResolvedValue(admins);
     getVerificationRequestNotificationContext.mockResolvedValue(context());
+    getPremiumQuoteNotificationContext.mockResolvedValue({
+      id: "quote-1",
+      verificationRequestId: "vr-1",
+      status: "ISSUED",
+      quoteUsdCents: 15000,
+      quoteNgnKobo: 22500000,
+      expiresAt: new Date("2026-11-18T23:59:59.000Z"),
+      verificationRequest: { user: client },
+    });
   });
 
   it("USER_REGISTERED emails only the registered user, untracked", async () => {
@@ -406,6 +417,59 @@ describe("notification event handlers", () => {
       },
     ]);
     delete process.env.ADMIN_APP_URL;
+  });
+
+  it("PREMIUM_QUOTE_ISSUED emails the client both prices and a review link", async () => {
+    const deliveries = await notificationEventHandlers[AppEventTypes.PREMIUM_QUOTE_ISSUED]({
+      quoteId: "quote-1",
+      reviewUrl: "https://client.example.com/verification-requests/vr-1/quote",
+    });
+
+    expect(emailFor(deliveries, "user-1")).toEqual({
+      template: EmailTemplate.PREMIUM_QUOTE_ISSUED,
+      data: {
+        firstName: "Test User",
+        companyName: "Bonafide",
+        quoteId: "quote-1",
+        verificationRequestId: "vr-1",
+        amountUsd: "150.00",
+        amountNgn: "225,000.00",
+        expiresAt: "2026-11-18T23:59:59.000Z",
+        reviewUrl: "https://client.example.com/verification-requests/vr-1/quote",
+      },
+    });
+  });
+
+  it("PREMIUM_QUOTE_ACCEPTED emails the client the hosted checkout URL", async () => {
+    getPremiumQuoteNotificationContext.mockResolvedValue({
+      id: "quote-1",
+      verificationRequestId: "vr-1",
+      status: "ACCEPTED",
+      quoteUsdCents: 15000,
+      quoteNgnKobo: 22500000,
+      expiresAt: new Date("2026-11-18T23:59:59.000Z"),
+      verificationRequest: { user: client },
+    });
+
+    const deliveries = await notificationEventHandlers[AppEventTypes.PREMIUM_QUOTE_ACCEPTED]({
+      quoteId: "quote-1",
+      provider: "PAYSTACK",
+      currency: "NGN",
+      checkoutUrl: "https://checkout.paystack.com/session",
+    });
+
+    expect(emailFor(deliveries, "user-1")).toEqual({
+      template: EmailTemplate.PREMIUM_QUOTE_ACCEPTED,
+      data: {
+        firstName: "Test User",
+        companyName: "Bonafide",
+        quoteId: "quote-1",
+        verificationRequestId: "vr-1",
+        amount: "225,000.00",
+        currency: "NGN",
+        checkoutUrl: "https://checkout.paystack.com/session",
+      },
+    });
   });
 
   it("returns no deliveries when the verification request no longer exists", async () => {

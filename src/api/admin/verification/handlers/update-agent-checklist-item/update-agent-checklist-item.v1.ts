@@ -3,6 +3,7 @@ import { v2 as cloudinary } from "cloudinary";
 import {
   ApiError,
   BadRequestError,
+  ConflictError,
   HttpStatusCode,
   NotFoundError,
 } from "../../../../../exceptions";
@@ -13,6 +14,7 @@ import {
   ChecklistMediaData,
 } from "../../services/database/agent-assignment";
 import { logger } from "../../../../../utils/logger";
+import { parseVerificationReportSectionResult } from "../../../../services/verification-report-sections";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_NAME,
@@ -48,6 +50,13 @@ export const updateAgentAssignmentChecklistItem = async (
     if (status === null) {
       return next(new BadRequestError("Status must be PENDING or COMPLETE."));
     }
+    const result =
+      req.body?.result === undefined
+        ? undefined
+        : parseVerificationReportSectionResult(req.body.result);
+    if (req.body?.result !== undefined && !result) {
+      return next(new BadRequestError("Result must be a JSON object with scalar values."));
+    }
 
     const agent = await getVerificationAgentByUserId(userId);
     if (!agent) return next(new NotFoundError("Verification agent not found."));
@@ -60,7 +69,11 @@ export const updateAgentAssignmentChecklistItem = async (
           `data:${fileType};base64,${file.buffer.toString("base64")}`,
           {
             folder: process.env.CLOUDINARY_FOLDER || "bonafide-services/verification-checklist",
-            resource_type: fileType === "application/pdf" ? "raw" : "image",
+            resource_type: fileType.startsWith("video/")
+              ? "video"
+              : fileType === "application/pdf"
+                ? "raw"
+                : "image",
           },
         );
         return {
@@ -78,7 +91,11 @@ export const updateAgentAssignmentChecklistItem = async (
       req.params.itemId,
       status,
       media,
+      result ?? undefined,
     );
+    if (item && "kind" in item && item.kind === "INVALID_SITE_VISIT_TRANSITION") {
+      return next(new ConflictError("This site visit cannot be marked complete."));
+    }
     if (!item) return next(new NotFoundError("Checklist item not found."));
 
     res.status(HttpStatusCode.OK).json(item);

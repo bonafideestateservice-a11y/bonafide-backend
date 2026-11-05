@@ -37,6 +37,34 @@ describe("updateAgentAssignmentChecklistItem (unit)", () => {
     mockedGetAgent.mockResolvedValue({ id: "agent-1" });
   });
 
+  it("parses and persists a flat JSON result", async () => {
+    mockedUpdateItem.mockResolvedValue({ id: "item-1" });
+    const { req, res, next } = buildMockReqRes({ result: '{"outcome":"Clear"}' });
+
+    await updateAgentAssignmentChecklistItem(req, res, next);
+
+    expect(mockedUpdateItem).toHaveBeenCalledWith(
+      "agent-1",
+      "assignment-1",
+      "item-1",
+      undefined,
+      [],
+      { outcome: "Clear" },
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed or nested report results", async () => {
+    const { req, res, next } = buildMockReqRes({ result: '{"outcome":{"value":"Clear"}}' });
+
+    await updateAgentAssignmentChecklistItem(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: HttpStatusCode.BAD_REQUEST }),
+    );
+    expect(mockedUpdateItem).not.toHaveBeenCalled();
+  });
+
   it("updates a checklist item without media", async () => {
     const item = { id: "item-1", label: "Front view", status: "COMPLETE", media: [] };
     mockedUpdateItem.mockResolvedValue(item);
@@ -50,6 +78,7 @@ describe("updateAgentAssignmentChecklistItem (unit)", () => {
       "item-1",
       "COMPLETE",
       [],
+      undefined,
     );
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
     expect(res.json).toHaveBeenCalledWith(item);
@@ -66,7 +95,14 @@ describe("updateAgentAssignmentChecklistItem (unit)", () => {
 
     await updateAgentAssignmentChecklistItem(req, res, next);
 
-    expect(mockedUpdateItem).toHaveBeenCalledWith("agent-1", "assignment-1", "item-1", saved, []);
+    expect(mockedUpdateItem).toHaveBeenCalledWith(
+      "agent-1",
+      "assignment-1",
+      "item-1",
+      saved,
+      [],
+      undefined,
+    );
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -82,6 +118,7 @@ describe("updateAgentAssignmentChecklistItem (unit)", () => {
       "item-1",
       undefined,
       [],
+      undefined,
     );
   });
 
@@ -104,6 +141,18 @@ describe("updateAgentAssignmentChecklistItem (unit)", () => {
 
     expect(next).toHaveBeenCalledWith(
       expect.objectContaining({ statusCode: HttpStatusCode.NOT_FOUND }),
+    );
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("returns a conflict when the linked site visit cannot be completed", async () => {
+    mockedUpdateItem.mockResolvedValue({ kind: "INVALID_SITE_VISIT_TRANSITION" });
+    const { req, res, next } = buildMockReqRes({ status: "COMPLETE" });
+
+    await updateAgentAssignmentChecklistItem(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: HttpStatusCode.CONFLICT }),
     );
     expect(res.status).not.toHaveBeenCalled();
   });

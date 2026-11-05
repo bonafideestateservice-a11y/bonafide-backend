@@ -22,17 +22,14 @@ export const getVerificationRequestTracking = async (
       return next(new NotFoundError("Verification request not found."));
     }
 
-    const tracking = await getVerificationRequestTrackingForUser(
-      verificationRequestId,
-      userId,
-    );
+    const tracking = await getVerificationRequestTrackingForUser(verificationRequestId, userId);
 
     if (!tracking) {
       return next(new NotFoundError("Verification request not found."));
     }
 
     let progressPercent = 0;
-    let inspectionUploads: Array<{ url: string; label: string }> = [];
+    const inspectionUploads: Array<{ url: string; label: string }> = [];
 
     if (tracking.agentAssignment) {
       const items = tracking.agentAssignment.checklistItems;
@@ -58,7 +55,7 @@ export const getVerificationRequestTracking = async (
       const agentNameParts = tracking.agentAssignment.agent.name.split(" ");
       const firstName = agentNameParts[0] || "";
       const lastName = agentNameParts.slice(1).join(" ") || "";
-      
+
       agentData = {
         firstName,
         lastName,
@@ -70,15 +67,52 @@ export const getVerificationRequestTracking = async (
     // A recurring request's current assignment has no report until it's submitted, so only
     // the report for the assignment's own period counts as ready.
     const latestReport = tracking.reports[0];
-    const assignmentPeriod = tracking.agentAssignment?.transactionId;
+    const currentPeriod = tracking.subscriptionPeriods?.[0];
+    const assignmentPeriod =
+      tracking.agentAssignment?.transactionId ?? currentPeriod?.paidTransactionId;
     const currentReport =
       latestReport && (!assignmentPeriod || latestReport.transactionId === assignmentPeriod)
         ? latestReport
         : undefined;
+    const monitoringSubscription = tracking.monitoringSubscriptions?.[0];
+    const monitoring = monitoringSubscription
+      ? {
+          status: monitoringSubscription.status,
+          plan: monitoringSubscription.monitoringPlan?.code ?? monitoringSubscription.interval,
+          currentPeriod: currentPeriod
+            ? {
+                startsAt: currentPeriod.periodStart.toISOString(),
+                endsAt: currentPeriod.periodEnd.toISOString(),
+                checksIncluded: currentPeriod.requiredSiteVisits,
+                checksCompleted: currentPeriod.completedSiteVisits,
+                reportStatus:
+                  currentPeriod.reportCount >= currentPeriod.requiredReports
+                    ? "COMPLETED"
+                    : currentPeriod.reportCount > 0
+                      ? "IN_PROGRESS"
+                      : "PENDING",
+                siteVisits: currentPeriod.siteVisits.map((visit) => ({
+                  id: visit.id,
+                  visitNumber: visit.visitNumber,
+                  status: visit.status,
+                  completedAt: visit.completedAt?.toISOString() ?? null,
+                })),
+              }
+            : null,
+          cancelAtPeriodEnd: monitoringSubscription.status === "NON_RENEWING",
+        }
+      : null;
 
     let propertyAddress = "Address not provided";
-    if (tracking.details && typeof tracking.details === "object" && !Array.isArray(tracking.details)) {
-      propertyAddress = (tracking.details as any).propertyAddress || propertyAddress;
+    if (
+      tracking.details &&
+      typeof tracking.details === "object" &&
+      !Array.isArray(tracking.details)
+    ) {
+      const details = tracking.details as Record<string, unknown>;
+      if (typeof details.propertyAddress === "string" && details.propertyAddress) {
+        propertyAddress = details.propertyAddress;
+      }
     }
 
     const responsePayload = {
@@ -86,6 +120,7 @@ export const getVerificationRequestTracking = async (
       verificationType: { name: tracking.verificationType.name },
       address: propertyAddress,
       progressPercent,
+      monitoring,
       timeline: {
         requestSubmittedAt: tracking.createdAt.toISOString(),
         agentAssignedAt: tracking.agentAssignment?.createdAt.toISOString() || null,

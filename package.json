@@ -9,10 +9,11 @@
   "scripts": {
     "migrate": "npx prisma migrate dev",
     "db:seed": "npx prisma db seed",
-    "paystack:plans": "ts-node --transpile-only scripts/setup-paystack-plans.ts",
+    "paystack:plans": "ts-node --transpile-only scripts/setup-pricing-providers.ts",
     "paystack:test-plans": "ts-node --transpile-only scripts/setup-paystack-test-plans.ts",
     "paystack:simulate": "ts-node --transpile-only scripts/simulate-paystack-event.ts",
-    "stripe:products": "ts-node --transpile-only scripts/setup-stripe-products.ts",
+    "stripe:products": "ts-node --transpile-only scripts/setup-pricing-providers.ts",
+    "pricing:providers": "ts-node --transpile-only scripts/setup-pricing-providers.ts",
     "zeptomail:templates": "ts-node --transpile-only scripts/zeptomail/create-templates.ts",
     "test": "jest --runInBand",
     "format": "prettier --write \"src/**/*.ts\" \"postman/**/*.ts\" \"prisma/seed.ts\" \"*.js\" \"*.json\"",

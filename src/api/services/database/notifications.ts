@@ -167,6 +167,28 @@ export type VerificationRequestNotificationContext = NonNullable<
   Awaited<ReturnType<typeof getVerificationRequestNotificationContext>>
 >;
 
+export const getPremiumQuoteNotificationContext = async (quoteId: string) => {
+  try {
+    return await prismaClient.premiumQuote.findUnique({
+      where: { id: quoteId },
+      select: {
+        id: true,
+        verificationRequestId: true,
+        status: true,
+        quoteUsdCents: true,
+        quoteNgnKobo: true,
+        expiresAt: true,
+        verificationRequest: {
+          select: { user: { select: notificationRecipientSelect } },
+        },
+      },
+    });
+  } catch (error) {
+    logger.error(`Error fetching Premium quote notification context quoteId=${quoteId} ${error}`);
+    throw error;
+  }
+};
+
 const propertyRequestContextSelect = {
   id: true,
   reference: true,

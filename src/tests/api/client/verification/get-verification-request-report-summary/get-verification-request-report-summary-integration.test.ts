@@ -207,8 +207,11 @@ describe("GET /api/v1/client/verification-requests/:id/report-summary (integrati
     expect(res.body.data.property).toBe("Test Property");
     expect(res.body.data.location).toBe("123 Summary Ave");
     expect(res.body.data.reportType).toBe("Gold Plan");
-    expect(res.body.data.agent.firstName).toBe("Agent");
-    expect(res.body.data.agent.lastName).toBe("Summary");
+    expect(res.body.data.providerName).toBe("Bonafide");
+    expect(res.body.data.verificationTier).toBeNull();
+    expect(res.body.data.subscriptionPeriod).toBeNull();
+    expect(res.body.data).not.toHaveProperty("agent");
+    expect(JSON.stringify(res.body.data)).not.toContain("Agent Summary");
     expect(res.body.data.inspectionDate).toBeTruthy();
     expect(res.body.data.mediaPreview).toHaveLength(1);
     expect(res.body.data.mediaPreview[0].url).toBe("http://example.com/door-summary.png");

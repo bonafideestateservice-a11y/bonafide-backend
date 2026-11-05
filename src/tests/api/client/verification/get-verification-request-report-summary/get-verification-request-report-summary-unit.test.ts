@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import { getVerificationRequestReportSummary } from "../../../../../api/client/verification/handlers/get-verification-request-report-summary";
 import * as databaseService from "../../../../../api/client/verification/services/database/verification-request";
 import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptions";
@@ -14,7 +14,7 @@ describe("GET /verification-requests/:id/report-summary - Unit", () => {
   beforeEach(() => {
     req = {
       params: { id: "req-123" },
-      user: { id: "user-123" } as any,
+      token: { id: "user-123" },
     };
     res = {
       status: jest.fn().mockReturnThis(),
@@ -80,13 +80,13 @@ describe("GET /verification-requests/:id/report-summary - Unit", () => {
       data: {
         property: "Test Prop",
         inspectionDate: "2023-12-16T10:00:00.000Z",
-        agent: {
-          firstName: "John",
-          lastName: "Doe",
-        },
         location: "123 Main St",
         reportType: "Standard Plan",
         insights: [{ label: "Ownership", value: "Verified", status: "good" }],
+        findings: [{ label: "Ownership", value: "Verified", status: "good" }],
+        verificationTier: null,
+        subscriptionPeriod: null,
+        providerName: "Bonafide",
         checklist: [
           { label: "Physical verification", status: "COMPLETE" },
           { label: "Court/crime verification", status: "PENDING" },
@@ -101,5 +101,82 @@ describe("GET /verification-requests/:id/report-summary - Unit", () => {
         ],
       },
     });
+  });
+
+  it("returns tiered findings and Bonafide attribution without agent identity", async () => {
+    (databaseService.getVerificationRequestReportSummaryForUser as jest.Mock).mockResolvedValue({
+      details: { propertyAddress: "12 Example Road", propertyName: "Premium Property" },
+      reports: [
+        {
+          generatedAt: new Date("2026-11-05T10:00:00Z"),
+          findings: {
+            tier: { id: "private-tier-id", code: "PREMIUM", name: "Premium" },
+            period: {
+              periodStart: "2026-11-01T00:00:00.000Z",
+              periodEnd: "2026-12-01T00:00:00.000Z",
+              requiredSiteVisits: 2,
+              completedSiteVisits: 2,
+            },
+            sections: [
+              {
+                key: "valuation",
+                result: { amount: 85000000, currency: "NGN", basis: "Comparable local sales" },
+              },
+            ],
+          },
+          tierNameSnapshot: "Premium",
+          packageScopeSnapshot: {
+            tier: { id: "private-tier-id", code: "PREMIUM", name: "Premium" },
+            period: {
+              periodStart: "2026-11-01T00:00:00.000Z",
+              periodEnd: "2026-12-01T00:00:00.000Z",
+              requiredSiteVisits: 2,
+              completedSiteVisits: 2,
+            },
+          },
+          agent: { name: "Private Agent Name" },
+          checklistItems: [
+            {
+              label: "Property valuation",
+              status: "COMPLETE",
+              sortOrder: 0,
+              sectionKey: "valuation",
+              result: { amount: 85000000, currency: "NGN", basis: "Comparable local sales" },
+              media: [{ url: "https://cdn.test/valuation.pdf", fileName: "valuation.pdf" }],
+            },
+          ],
+          media: [],
+        },
+      ],
+      agentAssignment: null,
+      verificationPlan: { name: "Legacy Plan" },
+    });
+
+    await getVerificationRequestReportSummary(req as Request, res as Response, next);
+
+    const data = (res.json as jest.Mock).mock.calls[0][0].data;
+    expect(data).toMatchObject({
+      reportType: "Premium",
+      providerName: "Bonafide",
+      verificationTier: { code: "PREMIUM", name: "Premium" },
+      subscriptionPeriod: {
+        startsAt: "2026-11-01T00:00:00.000Z",
+        endsAt: "2026-12-01T00:00:00.000Z",
+        checksIncluded: 2,
+        checksCompleted: 2,
+      },
+      findings: {
+        valuation: { amount: 85000000, currency: "NGN", basis: "Comparable local sales" },
+      },
+      checklist: [
+        {
+          sectionKey: "valuation",
+          result: { amount: 85000000, currency: "NGN", basis: "Comparable local sales" },
+        },
+      ],
+      mediaPreview: [{ url: "https://cdn.test/valuation.pdf" }],
+    });
+    expect(data).not.toHaveProperty("agent");
+    expect(JSON.stringify(data)).not.toContain("Private Agent Name");
   });
 });

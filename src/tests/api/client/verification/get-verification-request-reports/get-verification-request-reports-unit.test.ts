@@ -35,7 +35,41 @@ describe("getVerificationRequestReports handler (unit)", () => {
         reviewStatus: "PENDING",
         viewedAt: null,
         agent: { name: "Tunde Bello" },
-        checklistItems: [{ sortOrder: 0, status: "COMPLETE" }],
+        tierNameSnapshot: "Standard",
+        packageScopeSnapshot: {
+          tier: { id: "private-tier-id", code: "STANDARD", name: "Standard" },
+          period: {
+            periodStart: "2026-10-01T08:00:00.000Z",
+            periodEnd: "2026-11-01T08:00:00.000Z",
+            requiredSiteVisits: 2,
+            completedSiteVisits: 1,
+          },
+        },
+        findings: {
+          tier: { id: "private-tier-id", code: "STANDARD", name: "Standard" },
+          period: {
+            periodStart: "2026-10-01T08:00:00.000Z",
+            periodEnd: "2026-11-01T08:00:00.000Z",
+            requiredSiteVisits: 2,
+            completedSiteVisits: 1,
+          },
+          sections: [
+            {
+              key: "site_visit",
+              result: { visitOutcome: "Located", notes: "Site inspected." },
+            },
+          ],
+        },
+        checklistItems: [
+          {
+            label: "Physical/site visit",
+            sortOrder: 0,
+            status: "COMPLETE",
+            sectionKey: "site_visit",
+            result: { visitOutcome: "Located", notes: "Site inspected." },
+            media: [{ url: "https://cdn.test/site.jpg", fileName: "site.jpg" }],
+          },
+        ],
         media: [],
         transaction: {
           paidAt: new Date("2026-10-01T08:00:00Z"),
@@ -69,15 +103,25 @@ describe("getVerificationRequestReports handler (unit)", () => {
           generatedAt: "2026-10-05T10:00:00.000Z",
           reviewStatus: "PENDING",
           viewed: false,
+          providerName: "Bonafide",
+          verificationTier: { code: "STANDARD", name: "Standard" },
+          subscriptionPeriod: {
+            startsAt: "2026-10-01T08:00:00.000Z",
+            endsAt: "2026-11-01T08:00:00.000Z",
+            checksIncluded: 2,
+            checksCompleted: 1,
+          },
+          findings: { physicalVisit: { outcome: "Located", notes: "Site inspected." } },
           checklist: [
-            { label: "Physical verification", status: "COMPLETE" },
-            { label: "Court/crime verification", status: null },
-            { label: "Title deeds and documentation verification", status: null },
-            { label: "Valuation verification", status: null },
-            { label: "Amenities and environment verification", status: null },
+            {
+              label: "Physical/site visit",
+              status: "COMPLETE",
+              sectionKey: "site_visit",
+              result: { visitOutcome: "Located", notes: "Site inspected." },
+              media: [{ url: "https://cdn.test/site.jpg", fileName: "site.jpg" }],
+            },
           ],
           reportDocument: null,
-          agent: { firstName: "Tunde", lastName: "Bello" },
           payment: {
             paidAt: "2026-10-01T08:00:00.000Z",
             amountInCents: 500000,
@@ -89,6 +133,10 @@ describe("getVerificationRequestReports handler (unit)", () => {
           generatedAt: null,
           reviewStatus: "APPROVED",
           viewed: true,
+          providerName: "Bonafide",
+          verificationTier: null,
+          subscriptionPeriod: null,
+          findings: [],
           checklist: [
             { label: "Physical verification", status: null },
             { label: "Court/crime verification", status: null },
@@ -97,7 +145,6 @@ describe("getVerificationRequestReports handler (unit)", () => {
             { label: "Amenities and environment verification", status: null },
           ],
           reportDocument: null,
-          agent: { firstName: "Ada", lastName: "" },
           payment: null,
         },
       ],

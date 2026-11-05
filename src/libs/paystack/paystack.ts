@@ -160,7 +160,15 @@ export async function createPaystackCustomer(email: string) {
   return paystackRequest<PaystackCustomer>("POST", "/customer", { email });
 }
 
-export type PaystackPlan = { plan_code: string; description?: string | null };
+export type PaystackPlanInterval = "weekly" | "monthly" | "quarterly";
+
+export type PaystackPlan = {
+  plan_code: string;
+  description?: string | null;
+  amount?: number | string;
+  currency?: string;
+  interval?: string;
+};
 
 export async function listPaystackPlans(page = 1, perPage = 100) {
   return paystackRequest<PaystackPlan[]>("GET", "/plan", undefined, { page, perPage });
@@ -178,6 +186,75 @@ export async function createPaystackPlan(plan: {
     send_invoices: false,
     send_sms: false,
   });
+}
+
+export interface SyncPaystackPlanParams {
+  name: string;
+  amount: number;
+  interval: PaystackPlanInterval;
+  description: string;
+}
+
+export interface SyncedPaystackPlan {
+  planCode: string;
+}
+
+async function findPaystackPlanByDescription(description: string): Promise<PaystackPlan | null> {
+  for (let page = 1; ; page += 1) {
+    const plans = await listPaystackPlans(page, 100);
+    const plan = plans.find((candidate) => candidate.description === description);
+    if (plan) return plan;
+    if (plans.length < 100) return null;
+  }
+}
+
+function assertPaystackPlanMatches(plan: PaystackPlan, params: SyncPaystackPlanParams) {
+  if (
+    !plan.plan_code ||
+    plan.description !== params.description ||
+    Number(plan.amount) !== params.amount ||
+    plan.currency?.toUpperCase() !== "NGN" ||
+    plan.interval?.toLowerCase() !== params.interval
+  ) {
+    throw new Error(`Paystack Plan ${plan.plan_code} does not match local price version`);
+  }
+}
+
+export async function syncPaystackPlan(
+  params: SyncPaystackPlanParams,
+): Promise<SyncedPaystackPlan> {
+  if (!Number.isSafeInteger(params.amount) || params.amount <= 0) {
+    throw new Error("Paystack Plan amount must be a positive safe integer");
+  }
+  if (!params.description) throw new Error("Paystack Plan marker is required");
+
+  const existing = await findPaystackPlanByDescription(params.description);
+  if (existing) {
+    assertPaystackPlanMatches(existing, params);
+    return { planCode: existing.plan_code };
+  }
+
+  const created = await createPaystackPlan({
+    name: params.name,
+    amount: params.amount,
+    interval: params.interval,
+    currency: "NGN",
+    description: params.description,
+  });
+  if (
+    created.amount === undefined ||
+    created.currency === undefined ||
+    created.interval === undefined
+  ) {
+    const createdPlan = await findPaystackPlanByDescription(params.description);
+    if (!createdPlan) {
+      throw new Error("Paystack Plan was created but could not be verified");
+    }
+    assertPaystackPlanMatches(createdPlan, params);
+    return { planCode: createdPlan.plan_code };
+  }
+  assertPaystackPlanMatches(created, params);
+  return { planCode: created.plan_code };
 }
 
 export async function listPaystackSubscriptions(customer: string) {

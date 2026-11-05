@@ -3,6 +3,7 @@ import {
   AgentAssignmentStatus,
   AgentStatus,
   Prisma,
+  SiteVisitStatus,
   UserStatus,
   VerificationStatus,
 } from "@prisma/client";
@@ -10,6 +11,12 @@ import { appEvents, AppEventTypes } from "../../../../../events";
 import { prismaClient } from "../../../../../utils/prisma";
 import { logger } from "../../../../../utils/logger";
 import { verificationReportChecklistLabels } from "../../../../services/verification-report-checklist";
+import {
+  getSiteVisitNumberFromSectionKey,
+  getVerificationReportSections,
+  isVerificationReportSectionComplete,
+  VerificationReportSectionResult,
+} from "../../../../services/verification-report-sections";
 import { findUnreportedPaidTransaction } from "../../../../services/database/verification-lifecycle";
 import {
   MAX_ACTIVE_ASSIGNMENTS,
@@ -395,8 +402,10 @@ export type StartedAgentAssignment = {
   checklist: {
     id: string;
     label: string;
+    sectionKey: string | null;
     status: "PENDING";
     requiresMedia: boolean;
+    fields: { key: string; label: string; type: "text" | "number" }[];
   }[];
 };
 
@@ -406,69 +415,160 @@ export const startAgentAssignment = async (
 ): Promise<StartedAgentAssignment | null> => {
   try {
     let startedEvent: { assignmentId: string; verificationRequestId: string } | undefined;
-    const result = await prismaClient.$transaction(async (transaction) => {
-      const assignment = await transaction.agentAssignment.findFirst({
-        where: { id: assignmentId, agentId },
-        select: {
-          id: true,
-          verificationRequestId: true,
-          status: true,
-          checklistItems: {
-            select: { id: true, label: true, status: true, sortOrder: true },
-            orderBy: { sortOrder: "asc" },
+    const result = await prismaClient.$transaction(
+      async (transaction) => {
+        const assignment = await transaction.agentAssignment.findFirst({
+          where: { id: assignmentId, agentId },
+          select: {
+            id: true,
+            verificationRequestId: true,
+            status: true,
+            verificationRequest: {
+              select: { verificationTier: { select: { code: true } } },
+            },
+            transaction: {
+              select: {
+                subscriptionPeriod: {
+                  select: { requiredSiteVisits: true },
+                },
+              },
+            },
+            checklistItems: {
+              select: {
+                id: true,
+                label: true,
+                sectionKey: true,
+                result: true,
+                status: true,
+                sortOrder: true,
+                media: { select: { id: true } },
+              },
+              orderBy: { sortOrder: "asc" },
+            },
           },
-        },
-      });
-
-      if (!assignment) return null;
-
-      if (assignment.checklistItems.length === 0) {
-        await transaction.verificationChecklistItem.createMany({
-          data: verificationReportChecklistLabels.map((label, sortOrder) => ({
-            agentAssignmentId: assignment.id,
-            label,
-            sortOrder,
-          })),
         });
-      }
 
-      const status =
-        assignment.status === AgentAssignmentStatus.ASSIGNED
-          ? AgentAssignmentStatus.ACCEPTED
-          : assignment.status;
+        if (!assignment) return null;
 
-      await transaction.agentAssignment.update({
-        where: { id: assignment.id },
-        data: {
+        const tierCode = assignment.verificationRequest.verificationTier?.code;
+        const requiredSiteVisits =
+          assignment.transaction?.subscriptionPeriod?.requiredSiteVisits ?? 1;
+        const reportSections = getVerificationReportSections(tierCode, requiredSiteVisits);
+        if (reportSections) {
+          const legacySiteVisit = assignment.checklistItems.find(
+            (item) => item.sectionKey === "site_visit",
+          );
+          if (
+            requiredSiteVisits > 1 &&
+            legacySiteVisit &&
+            !assignment.checklistItems.some((item) => item.sectionKey === "site_visit_1")
+          ) {
+            await transaction.verificationChecklistItem.update({
+              where: { id: legacySiteVisit.id },
+              data: {
+                sectionKey: "site_visit_1",
+                label: reportSections[0].label,
+              },
+            });
+          }
+          const existingSectionKeys = new Set(
+            assignment.checklistItems
+              .map((item) => item.sectionKey)
+              .filter((key): key is string => key !== null)
+              .map((key) =>
+                requiredSiteVisits > 1 && key === "site_visit" ? "site_visit_1" : key,
+              ),
+          );
+          const missingSections = reportSections.filter(
+            (section) => !existingSectionKeys.has(section.key),
+          );
+          if (missingSections.length > 0) {
+            await transaction.verificationChecklistItem.createMany({
+              data: missingSections.map((section, index) => ({
+                agentAssignmentId: assignment.id,
+                label: section.label,
+                sectionKey: section.key,
+                sortOrder: assignment.checklistItems.length + index,
+              })),
+            });
+          }
+        } else if (assignment.checklistItems.length === 0) {
+          await transaction.verificationChecklistItem.createMany({
+            data: verificationReportChecklistLabels.map((label, sortOrder) => ({
+              agentAssignmentId: assignment.id,
+              label,
+              sortOrder,
+            })),
+          });
+        }
+
+        const status =
+          assignment.status === AgentAssignmentStatus.ASSIGNED
+            ? AgentAssignmentStatus.ACCEPTED
+            : assignment.status;
+
+        if (status === AgentAssignmentStatus.ACCEPTED) {
+          startedEvent = {
+            assignmentId: assignment.id,
+            verificationRequestId: assignment.verificationRequestId,
+          };
+        }
+
+        const checklistItems = await transaction.verificationChecklistItem.findMany({
+          where: {
+            agentAssignmentId: assignment.id,
+            ...(reportSections
+              ? { sectionKey: { in: reportSections.map((section) => section.key) } }
+              : {}),
+          },
+          select: {
+            id: true,
+            label: true,
+            sectionKey: true,
+            result: true,
+            status: true,
+            sortOrder: true,
+            media: { select: { id: true } },
+          },
+          orderBy: { sortOrder: "asc" },
+        });
+        const completedItems = checklistItems.filter((item) => {
+          const section = reportSections?.find((candidate) => candidate.key === item.sectionKey);
+          return section
+            ? isVerificationReportSectionComplete(
+                section,
+                item.status,
+                item.result,
+                item.media.length,
+              )
+            : item.status === "COMPLETE";
+        }).length;
+        const progressPercent = checklistItems.length
+          ? Math.round((completedItems / checklistItems.length) * 100)
+          : 0;
+        await transaction.agentAssignment.update({
+          where: { id: assignment.id },
+          data: { status, progressPercent },
+        });
+
+        return {
+          id: assignment.id,
           status,
-          progressPercent: assignment.checklistItems.length === 0 ? 0 : undefined,
-        },
-      });
-
-      if (status === AgentAssignmentStatus.ACCEPTED) {
-        startedEvent = {
-          assignmentId: assignment.id,
-          verificationRequestId: assignment.verificationRequestId,
+          checklist: checklistItems.map((item) => ({
+            id: item.id,
+            label: item.label,
+            sectionKey: item.sectionKey,
+            status: "PENDING" as const,
+            requiresMedia:
+              reportSections?.find((section) => section.key === item.sectionKey)?.requiresMedia ??
+              true,
+            fields:
+              reportSections?.find((section) => section.key === item.sectionKey)?.fields ?? [],
+          })),
         };
-      }
-
-      const checklistItems = await transaction.verificationChecklistItem.findMany({
-        where: { agentAssignmentId: assignment.id },
-        select: { id: true, label: true, status: true, sortOrder: true },
-        orderBy: { sortOrder: "asc" },
-      });
-
-      return {
-        id: assignment.id,
-        status,
-        checklist: checklistItems.map((item) => ({
-          id: item.id,
-          label: item.label,
-          status: "PENDING" as const,
-          requiresMedia: true,
-        })),
-      };
-    }, { maxWait: 5000, timeout: 20000 });
+      },
+      { timeout: 15000 },
+    , { maxWait: 5000, timeout: 20000 });
 
     if (startedEvent) {
       appEvents.emit(AppEventTypes.INSPECTION_STARTED, {
@@ -488,9 +588,26 @@ export type AgentAssignmentChecklist = {
   checklistItems: {
     id: string;
     label: string;
+    sectionKey: string | null;
     status: "PENDING" | "COMPLETE";
-    media: { url: string }[];
+    result: Prisma.JsonValue;
+    fields: { key: string; label: string; type: "text" | "number" }[];
+    media: { id: string; url: string; fileName: string; fileType: string; fileSizeBytes: number }[];
   }[];
+  verificationTier: { id: string; name: string; code: string } | null;
+  period: {
+    id: string;
+    periodStart: Date;
+    periodEnd: Date;
+    requiredSiteVisits: number;
+    completedSiteVisits: number;
+    siteVisits: {
+      id: string;
+      visitNumber: number;
+      status: SiteVisitStatus;
+      completedAt: Date | null;
+    }[];
+  } | null;
   clientDocuments: {
     id: string;
     fileName: string;
@@ -518,18 +635,52 @@ export const getAgentAssignmentChecklist = async (
       select: {
         id: true,
         additionalNotes: true,
-        transaction: { select: { status: true, amountInCents: true } },
+        transaction: {
+          select: {
+            status: true,
+            amountInCents: true,
+            subscriptionPeriod: {
+              select: {
+                id: true,
+                periodStart: true,
+                periodEnd: true,
+                requiredSiteVisits: true,
+                completedSiteVisits: true,
+                siteVisits: {
+                  select: {
+                    id: true,
+                    visitNumber: true,
+                    status: true,
+                    completedAt: true,
+                  },
+                  orderBy: { visitNumber: "asc" },
+                },
+              },
+            },
+          },
+        },
         checklistItems: {
           select: {
             id: true,
             label: true,
+            sectionKey: true,
+            result: true,
             status: true,
-            media: { select: { url: true } },
+            media: {
+              select: {
+                id: true,
+                url: true,
+                fileName: true,
+                fileType: true,
+                fileSizeBytes: true,
+              },
+            },
           },
           orderBy: { sortOrder: "asc" },
         },
         verificationRequest: {
           select: {
+            verificationTier: { select: { id: true, name: true, code: true } },
             user: { select: { fullName: true, phone: true, email: true } },
             documents: {
               where: { checklistItemId: null, verificationReportId: null },
@@ -548,18 +699,35 @@ export const getAgentAssignmentChecklist = async (
 
     if (!assignment) return null;
 
-    const completedItems = assignment.checklistItems.filter(
-      (item) => item.status === "COMPLETE",
-    ).length;
-    const progressPercent = assignment.checklistItems.length
-      ? Math.round((completedItems / assignment.checklistItems.length) * 100)
+    const reportSections = getVerificationReportSections(
+      assignment.verificationRequest.verificationTier?.code,
+      assignment.transaction?.subscriptionPeriod?.requiredSiteVisits ?? 1,
+    );
+    const checklistItems = reportSections
+      ? assignment.checklistItems.filter((item) =>
+          reportSections.some((section) => section.key === item.sectionKey),
+        )
+      : assignment.checklistItems;
+    const completedItems = checklistItems.filter((item) => {
+      const section = reportSections?.find((candidate) => candidate.key === item.sectionKey);
+      return section
+        ? isVerificationReportSectionComplete(section, item.status, item.result, item.media.length)
+        : item.status === "COMPLETE";
+    }).length;
+    const progressPercent = checklistItems.length
+      ? Math.round((completedItems / checklistItems.length) * 100)
       : 0;
     const names = assignment.verificationRequest.user.fullName.trim().split(/\s+/);
     // The payment for this assignment's period; older assignments fall back to the latest.
     const transaction = assignment.transaction ?? assignment.verificationRequest.transactions[0];
 
     return {
-      checklistItems: assignment.checklistItems,
+      checklistItems: checklistItems.map((item) => ({
+        ...item,
+        fields: reportSections?.find((section) => section.key === item.sectionKey)?.fields ?? [],
+      })),
+      verificationTier: assignment.verificationRequest.verificationTier,
+      period: assignment.transaction?.subscriptionPeriod ?? null,
       clientDocuments: assignment.verificationRequest.documents,
       client: {
         firstName: names[0] || "",
@@ -589,9 +757,23 @@ export interface ChecklistMediaData {
 export type UpdatedAgentChecklistItem = {
   id: string;
   label: string;
+  sectionKey: string | null;
   status: "PENDING" | "COMPLETE";
-  media: { url: string }[];
+  result: Prisma.JsonValue;
+  fields: { key: string; label: string; type: "text" | "number" }[];
+  media: {
+    id: string;
+    url: string;
+    fileName: string;
+    fileType: string;
+    fileSizeBytes: number;
+  }[];
 };
+
+export type UpdateAgentChecklistItemResult =
+  UpdatedAgentChecklistItem | { kind: "INVALID_SITE_VISIT_TRANSITION" } | null;
+
+class ChecklistSiteVisitTransitionError extends Error {}
 
 export const updateAgentChecklistItem = async (
   agentId: string,
@@ -600,66 +782,201 @@ export const updateAgentChecklistItem = async (
   /** Leave out to keep the item's current status (e.g. when only adding photos). */
   status: "PENDING" | "COMPLETE" | undefined,
   media: ChecklistMediaData[] = [],
-): Promise<UpdatedAgentChecklistItem | null> => {
+  result?: VerificationReportSectionResult,
+): Promise<UpdateAgentChecklistItemResult> => {
   try {
-    return await prismaClient.$transaction(async (transaction) => {
-      const item = await transaction.verificationChecklistItem.findFirst({
-        where: {
-          id: itemId,
-          agentAssignmentId: assignmentId,
-          agentAssignment: { agentId },
-        },
-        select: {
-          id: true,
-          agentAssignment: { select: { verificationRequestId: true } },
-        },
-      });
-
-      if (!item?.agentAssignment) return null;
-      const { verificationRequestId } = item.agentAssignment;
-
-      if (status) {
-        await transaction.verificationChecklistItem.update({
-          where: { id: item.id },
-          data: { status },
+    return await prismaClient.$transaction(
+      async (transaction) => {
+        const item = await transaction.verificationChecklistItem.findFirst({
+          where: {
+            id: itemId,
+            agentAssignmentId: assignmentId,
+            agentAssignment: { agentId },
+          },
+          select: {
+            id: true,
+            sectionKey: true,
+            agentAssignment: {
+              select: {
+                transaction: {
+                  select: {
+                    subscriptionPeriod: {
+                      select: { id: true, requiredSiteVisits: true },
+                    },
+                  },
+                },
+                verificationRequestId: true,
+                verificationRequest: {
+                  select: { verificationTier: { select: { code: true } } },
+                },
+              },
+            },
+          },
         });
-      }
 
-      if (media.length > 0) {
-        await transaction.document.createMany({
-          data: media.map((file) => ({
-            ...file,
-            verificationRequestId,
-            checklistItemId: item.id,
-            documentType: DocumentType.CHECKLIST_MEDIA,
-          })),
+        if (!item?.agentAssignment) return null;
+        const { agentAssignment } = item;
+        const period = agentAssignment.transaction?.subscriptionPeriod;
+        const reportSections = getVerificationReportSections(
+          agentAssignment.verificationRequest.verificationTier?.code,
+          period?.requiredSiteVisits ?? 1,
+        );
+        const siteVisitNumber = getSiteVisitNumberFromSectionKey(item.sectionKey);
+        const siteVisitSection = reportSections?.find((section) => section.key === item.sectionKey);
+        const siteVisit =
+          period && siteVisitSection && siteVisitNumber !== null
+            ? await transaction.siteVisit.findFirst({
+                where: { subscriptionPeriodId: period.id, visitNumber: siteVisitNumber },
+                select: { id: true, status: true },
+              })
+            : null;
+
+        if (
+          period &&
+          siteVisitSection &&
+          siteVisitNumber !== null &&
+          (!siteVisit || (status === "COMPLETE" && siteVisit.status === SiteVisitStatus.CANCELLED))
+        ) {
+          return { kind: "INVALID_SITE_VISIT_TRANSITION" as const };
+        }
+
+        if (status) {
+          await transaction.verificationChecklistItem.update({
+            where: { id: item.id },
+            data: { status, ...(result ? { result } : {}) },
+          });
+        } else if (result) {
+          await transaction.verificationChecklistItem.update({
+            where: { id: item.id },
+            data: { result },
+          });
+        }
+
+        if (media.length > 0) {
+          await transaction.document.createMany({
+            data: media.map((file) => ({
+              ...file,
+              verificationRequestId: agentAssignment.verificationRequestId,
+              checklistItemId: item.id,
+              documentType: DocumentType.CHECKLIST_MEDIA,
+            })),
+          });
+        }
+
+        const checklistItems = await transaction.verificationChecklistItem.findMany({
+          where: { agentAssignmentId: assignmentId },
+          select: {
+            id: true,
+            label: true,
+            sectionKey: true,
+            result: true,
+            status: true,
+            media: {
+              select: {
+                id: true,
+                url: true,
+                fileName: true,
+                fileType: true,
+                fileSizeBytes: true,
+              },
+            },
+          },
         });
-      }
+        const activeChecklistItems = reportSections
+          ? checklistItems.filter((checklistItem) =>
+              reportSections.some((section) => section.key === checklistItem.sectionKey),
+            )
+          : checklistItems;
+        const completedItems = activeChecklistItems.filter((checklistItem) => {
+          const section = reportSections?.find(
+            (candidate) => candidate.key === checklistItem.sectionKey,
+          );
+          return section
+            ? isVerificationReportSectionComplete(
+                section,
+                checklistItem.status,
+                checklistItem.result,
+                checklistItem.media.length,
+              )
+            : checklistItem.status === "COMPLETE";
+        }).length;
 
-      const checklistItems = await transaction.verificationChecklistItem.findMany({
-        where: { agentAssignmentId: assignmentId },
-        select: {
-          id: true,
-          label: true,
-          status: true,
-          media: { select: { url: true } },
-        },
-      });
-      const completedItems = checklistItems.filter(
-        (checklistItem) => checklistItem.status === "COMPLETE",
-      ).length;
-      const progressPercent = checklistItems.length
-        ? Math.round((completedItems / checklistItems.length) * 100)
-        : 0;
+        if (period && siteVisit && siteVisitSection) {
+          const updatedChecklistItem = activeChecklistItems.find(
+            (checklistItem) => checklistItem.id === item.id,
+          );
+          const isVisitComplete = Boolean(
+            updatedChecklistItem &&
+            isVerificationReportSectionComplete(
+              siteVisitSection,
+              updatedChecklistItem.status,
+              updatedChecklistItem.result,
+              updatedChecklistItem.media.length,
+            ),
+          );
 
-      await transaction.agentAssignment.update({
-        where: { id: assignmentId },
-        data: { progressPercent },
-      });
+          if (isVisitComplete && siteVisit.status !== SiteVisitStatus.COMPLETED) {
+            const updated = await transaction.siteVisit.updateMany({
+              where: {
+                id: siteVisit.id,
+                status: {
+                  in: [
+                    SiteVisitStatus.PENDING,
+                    SiteVisitStatus.SCHEDULED,
+                    SiteVisitStatus.IN_PROGRESS,
+                  ],
+                },
+              },
+              data: {
+                status: SiteVisitStatus.COMPLETED,
+                completedAt: new Date(),
+              },
+            });
+            if (updated.count === 1) {
+              await transaction.subscriptionPeriod.update({
+                where: { id: period.id },
+                data: {
+                  completedSiteVisits: { increment: 1 },
+                  status: "IN_PROGRESS",
+                },
+              });
+            } else {
+              const latestVisit = await transaction.siteVisit.findUniqueOrThrow({
+                where: { id: siteVisit.id },
+                select: { status: true },
+              });
+              if (latestVisit.status !== SiteVisitStatus.COMPLETED) {
+                throw new ChecklistSiteVisitTransitionError();
+              }
+            }
+          }
+        }
 
-      return checklistItems.find((checklistItem) => checklistItem.id === item.id) ?? null;
-    });
+        const progressPercent = activeChecklistItems.length
+          ? Math.round((completedItems / activeChecklistItems.length) * 100)
+          : 0;
+
+        await transaction.agentAssignment.update({
+          where: { id: assignmentId },
+          data: { progressPercent },
+        });
+
+        const updatedItem = activeChecklistItems.find(
+          (checklistItem) => checklistItem.id === item.id,
+        );
+        if (!updatedItem) return null;
+        return {
+          ...updatedItem,
+          fields:
+            reportSections?.find((section) => section.key === updatedItem.sectionKey)?.fields ?? [],
+        };
+      },
+      { timeout: 15000 },
+    );
   } catch (error) {
+    if (error instanceof ChecklistSiteVisitTransitionError) {
+      return { kind: "INVALID_SITE_VISIT_TRANSITION" };
+    }
     logger.error(
       `Error updating checklist item itemId=${itemId} assignmentId=${assignmentId} ${error}`,
     );

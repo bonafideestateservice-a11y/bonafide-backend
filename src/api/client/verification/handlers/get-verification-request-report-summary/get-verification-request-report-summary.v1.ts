@@ -3,7 +3,11 @@ import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptio
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationRequestReportSummaryForUser } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
-import { toVerificationReportChecklist } from "../../../../services/verification-report-checklist";
+import {
+  toClientReportChecklist,
+  toClientReportDocument,
+  toClientVerificationReportView,
+} from "../../../../services/client-verification-report";
 
 export const getVerificationRequestReportSummary = async (
   req: Request,
@@ -34,35 +38,29 @@ export const getVerificationRequestReportSummary = async (
     let propertyName = "Property";
 
     if (summary.details && typeof summary.details === "object" && !Array.isArray(summary.details)) {
-      propertyAddress = (summary.details as any).propertyAddress || propertyAddress;
-      propertyName = (summary.details as any).propertyName || propertyName;
+      const details = summary.details as Record<string, unknown>;
+      if (typeof details.propertyAddress === "string" && details.propertyAddress) {
+        propertyAddress = details.propertyAddress;
+      }
+      if (typeof details.propertyName === "string" && details.propertyName) {
+        propertyName = details.propertyName;
+      }
     }
 
-    // Recurring requests have one report per paid period; summarise the latest. The report
-    // keeps its own agent and checklist; older reports fall back to the assignment.
+    // Recurring requests have one report per paid period; summarise the latest.
     const report = summary.reports[0];
-    const reportAgent = report?.agent ?? summary.agentAssignment?.agent;
-    let agentData = null;
-    if (reportAgent) {
-      const agentNameParts = reportAgent.name.split(" ");
-      const firstName = agentNameParts[0] || "";
-      const lastName = agentNameParts.slice(1).join(" ") || "";
-
-      agentData = {
-        firstName,
-        lastName,
-      };
-    }
-
-    let mediaPreview: Array<{ url: string }> = [];
+    const clientReport = report
+      ? toClientVerificationReportView(report)
+      : { verificationTier: null, subscriptionPeriod: null, findings: null };
+    const mediaPreview: Array<{ url: string }> = [];
     const checklistItems = report?.checklistItems.length
       ? report.checklistItems
       : summary.agentAssignment?.checklistItems;
-    const checklist = toVerificationReportChecklist(checklistItems ?? []);
+    const checklist = toClientReportChecklist(checklistItems ?? []);
     if (checklistItems) {
       for (const item of checklistItems) {
         if (item.media) {
-          item.media.forEach((m: any) => {
+          item.media.forEach((m) => {
             if (mediaPreview.length < 3) {
               mediaPreview.push({ url: m.url });
             }
@@ -71,20 +69,21 @@ export const getVerificationRequestReportSummary = async (
       }
     }
 
-    let insights: Array<{ label: string; value: string; status: "good" | "warning" | "bad" }> = [];
-    if (report?.findings && Array.isArray(report.findings)) {
-      insights = report.findings as any;
-    }
+    const insights = report?.findings && Array.isArray(report.findings) ? report.findings : [];
 
     const responsePayload = {
       property: propertyName,
       inspectionDate: report?.generatedAt?.toISOString() || null,
-      agent: agentData,
       location: propertyAddress,
-      reportType: summary.verificationPlan?.name || "Standard Report",
+      reportType:
+        clientReport.verificationTier?.name ?? summary.verificationPlan?.name ?? "Standard Report",
       insights,
+      findings: clientReport.findings ?? [],
+      verificationTier: clientReport.verificationTier,
+      subscriptionPeriod: clientReport.subscriptionPeriod,
+      providerName: "Bonafide",
       checklist,
-      reportDocument: report?.media[0] ?? null,
+      reportDocument: toClientReportDocument(report?.media[0]),
       mediaPreview,
     };
 

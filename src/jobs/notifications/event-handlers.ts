@@ -3,6 +3,7 @@ import { AppEventPayloads, AppEventTypes, PayloadEventType } from "../../events"
 import {
   getAdminNotificationRecipients,
   getNotificationRecipient,
+  getPremiumQuoteNotificationContext,
   getPropertyPaymentNotificationContext,
   getPropertyRequestNotificationContext,
   getVerificationRequestNotificationContext,
@@ -457,6 +458,69 @@ const handleSubscriptionEnded: EventHandler<AppEventTypes.SUBSCRIPTION_ENDED> = 
   );
 };
 
+const handlePremiumQuoteIssued: EventHandler<AppEventTypes.PREMIUM_QUOTE_ISSUED> = async (
+  payload,
+) => {
+  const quote = await getPremiumQuoteNotificationContext(payload.quoteId);
+  if (!quote || quote.status !== "ISSUED") return [];
+  if (quote.quoteUsdCents === null || quote.quoteNgnKobo === null || !quote.expiresAt) {
+    throw new Error(`Issued Premium quote has incomplete pricing quoteId=${quote.id}`);
+  }
+  const recipient = quote.verificationRequest.user;
+  return [
+    {
+      channel: "email",
+      recipient: toRecipient(recipient),
+      email: {
+        template: EmailTemplate.PREMIUM_QUOTE_ISSUED,
+        data: {
+          firstName: recipient.fullName,
+          companyName: "Bonafide",
+          quoteId: quote.id,
+          verificationRequestId: quote.verificationRequestId,
+          amountUsd: formatAmount(quote.quoteUsdCents),
+          amountNgn: formatAmount(quote.quoteNgnKobo),
+          expiresAt: quote.expiresAt.toISOString(),
+          reviewUrl: payload.reviewUrl,
+        },
+      },
+    },
+  ];
+};
+
+const handlePremiumQuoteAccepted: EventHandler<AppEventTypes.PREMIUM_QUOTE_ACCEPTED> = async (
+  payload,
+) => {
+  const quote = await getPremiumQuoteNotificationContext(payload.quoteId);
+  if (!quote || quote.status !== "ACCEPTED") return [];
+  if (!payload.checkoutUrl) {
+    throw new Error(`Accepted Premium quote has no checkout URL quoteId=${quote.id}`);
+  }
+  const recipient = quote.verificationRequest.user;
+  const amount = payload.currency === "NGN" ? quote.quoteNgnKobo : quote.quoteUsdCents;
+  if (amount === null) {
+    throw new Error(`Accepted Premium quote has no ${payload.currency} amount quoteId=${quote.id}`);
+  }
+  return [
+    {
+      channel: "email",
+      recipient: toRecipient(recipient),
+      email: {
+        template: EmailTemplate.PREMIUM_QUOTE_ACCEPTED,
+        data: {
+          firstName: recipient.fullName,
+          companyName: "Bonafide",
+          quoteId: quote.id,
+          verificationRequestId: quote.verificationRequestId,
+          amount: formatAmount(amount),
+          currency: payload.currency,
+          checkoutUrl: payload.checkoutUrl,
+        },
+      },
+    },
+  ];
+};
+
 const propertyMergeInfo = (
   context: PropertyRequestNotificationContext,
   recipient: DeliveryRecipient,
@@ -674,6 +738,8 @@ export const notificationEventHandlers: { [K in PayloadEventType]: EventHandler<
   [AppEventTypes.INSPECTION_STARTED]: handleInspectionStarted,
   [AppEventTypes.PAYMENT_FAILED]: handlePaymentFailed,
   [AppEventTypes.SUBSCRIPTION_ENDED]: handleSubscriptionEnded,
+  [AppEventTypes.PREMIUM_QUOTE_ISSUED]: handlePremiumQuoteIssued,
+  [AppEventTypes.PREMIUM_QUOTE_ACCEPTED]: handlePremiumQuoteAccepted,
   [AppEventTypes.PROPERTY_REQUEST_CREATED]: handlePropertyRequestCreated,
   [AppEventTypes.PROPERTY_REQUEST_UPDATED]: handlePropertyRequestUpdated,
   [AppEventTypes.PROPERTY_PAYMENT_RECEIVED]: handlePropertyPaymentReceived,

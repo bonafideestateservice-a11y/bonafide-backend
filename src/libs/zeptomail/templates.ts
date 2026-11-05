@@ -22,6 +22,8 @@ export enum EmailTemplate {
   INSPECTION_STARTED_ADMIN = "INSPECTION_STARTED_ADMIN",
   PAYMENT_FAILED = "PAYMENT_FAILED",
   SUBSCRIPTION_ENDED = "SUBSCRIPTION_ENDED",
+  PREMIUM_QUOTE_ISSUED = "PREMIUM_QUOTE_ISSUED",
+  PREMIUM_QUOTE_ACCEPTED = "PREMIUM_QUOTE_ACCEPTED",
   PROPERTY_REQUEST_CREATED = "PROPERTY_REQUEST_CREATED",
   PROPERTY_REQUEST_CREATED_ADMIN = "PROPERTY_REQUEST_CREATED_ADMIN",
   PROPERTY_REQUEST_UPDATED = "PROPERTY_REQUEST_UPDATED",
@@ -132,6 +134,25 @@ export interface EmailTemplateData {
   [EmailTemplate.SUBSCRIPTION_ENDED]: VerificationRequestMergeInfo & {
     /** e.g. "Monthly Update". */
     planName: string;
+  };
+  [EmailTemplate.PREMIUM_QUOTE_ISSUED]: {
+    firstName: string;
+    companyName: string;
+    quoteId: string;
+    verificationRequestId: string;
+    amountUsd: string;
+    amountNgn: string;
+    expiresAt: string;
+    reviewUrl: string;
+  };
+  [EmailTemplate.PREMIUM_QUOTE_ACCEPTED]: {
+    firstName: string;
+    companyName: string;
+    quoteId: string;
+    verificationRequestId: string;
+    amount: string;
+    currency: string;
+    checkoutUrl: string;
   };
   [EmailTemplate.PROPERTY_REQUEST_CREATED]: PropertyRequestMergeInfo & {
     /** The listed price in major units, e.g. "85,000,000.00". */

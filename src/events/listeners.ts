@@ -17,6 +17,8 @@ const notificationEvents: PayloadEventType[] = [
   AppEventTypes.INSPECTION_STARTED,
   AppEventTypes.PAYMENT_FAILED,
   AppEventTypes.SUBSCRIPTION_ENDED,
+  AppEventTypes.PREMIUM_QUOTE_ISSUED,
+  AppEventTypes.PREMIUM_QUOTE_ACCEPTED,
   AppEventTypes.PROPERTY_REQUEST_CREATED,
   AppEventTypes.PROPERTY_REQUEST_UPDATED,
   AppEventTypes.PROPERTY_PAYMENT_RECEIVED,

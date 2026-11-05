@@ -72,6 +72,48 @@ describe("submitAgentReport handler (unit)", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("returns 409 with missing tier-specific report fields", async () => {
+    mockedGetAgent.mockResolvedValue({ id: "agent-1" });
+    mockedSubmit.mockResolvedValue({
+      kind: "INCOMPLETE_REPORT_DATA",
+      progressPercent: 50,
+      remainingFields: ["Valuation amount"],
+    });
+    const { req, res, next } = buildMockReqRes("user-1");
+
+    await submitAgentReport(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(HttpStatusCode.CONFLICT);
+    expect(res.json).toHaveBeenCalledWith({
+      error: "INCOMPLETE_REPORT_DATA",
+      progressPercent: 50,
+      remainingFields: ["Valuation amount"],
+    });
+    expect(mockedDestroy).toHaveBeenCalledWith("report-document-1", { resource_type: "raw" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 and removes the upload until all period site visits are complete", async () => {
+    mockedGetAgent.mockResolvedValue({ id: "agent-1" });
+    mockedSubmit.mockResolvedValue({
+      kind: "INCOMPLETE_SITE_VISITS",
+      progressPercent: 50,
+      remainingSiteVisits: 1,
+    });
+    const { req, res, next } = buildMockReqRes("user-1");
+
+    await submitAgentReport(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(HttpStatusCode.CONFLICT);
+    expect(res.json).toHaveBeenCalledWith({
+      error: "INCOMPLETE_SITE_VISITS",
+      progressPercent: 50,
+      remainingSiteVisits: 1,
+    });
+    expect(mockedDestroy).toHaveBeenCalledWith("report-document-1", { resource_type: "raw" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("returns 201 with the submitted report", async () => {
     mockedGetAgent.mockResolvedValue({ id: "agent-1" });
     mockedSubmit.mockResolvedValue({

@@ -1,6 +1,13 @@
 import { NextFunction, Request, Response } from "express";
 import crypto from "crypto";
-import { PaymentProvider, PaymentStatus, Prisma } from "@prisma/client";
+import {
+  MonitoringInterval,
+  MonitoringSubscriptionStatus,
+  MonitoringSubscription,
+  PaymentProvider,
+  PaymentStatus,
+  Prisma,
+} from "@prisma/client";
 import {
   markPropertyPaymentFailed,
   markPropertyPaymentSuccessful,
@@ -18,6 +25,10 @@ import {
   markRequestPaid,
   markRequestPaymentFailed,
 } from "../services/database/verification-lifecycle";
+import {
+  activateMonitoringForPaidTransaction,
+  createMonitoringRenewalSnapshot,
+} from "../services/database/pricing";
 
 type PaystackEvent = {
   event?: string;
@@ -66,6 +77,103 @@ const getCustomerCode = (event: PaystackEvent) => event.data?.customer?.customer
 
 const getPlanCode = (event: PaystackEvent) => event.data?.plan?.plan_code;
 
+const paystackDate = (value: string | undefined) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const addMonitoringInterval = (
+  start: Date,
+  interval: MonitoringInterval,
+  intervalCount: number,
+) => {
+  const end = new Date(start);
+  if (interval === MonitoringInterval.WEEKLY) {
+    end.setUTCDate(end.getUTCDate() + 7 * intervalCount);
+    return end;
+  }
+  const months = interval === MonitoringInterval.QUARTERLY ? 3 * intervalCount : intervalCount;
+  const day = end.getUTCDate();
+  end.setUTCDate(1);
+  end.setUTCMonth(end.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate();
+  end.setUTCDate(Math.min(day, lastDay));
+  return end;
+};
+
+const findMonitoringSubscriptionForCharge = async (event: PaystackEvent) => {
+  const subscriptionCode = getSubscriptionCode(event);
+  if (subscriptionCode) {
+    return prismaClient.monitoringSubscription.findUnique({
+      where: {
+        provider_providerSubscriptionId: {
+          provider: PaymentProvider.PAYSTACK,
+          providerSubscriptionId: subscriptionCode,
+        },
+      },
+    });
+  }
+
+  const customerCode = getCustomerCode(event);
+  const planCode = getPlanCode(event);
+  if (!customerCode || !planCode) return null;
+  const candidates = await prismaClient.monitoringSubscription.findMany({
+    where: {
+      provider: PaymentProvider.PAYSTACK,
+      customerCode,
+      status: { in: ["ACTIVE", "NON_RENEWING", "PAYMENT_FAILED"] },
+      providerPriceVersion: { is: { providerPriceId: planCode } },
+    },
+  });
+  if (candidates.length <= 1) return candidates[0] ?? null;
+
+  const chargedAt = paystackDate(event.data?.paid_at)?.getTime() ?? Date.now();
+  const distance = (date: Date | null) =>
+    date ? Math.abs(date.getTime() - chargedAt) : Number.POSITIVE_INFINITY;
+  const [closest] = [...candidates].sort(
+    (a, b) =>
+      distance(a.currentPeriodEnd) - distance(b.currentPeriodEnd) ||
+      Number(b.status === "ACTIVE") - Number(a.status === "ACTIVE"),
+  );
+  logger.warn(
+    `Paystack charge matched ${candidates.length} monitoring subscriptions for customer=${customerCode} plan=${planCode}; using subscription=${closest.providerSubscriptionId}`,
+  );
+  return closest;
+};
+
+const renewalSnapshot = (subscription: MonitoringSubscription, amountMinor: number) => {
+  if (
+    !subscription.monitoringPlanId ||
+    !subscription.interval ||
+    !subscription.planVersion ||
+    !subscription.intervalCount ||
+    !subscription.priceUsdCents ||
+    !subscription.checksPerPeriod ||
+    !subscription.reportsPerPeriod ||
+    !subscription.providerPriceVersionId ||
+    !subscription.consentAt
+  ) {
+    throw new Error(
+      `Paystack monitoring terms are incomplete subscriptionId=${subscription.providerSubscriptionId}`,
+    );
+  }
+  return createMonitoringRenewalSnapshot({
+    provider: PaymentProvider.PAYSTACK,
+    currency: "NGN",
+    planId: subscription.monitoringPlanId,
+    planCode: subscription.interval,
+    planVersion: subscription.planVersion,
+    intervalCount: subscription.intervalCount,
+    amountUsdCents: subscription.priceUsdCents,
+    amountMinor,
+    checksPerPeriod: subscription.checksPerPeriod,
+    reportsPerPeriod: subscription.reportsPerPeriod,
+    providerPriceVersionId: subscription.providerPriceVersionId,
+    consentAt: subscription.consentAt,
+  });
+};
+
 /**
  * Find the subscription a renewal charge belongs to. Renewal charges may not carry the
  * subscription code; then the customer + plan is used. A customer can hold several
@@ -98,8 +206,8 @@ const findSubscriptionForCharge = async (event: PaystackEvent) => {
     date ? Math.abs(date.getTime() - chargedAt) : Number.POSITIVE_INFINITY;
   const [closest] = [...candidates].sort(
     (a, b) =>
-      Number(b.status === "ACTIVE") - Number(a.status === "ACTIVE") ||
-      distance(a.nextPaymentDate) - distance(b.nextPaymentDate),
+      distance(a.nextPaymentDate) - distance(b.nextPaymentDate) ||
+      Number(b.status === "ACTIVE") - Number(a.status === "ACTIVE"),
   );
   logger.warn(
     `Paystack charge matched ${candidates.length} subscriptions for customer=${customerCode} plan=${planCode}; using subscription=${closest.subscriptionCode}`,
@@ -160,42 +268,147 @@ const handleChargeSuccess = async (event: PaystackEvent) => {
   let transaction = await prismaClient.transaction.findFirst({
     where: { providerRef: reference },
   });
+  let monitoringSubscription: MonitoringSubscription | null = null;
+  let period: { periodStart: Date; periodEnd: Date } | null = null;
 
   if (!transaction) {
-    // No transaction with this reference: a renewal charged by the subscription.
-    const subscription = await findSubscriptionForCharge(event);
-
-    if (!subscription) {
-      if (getPlanCode(event)) {
-        // A subscription renewal whose subscription.create isn't stored yet (Paystack can send
-        // them out of order). Fail so Paystack retries; a 200 here would lose the renewal.
-        throw new Error(`No subscription stored yet for Paystack renewal reference=${reference}`);
+    monitoringSubscription = await findMonitoringSubscriptionForCharge(event);
+    if (monitoringSubscription) {
+      const amountInCents = Number(event.data?.amount ?? 0);
+      const paidAt = paystackDate(event.data?.paid_at) ?? new Date();
+      const periodStart = monitoringSubscription.currentPeriodEnd ?? paidAt;
+      const periodEndFromProvider = paystackDate(event.data?.next_payment_date);
+      const periodEnd =
+        periodEndFromProvider && periodEndFromProvider > periodStart
+          ? periodEndFromProvider
+          : monitoringSubscription.interval && monitoringSubscription.intervalCount
+            ? addMonitoringInterval(
+                periodStart,
+                monitoringSubscription.interval,
+                monitoringSubscription.intervalCount,
+              )
+            : null;
+      if (!periodEnd) {
+        throw new Error(
+          `Paystack renewal period is missing subscription=${monitoringSubscription.providerSubscriptionId}`,
+        );
       }
-      logger.warn(`Paystack transaction not found reference=${reference}`);
-      return;
-    }
+      period = { periodStart, periodEnd };
+      const snapshot = renewalSnapshot(monitoringSubscription, amountInCents);
+      transaction = await prismaClient.transaction.upsert({
+        where: { providerRef: reference },
+        create: {
+          verificationRequestId: monitoringSubscription.verificationRequestId,
+          amountInCents,
+          currency: "NGN",
+          method: "CARD",
+          provider: PaymentProvider.PAYSTACK,
+          purpose: "RENEWAL",
+          providerPriceVersionId: monitoringSubscription.providerPriceVersionId,
+          monitoringAmountUsdCents: monitoringSubscription.priceUsdCents,
+          totalUsdCents: monitoringSubscription.priceUsdCents,
+          pricingSnapshot: snapshot,
+          status: PaymentStatus.PENDING,
+          providerRef: reference,
+          paidAt,
+        },
+        update: {
+          amountInCents,
+          currency: "NGN",
+          provider: PaymentProvider.PAYSTACK,
+          purpose: "RENEWAL",
+          providerPriceVersionId: monitoringSubscription.providerPriceVersionId,
+          monitoringAmountUsdCents: monitoringSubscription.priceUsdCents,
+          totalUsdCents: monitoringSubscription.priceUsdCents,
+          pricingSnapshot: snapshot,
+          paidAt,
+        },
+      });
+    } else {
+      // No transaction with this reference: a legacy subscription renewal.
+      const subscription = await findSubscriptionForCharge(event);
+      if (!subscription) {
+        if (getPlanCode(event)) {
+          throw new Error(`No subscription stored yet for Paystack renewal reference=${reference}`);
+        }
+        logger.warn(`Paystack transaction not found reference=${reference}`);
+        return;
+      }
 
-    transaction = await prismaClient.transaction.create({
-      data: {
-        verificationRequestId: subscription.verificationRequestId,
-        amountInCents: event.data?.amount ?? 0,
-        currency: event.data?.currency ?? "NGN",
-        method: "CARD",
-        status: PaymentStatus.SUCCESS,
-        providerRef: reference,
-        paidAt: new Date(),
-      },
-    });
+      transaction = await prismaClient.transaction.upsert({
+        where: { providerRef: reference },
+        create: {
+          verificationRequestId: subscription.verificationRequestId,
+          amountInCents: Number(event.data?.amount ?? 0),
+          currency: String(event.data?.currency ?? "NGN").toUpperCase(),
+          method: "CARD",
+          status: PaymentStatus.PENDING,
+          providerRef: reference,
+          paidAt: paystackDate(event.data?.paid_at),
+        },
+        update: {},
+      });
+    }
+  } else if (
+    transaction.provider === PaymentProvider.PAYSTACK &&
+    transaction.purpose === "RENEWAL"
+  ) {
+    monitoringSubscription = await findMonitoringSubscriptionForCharge(event);
+    if (!monitoringSubscription) {
+      throw new Error(`Paystack monitoring subscription not found reference=${reference}`);
+    }
+    const paidAt = paystackDate(event.data?.paid_at) ?? transaction.paidAt ?? new Date();
+    const periodStart = monitoringSubscription.currentPeriodEnd ?? paidAt;
+    const periodEndFromProvider = paystackDate(event.data?.next_payment_date);
+    const periodEnd =
+      periodEndFromProvider && periodEndFromProvider > periodStart
+        ? periodEndFromProvider
+        : monitoringSubscription.interval && monitoringSubscription.intervalCount
+          ? addMonitoringInterval(
+              periodStart,
+              monitoringSubscription.interval,
+              monitoringSubscription.intervalCount,
+            )
+          : null;
+    if (!periodEnd) {
+      throw new Error(
+        `Paystack renewal period is missing subscription=${monitoringSubscription.providerSubscriptionId}`,
+      );
+    }
+    period = { periodStart, periodEnd };
+  }
+
+  const amount = Number(event.data?.amount ?? transaction.amountInCents);
+  const currency = String(event.data?.currency ?? transaction.currency).toUpperCase();
+  if (amount !== transaction.amountInCents || currency !== transaction.currency.toUpperCase()) {
+    throw new Error(`Paystack charge amount does not match transaction reference=${reference}`);
   }
 
   const { verificationRequestId } = transaction;
-  await prismaClient.$transaction(async (tx) => {
-    await tx.transaction.updateMany({
+  const newlyPaid = await prismaClient.$transaction(async (tx) => {
+    const updated = await tx.transaction.updateMany({
       where: { id: transaction.id, status: { not: PaymentStatus.SUCCESS } },
-      data: { status: PaymentStatus.SUCCESS, paidAt: new Date() },
+      data: {
+        status: PaymentStatus.SUCCESS,
+        paidAt: paystackDate(event.data?.paid_at) ?? new Date(),
+      },
     });
     await markRequestPaid(tx, verificationRequestId);
+    return updated.count > 0;
   });
+
+  if (monitoringSubscription && period) {
+    await activateMonitoringForPaidTransaction({
+      transactionId: transaction.id,
+      provider: PaymentProvider.PAYSTACK,
+      providerSubscriptionId: monitoringSubscription.providerSubscriptionId ?? "",
+      customerCode: monitoringSubscription.customerCode ?? undefined,
+      emailToken: monitoringSubscription.emailToken ?? undefined,
+      startedAt: period.periodStart,
+      periodStart: period.periodStart,
+      periodEnd: period.periodEnd,
+    });
+  }
 
   const paidTransaction = await prismaClient.transaction.findUnique({
     where: { id: transaction.id },
@@ -209,7 +422,7 @@ const handleChargeSuccess = async (event: PaystackEvent) => {
     },
   });
 
-  if (paidTransaction) {
+  if (paidTransaction && newlyPaid) {
     appEvents.emit(AppEventTypes.PAYMENT_RECEIVED, {
       userId: paidTransaction.verificationRequest.user.id,
       email: paidTransaction.verificationRequest.user.email,
@@ -242,14 +455,29 @@ const handleChargeFailure = async (event: PaystackEvent) => {
   });
 
   if (!transaction) {
+    const monitoringSubscription = await findMonitoringSubscriptionForCharge(event);
+    if (monitoringSubscription) {
+      const amountInCents = Number(event.data?.amount ?? 0);
+      await recordFailedRenewal({
+        verificationRequestId: monitoringSubscription.verificationRequestId,
+        providerRef: reference,
+        amountInCents,
+        currency: String(event.data?.currency ?? "NGN").toUpperCase(),
+        provider: PaymentProvider.PAYSTACK,
+        providerPriceVersionId: monitoringSubscription.providerPriceVersionId ?? undefined,
+        pricingSnapshot: renewalSnapshot(monitoringSubscription, amountInCents),
+      });
+      return;
+    }
+
     const subscription = await findSubscriptionForCharge(event);
     if (!subscription) return;
 
     transaction = await prismaClient.transaction.create({
       data: {
         verificationRequestId: subscription.verificationRequestId,
-        amountInCents: event.data?.amount ?? 0,
-        currency: event.data?.currency ?? "NGN",
+        amountInCents: Number(event.data?.amount ?? 0),
+        currency: String(event.data?.currency ?? "NGN").toUpperCase(),
         method: "CARD",
         status: PaymentStatus.FAILED,
         providerRef: reference,
@@ -276,6 +504,71 @@ const handleSubscriptionCreated = async (event: PaystackEvent) => {
 
   if (!subscriptionCode || !customerCode || !planCode) {
     logger.warn("Paystack subscription.create is missing subscription, customer, or plan data");
+    return;
+  }
+
+  const providerPriceVersion = await prismaClient.providerPriceVersion.findFirst({
+    where: {
+      provider: PaymentProvider.PAYSTACK,
+      providerPriceId: planCode,
+      monitoringPlanId: { not: null },
+      syncStatus: "READY",
+    },
+  });
+  if (providerPriceVersion?.monitoringPlanId) {
+    const user = await prismaClient.user.findUnique({
+      where: { paystackCustomerCode: customerCode },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new Error(
+        `Paystack customer not found for monitoring subscription=${subscriptionCode}`,
+      );
+    }
+
+    const existing = await prismaClient.monitoringSubscription.findUnique({
+      where: {
+        provider_providerSubscriptionId: {
+          provider: PaymentProvider.PAYSTACK,
+          providerSubscriptionId: subscriptionCode,
+        },
+      },
+    });
+    const transaction = await prismaClient.transaction.findFirst({
+      where: {
+        status: PaymentStatus.SUCCESS,
+        provider: PaymentProvider.PAYSTACK,
+        providerPriceVersionId: providerPriceVersion.id,
+        verificationRequest: existing
+          ? { id: existing.verificationRequestId, userId: user.id }
+          : {
+              userId: user.id,
+              monitoringPlanId: providerPriceVersion.monitoringPlanId,
+              recurringConsent: true,
+              monitoringSubscriptions: { none: {} },
+            },
+      },
+      orderBy: { paidAt: "desc" },
+    });
+    if (!transaction) {
+      throw new Error(`No paid transaction found for Paystack subscription=${subscriptionCode}`);
+    }
+
+    const periodStart = transaction.paidAt ?? paystackDate(data?.createdAt) ?? new Date();
+    const periodEnd = paystackDate(data?.next_payment_date);
+    if (!periodEnd || periodEnd <= periodStart) {
+      throw new Error(`Paystack subscription period is invalid subscription=${subscriptionCode}`);
+    }
+    await activateMonitoringForPaidTransaction({
+      transactionId: transaction.id,
+      provider: PaymentProvider.PAYSTACK,
+      providerSubscriptionId: subscriptionCode,
+      customerCode,
+      emailToken: data?.email_token,
+      startedAt: paystackDate(data?.createdAt) ?? periodStart,
+      periodStart,
+      periodEnd,
+    });
     return;
   }
 
@@ -355,6 +648,82 @@ const handleSubscriptionStatusChange = async (event: PaystackEvent) => {
     return;
   }
 
+  const monitoringSubscription = await prismaClient.monitoringSubscription.findUnique({
+    where: {
+      provider_providerSubscriptionId: {
+        provider: PaymentProvider.PAYSTACK,
+        providerSubscriptionId: subscriptionCode,
+      },
+    },
+  });
+  if (monitoringSubscription) {
+    const previousStatus = monitoringSubscription.status;
+    const terminalStatuses: MonitoringSubscriptionStatus[] = [
+      MonitoringSubscriptionStatus.DISABLED,
+      MonitoringSubscriptionStatus.EXPIRED,
+    ];
+    const nextPaymentDate = paystackDate(event.data?.next_payment_date);
+    await prismaClient.monitoringSubscription.updateMany({
+      where: {
+        provider: PaymentProvider.PAYSTACK,
+        providerSubscriptionId: subscriptionCode,
+        ...(status === "PAYMENT_FAILED"
+          ? {
+              status: {
+                in: [
+                  MonitoringSubscriptionStatus.ACTIVE,
+                  MonitoringSubscriptionStatus.PAYMENT_FAILED,
+                ],
+              },
+            }
+          : status === "NON_RENEWING"
+            ? {
+                status: {
+                  in: [
+                    MonitoringSubscriptionStatus.ACTIVE,
+                    MonitoringSubscriptionStatus.PAYMENT_FAILED,
+                    MonitoringSubscriptionStatus.NON_RENEWING,
+                  ],
+                },
+              }
+            : { status: { notIn: terminalStatuses } }),
+      },
+      data: {
+        status,
+        ...(status === "DISABLED" ? { disabledAt: new Date() } : {}),
+        ...(nextPaymentDate ? { currentPeriodEnd: nextPaymentDate } : {}),
+      },
+    });
+
+    const invoiceCode = event.data?.invoice_code;
+    if (status === "PAYMENT_FAILED" && invoiceCode) {
+      const amountInCents = Number(event.data?.amount ?? 0);
+      await recordFailedRenewal({
+        verificationRequestId: monitoringSubscription.verificationRequestId,
+        providerRef: invoiceCode,
+        amountInCents,
+        currency: String(event.data?.currency ?? "NGN").toUpperCase(),
+        provider: PaymentProvider.PAYSTACK,
+        providerPriceVersionId: monitoringSubscription.providerPriceVersionId ?? undefined,
+        pricingSnapshot: renewalSnapshot(monitoringSubscription, amountInCents),
+      });
+    } else if (status === "PAYMENT_FAILED") {
+      announcePaymentFailed(
+        await markRequestPaymentFailed(prismaClient, monitoringSubscription.verificationRequestId),
+        monitoringSubscription.verificationRequestId,
+      );
+    } else {
+      await completeRequestIfFinished(prismaClient, monitoringSubscription.verificationRequestId);
+      if (
+        !terminalStatuses.includes(previousStatus) &&
+        previousStatus !== MonitoringSubscriptionStatus.NON_RENEWING
+      ) {
+        announceSubscriptionEnded(monitoringSubscription.verificationRequestId);
+      }
+    }
+    return;
+  }
+
   const subscription = await prismaClient.paystackSubscription.findUnique({
     where: { subscriptionCode },
     select: { verificationRequestId: true, status: true },
@@ -406,9 +775,23 @@ const handleInvoice = async (event: PaystackEvent) => {
   const nextPaymentDate = subscription?.next_payment_date;
   if (!subscriptionCode || typeof nextPaymentDate !== "string") return;
 
+  const parsedNextPaymentDate = paystackDate(nextPaymentDate);
+  if (!parsedNextPaymentDate) {
+    logger.warn(
+      `Paystack invoice has an invalid next payment date subscription=${subscriptionCode}`,
+    );
+    return;
+  }
+  await prismaClient.monitoringSubscription.updateMany({
+    where: {
+      provider: PaymentProvider.PAYSTACK,
+      providerSubscriptionId: subscriptionCode,
+    },
+    data: { currentPeriodEnd: parsedNextPaymentDate },
+  });
   await prismaClient.paystackSubscription.updateMany({
     where: { subscriptionCode },
-    data: { nextPaymentDate: new Date(nextPaymentDate) },
+    data: { nextPaymentDate: parsedNextPaymentDate },
   });
 };
 

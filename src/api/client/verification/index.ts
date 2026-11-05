@@ -19,6 +19,12 @@ import { postVerificationRequestReportComment } from "./handlers/post-verificati
 import { getVerificationRequestReports } from "./handlers/get-verification-request-reports";
 import { initializeVerificationPaymentPaystack } from "./handlers/initialize-verification-payment-paystack";
 import { initializeVerificationPaymentStripe } from "./handlers/initialize-verification-payment-stripe";
+import { getVerificationPricingCatalog } from "./handlers/get-verification-pricing-catalog";
+import { patchVerificationRequestPricing } from "./handlers/patch-verification-request-pricing";
+import { postVerificationRequestQuote } from "./handlers/post-verification-request-quote";
+import { getVerificationRequestQuote } from "./handlers/get-verification-request-quote";
+import { acceptVerificationRequestQuote } from "./handlers/accept-verification-request-quote";
+import { getVerificationRequestCheckoutSummary } from "./handlers/get-verification-request-checkout-summary";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -250,13 +256,6 @@ const upload = multer({ storage: multer.memoryStorage() });
  *       required: [unviewedReportsCount]
  *       properties:
  *         unviewedReportsCount: { type: integer, minimum: 0, example: 2 }
- *     ClientVerificationAgentName:
- *       type: object
- *       description: The agent's name split on spaces; lastName is every word after the first (empty string if none).
- *       required: [firstName, lastName]
- *       properties:
- *         firstName: { type: string, example: Ada }
- *         lastName: { type: string, example: Okafor }
  *     ClientVerificationFinding:
  *       type: object
  *       description: >
@@ -268,6 +267,30 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         label: { type: string, example: Ownership }
  *         value: { type: string, example: Title matches the registered owner }
  *         status: { type: string, enum: [good, warning, bad], example: good }
+ *     ClientVerificationTieredFindings:
+ *       type: object
+ *       description: Tier-specific sections keyed by public report section.
+ *       additionalProperties:
+ *         type: object
+ *         additionalProperties: true
+ *       example:
+ *         physicalVisit: { outcome: VERIFIED, notes: The property was located and inspected. }
+ *     ClientVerificationReportTier:
+ *       type: object
+ *       nullable: true
+ *       required: [code, name]
+ *       properties:
+ *         code: { type: string, nullable: true, example: PREMIUM }
+ *         name: { type: string, nullable: true, example: Premium }
+ *     ClientVerificationSubscriptionPeriod:
+ *       type: object
+ *       nullable: true
+ *       required: [startsAt, endsAt, checksIncluded, checksCompleted]
+ *       properties:
+ *         startsAt: { type: string, format: date-time, nullable: true, example: "2026-11-04T12:20:00.000Z" }
+ *         endsAt: { type: string, format: date-time, nullable: true, example: "2026-12-04T12:20:00.000Z" }
+ *         checksIncluded: { type: integer, nullable: true, example: 2 }
+ *         checksCompleted: { type: integer, nullable: true, example: 2 }
  *     ClientVerificationNotificationPreferences:
  *       type: object
  *       required: [notifyOnInspectionStart, notifyOnReportReady]
@@ -276,7 +299,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         notifyOnReportReady: { type: boolean, example: false }
  *     ClientVerificationTracking:
  *       type: object
- *       required: [id, verificationType, address, progressPercent, timeline, agent, inspectionUploads, notificationPreferences]
+ *       required: [id, verificationType, address, progressPercent, timeline, agent, inspectionUploads, monitoring, notificationPreferences]
  *       properties:
  *         id: { type: string, example: cm1vreq0001 }
  *         verificationType:
@@ -294,6 +317,35 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           maximum: 100
  *           description: Share of COMPLETE checklist items on the current assignment (rounded); falls back to the assignment's stored progressPercent when it has no checklist, and 0 when there is no assignment.
  *           example: 60
+ *         monitoring:
+ *           type: object
+ *           nullable: true
+ *           description: Latest monitoring subscription and paid period, or null when the request has no monitoring subscription.
+ *           required: [status, plan, currentPeriod, cancelAtPeriodEnd]
+ *           properties:
+ *             status: { type: string, enum: [ACTIVE, NON_RENEWING, PAYMENT_FAILED, DISABLED, EXPIRED] }
+ *             plan: { type: string, nullable: true, example: MONTHLY }
+ *             cancelAtPeriodEnd: { type: boolean, example: false }
+ *             currentPeriod:
+ *               type: object
+ *               nullable: true
+ *               required: [startsAt, endsAt, checksIncluded, checksCompleted, reportStatus, siteVisits]
+ *               properties:
+ *                 startsAt: { type: string, format: date-time }
+ *                 endsAt: { type: string, format: date-time }
+ *                 checksIncluded: { type: integer, minimum: 0 }
+ *                 checksCompleted: { type: integer, minimum: 0 }
+ *                 reportStatus: { type: string, enum: [PENDING, IN_PROGRESS, COMPLETED] }
+ *                 siteVisits:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     required: [id, visitNumber, status, completedAt]
+ *                     properties:
+ *                       id: { type: string }
+ *                       visitNumber: { type: integer }
+ *                       status: { type: string, enum: [PENDING, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED] }
+ *                       completedAt: { type: string, format: date-time, nullable: true }
  *         timeline:
  *           type: object
  *           required: [requestSubmittedAt, agentAssignedAt, inspectionStartedAt, inspectionCompletedAt, reportReadyAt]
@@ -339,7 +391,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         notificationPreferences: { $ref: '#/components/schemas/ClientVerificationNotificationPreferences' }
  *     ClientVerificationReportSummary:
  *       type: object
- *       required: [property, inspectionDate, agent, location, reportType, insights, checklist, reportDocument, mediaPreview]
+ *       required: [property, inspectionDate, location, reportType, insights, findings, verificationTier, subscriptionPeriod, providerName, checklist, reportDocument, mediaPreview]
  *       properties:
  *         property:
  *           type: string
@@ -351,24 +403,27 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           nullable: true
  *           description: generatedAt of the latest report; null when there is no report yet.
  *           example: "2026-10-05T12:00:00.000Z"
- *         agent:
- *           type: object
- *           allOf:
- *             - $ref: '#/components/schemas/ClientVerificationAgentName'
- *           nullable: true
- *           description: The latest report's agent, else the current assignment's agent, else null.
  *         location:
  *           type: string
  *           description: details.propertyAddress, or "Address not provided".
  *           example: 12 Admiralty Way, Lekki Phase 1, Lagos
  *         reportType:
  *           type: string
- *           description: The selected plan's name, or "Standard Report".
+ *           description: The selected tier's name, legacy plan name, or "Standard Report".
  *           example: One-time verification
  *         insights:
  *           type: array
- *           description: The latest report's raw findings array (empty if none).
+ *           description: Legacy findings array, empty for tiered reports.
  *           items: { $ref: '#/components/schemas/ClientVerificationFinding' }
+ *         findings:
+ *           description: Legacy findings array or tier-specific section results.
+ *           oneOf:
+ *             - type: array
+ *               items: { $ref: '#/components/schemas/ClientVerificationFinding' }
+ *             - $ref: '#/components/schemas/ClientVerificationTieredFindings'
+ *         verificationTier: { $ref: '#/components/schemas/ClientVerificationReportTier' }
+ *         subscriptionPeriod: { $ref: '#/components/schemas/ClientVerificationSubscriptionPeriod' }
+ *         providerName: { type: string, enum: [Bonafide], example: Bonafide }
  *         checklist:
  *           type: array
  *           items: { $ref: '#/components/schemas/ClientVerificationReportChecklistItem' }
@@ -389,26 +444,38 @@ const upload = multer({ storage: multer.memoryStorage() });
  *       type: object
  *       required: [label, status]
  *       properties:
- *         label:
- *           type: string
- *           enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification]
+ *         label: { type: string, example: Physical/site visit }
  *         status:
  *           type: string
  *           nullable: true
  *           enum: [PENDING, COMPLETE]
  *           description: Null when older reports do not contain this checklist section.
+ *         sectionKey: { type: string, nullable: true, example: site_visit }
+ *         result:
+ *           type: object
+ *           nullable: true
+ *           additionalProperties: true
+ *         media:
+ *           type: array
+ *           items:
+ *             type: object
+ *             required: [url, fileName]
+ *             properties:
+ *               url: { type: string, format: uri }
+ *               fileName: { type: string, nullable: true }
  *     ClientVerificationReportDocument:
  *       type: object
- *       required: [id, url, fileName, fileType, fileSizeBytes]
+ *       required: [id, url, fileName, fileType, fileSizeBytes, contentType]
  *       properties:
  *         id: { type: string, example: cm9document0001 }
  *         url: { type: string, format: uri, example: "https://res.cloudinary.com/demo/raw/upload/report.pdf" }
  *         fileName: { type: string, example: verification-report.pdf }
  *         fileType: { type: string, example: application/pdf }
  *         fileSizeBytes: { type: integer, example: 245760 }
+ *         contentType: { type: string, example: application/pdf }
  *     ClientVerificationFullReport:
  *       type: object
- *       required: [id, reportId, generatedAt, reviewStatus, client, property, summary, ownershipFindings, findings, checklist, reportDocument, photos, agentNotes, agent, feedback]
+ *       required: [id, reportId, generatedAt, reviewStatus, client, property, summary, ownershipFindings, findings, verificationTier, subscriptionPeriod, providerName, checklist, reportDocument, photos, feedback]
  *       properties:
  *         id: { type: string, description: The verification request id., example: cm1vreq0001 }
  *         reportId: { type: string, description: The latest report's id., example: cm1vrep0001 }
@@ -444,11 +511,17 @@ const upload = multer({ storage: multer.memoryStorage() });
  *             "Verification completed." when findings is not an array.
  *           example: Title matches the registered owner
  *         findings:
- *           type: array
- *           items: { $ref: '#/components/schemas/ClientVerificationFinding' }
+ *           description: Legacy findings array or tier-specific section results.
+ *           oneOf:
+ *             - type: array
+ *               items: { $ref: '#/components/schemas/ClientVerificationFinding' }
+ *             - $ref: '#/components/schemas/ClientVerificationTieredFindings'
+ *         verificationTier: { $ref: '#/components/schemas/ClientVerificationReportTier' }
+ *         subscriptionPeriod: { $ref: '#/components/schemas/ClientVerificationSubscriptionPeriod' }
+ *         providerName: { type: string, enum: [Bonafide], example: Bonafide }
  *         checklist:
  *           type: array
- *           description: The five fixed verification sections and their completion status.
+ *           description: Tier-specific checklist results and evidence, or legacy checklist statuses.
  *           items: { $ref: '#/components/schemas/ClientVerificationReportChecklistItem' }
  *         reportDocument:
  *           allOf:
@@ -463,15 +536,6 @@ const upload = multer({ storage: multer.memoryStorage() });
  *             properties:
  *               url: { type: string, example: "https://res.cloudinary.com/demo/image/upload/front.jpg" }
  *               label: { type: string, example: Front elevation }
- *         agentNotes:
- *           type: string
- *           description: The report's additional notes (or the assignment's); empty string when there are none or no agent.
- *           example: Neighbours confirmed occupancy.
- *         agent:
- *           type: object
- *           allOf:
- *             - $ref: '#/components/schemas/ClientVerificationAgentName'
- *           nullable: true
  *         feedback:
  *           type: object
  *           nullable: true
@@ -487,12 +551,21 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         ratedAt: { type: string, format: date-time, example: "2026-10-08T14:02:11.000Z" }
  *     ClientVerificationReportHistoryItem:
  *       type: object
- *       required: [id, generatedAt, reviewStatus, viewed, checklist, reportDocument, agent, payment]
+ *       required: [id, generatedAt, reviewStatus, viewed, providerName, verificationTier, subscriptionPeriod, findings, checklist, reportDocument, payment]
  *       properties:
  *         id: { type: string, example: cm1vrep0001 }
  *         generatedAt: { type: string, format: date-time, nullable: true, example: "2026-10-05T12:00:00.000Z" }
  *         reviewStatus: { $ref: '#/components/schemas/ClientVerificationReportReviewStatus' }
  *         viewed: { type: boolean, description: True when the report's viewedAt is set., example: false }
+ *         providerName: { type: string, enum: [Bonafide], example: Bonafide }
+ *         verificationTier: { $ref: '#/components/schemas/ClientVerificationReportTier' }
+ *         subscriptionPeriod: { $ref: '#/components/schemas/ClientVerificationSubscriptionPeriod' }
+ *         findings:
+ *           description: Legacy findings array or tier-specific section results.
+ *           oneOf:
+ *             - type: array
+ *               items: { $ref: '#/components/schemas/ClientVerificationFinding' }
+ *             - $ref: '#/components/schemas/ClientVerificationTieredFindings'
  *         checklist:
  *           type: array
  *           items: { $ref: '#/components/schemas/ClientVerificationReportChecklistItem' }
@@ -500,7 +573,6 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           allOf:
  *             - $ref: '#/components/schemas/ClientVerificationReportDocument'
  *           nullable: true
- *         agent: { $ref: '#/components/schemas/ClientVerificationAgentName' }
  *         payment:
  *           type: object
  *           nullable: true
@@ -577,6 +649,16 @@ router.get("/services/verification/verification-types", getVerificationTypes);
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get("/verification-types/:slug/plans", getVerificationTypesPlan);
+router.get("/verification-pricing/catalogue", checkJwt, getVerificationPricingCatalog);
+router.patch("/verification-requests/:id/pricing", checkJwt, patchVerificationRequestPricing);
+router.post("/verification-requests/:id/quote", checkJwt, postVerificationRequestQuote);
+router.get("/verification-requests/:id/quote", checkJwt, getVerificationRequestQuote);
+router.get(
+  "/verification-requests/:id/checkout-summary",
+  checkJwt,
+  getVerificationRequestCheckoutSummary,
+);
+router.post("/verification-requests/:id/quote/accept", checkJwt, acceptVerificationRequestQuote);
 
 /**
  * @swagger

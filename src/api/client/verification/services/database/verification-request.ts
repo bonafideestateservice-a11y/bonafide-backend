@@ -7,6 +7,10 @@ export interface CreateVerificationRequestData {
   userId: string;
   verificationTypeId: string;
   verificationPlanId?: string | null;
+  verificationTierId?: string | null;
+  monitoringPlanId?: string | null;
+  recurringConsent?: boolean;
+  recurringConsentAt?: Date | null;
   status?: VerificationStatus;
   details: Prisma.InputJsonValue;
   additionalNote?: string | null;
@@ -16,6 +20,10 @@ export interface UpdateVerificationRequestData {
   userId?: string;
   verificationTypeId?: string;
   verificationPlanId?: string | null;
+  verificationTierId?: string | null;
+  monitoringPlanId?: string | null;
+  recurringConsent?: boolean;
+  recurringConsentAt?: Date | null;
   status?: VerificationStatus;
   details?: Prisma.InputJsonValue;
   additionalNote?: string | null;
@@ -252,6 +260,39 @@ export type VerificationRequestTracking = Prisma.VerificationRequestGetPayload<{
       orderBy: { generatedAt: "desc" };
       take: 1;
     };
+    monitoringSubscriptions: {
+      select: {
+        status: true;
+        interval: true;
+        monitoringPlan: { select: { code: true } };
+      };
+      orderBy: { createdAt: "desc" };
+      take: 1;
+    };
+    subscriptionPeriods: {
+      select: {
+        id: true;
+        paidTransactionId: true;
+        status: true;
+        periodStart: true;
+        periodEnd: true;
+        requiredSiteVisits: true;
+        completedSiteVisits: true;
+        requiredReports: true;
+        reportCount: true;
+        siteVisits: {
+          select: {
+            id: true;
+            visitNumber: true;
+            status: true;
+            completedAt: true;
+          };
+          orderBy: { visitNumber: "asc" };
+        };
+      };
+      orderBy: { periodStart: "desc" };
+      take: 1;
+    };
   };
 }>;
 
@@ -309,6 +350,39 @@ export const getVerificationRequestTrackingForUser = async (
           orderBy: { generatedAt: "desc" },
           take: 1,
         },
+        monitoringSubscriptions: {
+          select: {
+            status: true,
+            interval: true,
+            monitoringPlan: { select: { code: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        subscriptionPeriods: {
+          select: {
+            id: true,
+            paidTransactionId: true,
+            status: true,
+            periodStart: true,
+            periodEnd: true,
+            requiredSiteVisits: true,
+            completedSiteVisits: true,
+            requiredReports: true,
+            reportCount: true,
+            siteVisits: {
+              select: {
+                id: true,
+                visitNumber: true,
+                status: true,
+                completedAt: true,
+              },
+              orderBy: { visitNumber: "asc" },
+            },
+          },
+          orderBy: { periodStart: "desc" },
+          take: 1,
+        },
       },
     });
     logger.info(
@@ -328,13 +402,16 @@ export type VerificationRequestReportSummary = Prisma.VerificationRequestGetPayl
       select: {
         generatedAt: true;
         findings: true;
-        agent: { select: { name: true } };
+        tierNameSnapshot: true;
+        packageScopeSnapshot: true;
         checklistItems: {
           select: {
             label: true;
             status: true;
             sortOrder: true;
-            media: { select: { url: true }; take: 3 };
+            sectionKey: true;
+            result: true;
+            media: { select: { url: true; fileName: true }; take: 3 };
           };
           orderBy: { sortOrder: "asc" };
         };
@@ -355,19 +432,17 @@ export type VerificationRequestReportSummary = Prisma.VerificationRequestGetPayl
     };
     agentAssignment: {
       select: {
-        agent: {
-          select: {
-            name: true;
-          };
-        };
         checklistItems: {
           select: {
             label: true;
             status: true;
             sortOrder: true;
+            sectionKey: true;
+            result: true;
             media: {
               select: {
                 url: true;
+                fileName: true;
               };
               take: 3;
             };
@@ -399,13 +474,16 @@ export const getVerificationRequestReportSummaryForUser = async (
           select: {
             generatedAt: true,
             findings: true,
-            agent: { select: { name: true } },
+            tierNameSnapshot: true,
+            packageScopeSnapshot: true,
             checklistItems: {
               select: {
                 label: true,
                 status: true,
                 sortOrder: true,
-                media: { select: { url: true }, take: 3 },
+                sectionKey: true,
+                result: true,
+                media: { select: { url: true, fileName: true }, take: 3 },
               },
               orderBy: { sortOrder: "asc" },
             },
@@ -426,19 +504,17 @@ export const getVerificationRequestReportSummaryForUser = async (
         },
         agentAssignment: {
           select: {
-            agent: {
-              select: {
-                name: true,
-              },
-            },
             checklistItems: {
               select: {
                 label: true,
                 status: true,
                 sortOrder: true,
+                sectionKey: true,
+                result: true,
                 media: {
                   select: {
                     url: true,
+                    fileName: true,
                   },
                   take: 3,
                 },
@@ -473,17 +549,19 @@ export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload
         reviewStatus: true;
         summary: true;
         findings: true;
-        additionalNotes: true;
+        tierNameSnapshot: true;
+        packageScopeSnapshot: true;
         rating: true;
         clientComment: true;
         ratedAt: true;
-        agent: { select: { name: true } };
         checklistItems: {
           select: {
             label: true;
             status: true;
             sortOrder: true;
-            media: { select: { url: true } };
+            sectionKey: true;
+            result: true;
+            media: { select: { url: true; fileName: true } };
           };
           orderBy: { sortOrder: "asc" };
         };
@@ -504,20 +582,17 @@ export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload
     };
     agentAssignment: {
       select: {
-        additionalNotes: true;
-        agent: {
-          select: {
-            name: true;
-          };
-        };
         checklistItems: {
           select: {
             label: true;
             status: true;
             sortOrder: true;
+            sectionKey: true;
+            result: true;
             media: {
               select: {
                 url: true;
+                fileName: true;
               };
             };
           };
@@ -547,17 +622,19 @@ export const getVerificationRequestFullReportData = async (
             reviewStatus: true,
             summary: true,
             findings: true,
-            additionalNotes: true,
+            tierNameSnapshot: true,
+            packageScopeSnapshot: true,
             rating: true,
             clientComment: true,
             ratedAt: true,
-            agent: { select: { name: true } },
             checklistItems: {
               select: {
                 label: true,
                 status: true,
                 sortOrder: true,
-                media: { select: { url: true } },
+                sectionKey: true,
+                result: true,
+                media: { select: { url: true, fileName: true } },
               },
               orderBy: { sortOrder: "asc" },
             },
@@ -578,20 +655,17 @@ export const getVerificationRequestFullReportData = async (
         },
         agentAssignment: {
           select: {
-            additionalNotes: true,
-            agent: {
-              select: {
-                name: true,
-              },
-            },
             checklistItems: {
               select: {
                 label: true,
                 status: true,
                 sortOrder: true,
+                sectionKey: true,
+                result: true,
                 media: {
                   select: {
                     url: true,
+                    fileName: true,
                   },
                 },
               },
@@ -631,9 +705,20 @@ export type VerificationRequestReportHistoryItem = Prisma.VerificationReportGetP
     generatedAt: true;
     reviewStatus: true;
     viewedAt: true;
-    agent: { select: { name: true } };
+    findings: true;
+    tierNameSnapshot: true;
+    packageScopeSnapshot: true;
     transaction: { select: { paidAt: true; amountInCents: true; currency: true } };
-    checklistItems: { select: { sortOrder: true; status: true } };
+    checklistItems: {
+      select: {
+        sortOrder: true;
+        status: true;
+        label: true;
+        sectionKey: true;
+        result: true;
+        media: { select: { url: true; fileName: true } };
+      };
+    };
     media: {
       where: { documentType: "REPORT_DOCUMENT" };
       select: {
@@ -664,10 +749,19 @@ export const getVerificationRequestReportsForUser = async (
             generatedAt: true,
             reviewStatus: true,
             viewedAt: true,
-            agent: { select: { name: true } },
+            findings: true,
+            tierNameSnapshot: true,
+            packageScopeSnapshot: true,
             transaction: { select: { paidAt: true, amountInCents: true, currency: true } },
             checklistItems: {
-              select: { sortOrder: true, status: true },
+              select: {
+                sortOrder: true,
+                status: true,
+                label: true,
+                sectionKey: true,
+                result: true,
+                media: { select: { url: true, fileName: true } },
+              },
               orderBy: { sortOrder: "asc" },
             },
             media: {

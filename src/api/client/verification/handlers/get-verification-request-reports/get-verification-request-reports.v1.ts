@@ -3,12 +3,11 @@ import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptio
 import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationRequestReportsForUser } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
-import { toVerificationReportChecklist } from "../../../../services/verification-report-checklist";
-
-const getNames = (fullName: string) => {
-  const names = fullName.trim().split(/\s+/);
-  return { firstName: names[0] || "", lastName: names.slice(1).join(" ") };
-};
+import {
+  toClientReportChecklist,
+  toClientReportDocument,
+  toClientVerificationReportView,
+} from "../../../../services/client-verification-report";
 
 /** Report history for a verification request: one entry per reported period, newest first. */
 export const getVerificationRequestReports = async (
@@ -29,22 +28,28 @@ export const getVerificationRequestReports = async (
     res.status(HttpStatusCode.OK).json({
       status: "success",
       message: "Verification reports retrieved successfully",
-      data: reports.map((report) => ({
-        id: report.id,
-        generatedAt: report.generatedAt?.toISOString() ?? null,
-        reviewStatus: report.reviewStatus,
-        viewed: report.viewedAt !== null,
-        checklist: toVerificationReportChecklist(report.checklistItems),
-        reportDocument: report.media[0] ?? null,
-        agent: getNames(report.agent.name),
-        payment: report.transaction
-          ? {
-              paidAt: report.transaction.paidAt?.toISOString() ?? null,
-              amountInCents: report.transaction.amountInCents,
-              currency: report.transaction.currency,
-            }
-          : null,
-      })),
+      data: reports.map((report) => {
+        const clientReport = toClientVerificationReportView(report);
+        return {
+          id: report.id,
+          generatedAt: report.generatedAt?.toISOString() ?? null,
+          reviewStatus: report.reviewStatus,
+          viewed: report.viewedAt !== null,
+          providerName: "Bonafide",
+          verificationTier: clientReport.verificationTier,
+          subscriptionPeriod: clientReport.subscriptionPeriod,
+          findings: clientReport.findings ?? [],
+          checklist: toClientReportChecklist(report.checklistItems),
+          reportDocument: toClientReportDocument(report.media[0]),
+          payment: report.transaction
+            ? {
+                paidAt: report.transaction.paidAt?.toISOString() ?? null,
+                amountInCents: report.transaction.amountInCents,
+                currency: report.transaction.currency,
+              }
+            : null,
+        };
+      }),
     });
   } catch (error) {
     logger.error(`Error getting verification request reports: ${error}`);

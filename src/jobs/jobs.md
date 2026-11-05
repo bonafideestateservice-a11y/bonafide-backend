@@ -63,6 +63,8 @@ Client fields (`clientFields`): `clientName`, `clientEmail`, `clientPhone`.
 | `AGENT_ASSIGNED_AGENT`               | Assigned agent | requestFields + clientFields + `assignmentId`                                                                                    |
 | `INSPECTION_STARTED`                 | Client         | requestFields + `agentName`                                                                                                      |
 | `INSPECTION_STARTED_ADMIN`           | Admins         | requestFields + clientFields + `assignmentId`, `agentName`                                                                       |
+| `PREMIUM_QUOTE_ISSUED`               | Client         | `companyName`, `quoteId`, `verificationRequestId`, USD/NGN amounts, `expiresAt`, `reviewUrl`                                     |
+| `PREMIUM_QUOTE_ACCEPTED`             | Client         | `companyName`, `quoteId`, `verificationRequestId`, amount/currency, `checkoutUrl`                                                |
 
 In every template, `firstName` is the recipient's name.
 

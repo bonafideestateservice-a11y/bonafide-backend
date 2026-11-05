@@ -3,7 +3,14 @@ import path from "path";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
-import { ROLE, VERIFICATION_FREQUENCY } from "@prisma/client";
+import {
+  MonitoringInterval,
+  NgnRoundingRule,
+  Prisma,
+  ROLE,
+  VERIFICATION_FREQUENCY,
+  VerificationTierCode,
+} from "@prisma/client";
 import { prismaClient } from "../src/utils/prisma";
 import { hashPassword } from "../src/utils/password";
 import { logger } from "../src/utils/logger";
@@ -113,7 +120,91 @@ const verificationTypes = [
   },
 ] as const;
 
+const verificationTiers = [
+  {
+    code: VerificationTierCode.BASIC,
+    name: "Basic",
+    description:
+      "One site visit, brief local enquiries, and photos or video where needed, with one short report.",
+    priceUsdCents: 2500,
+    quoteRequired: false,
+    minQuoteUsdCents: null,
+    maxQuoteUsdCents: null,
+  },
+  {
+    code: VerificationTierCode.STANDARD,
+    name: "Standard",
+    description:
+      "Everything in Basic, plus a land registry check, court-records search, local intelligence gathering, and one detailed report.",
+    priceUsdCents: 6000,
+    quoteRequired: false,
+    minQuoteUsdCents: null,
+    maxQuoteUsdCents: null,
+  },
+  {
+    code: VerificationTierCode.PREMIUM,
+    name: "Premium",
+    description:
+      "Everything in Standard, plus a property valuation and feasibility report for the property's intended use.",
+    priceUsdCents: null,
+    quoteRequired: true,
+    minQuoteUsdCents: 10000,
+    maxQuoteUsdCents: 20000,
+  },
+] as const;
+
+const monitoringPlans = [
+  {
+    code: MonitoringInterval.WEEKLY,
+    name: "Weekly Monitoring",
+    description: "One site check and one report each week.",
+    priceUsdCents: 3500,
+    intervalCount: 1,
+    checksPerPeriod: 1,
+    reportsPerPeriod: 1,
+  },
+  {
+    code: MonitoringInterval.MONTHLY,
+    name: "Monthly Monitoring",
+    description: "Two site checks and one report each month.",
+    priceUsdCents: 6000,
+    intervalCount: 1,
+    checksPerPeriod: 2,
+    reportsPerPeriod: 1,
+  },
+  {
+    code: MonitoringInterval.QUARTERLY,
+    name: "Quarterly Monitoring",
+    description: "Three site checks and one report every three months.",
+    priceUsdCents: 20000,
+    intervalCount: 3,
+    checksPerPeriod: 3,
+    reportsPerPeriod: 1,
+  },
+] as const;
+
+const readInitialUsdToNgnRate = (value: string | undefined) => {
+  if (!value || !/^\d{1,10}(\.\d{1,8})?$/.test(value)) {
+    throw new Error(
+      "INITIAL_USD_TO_NGN_RATE must be set to a positive decimal with at most 10 integer and 8 fractional digits",
+    );
+  }
+  const rate = new Prisma.Decimal(value);
+  if (!rate.isFinite() || !rate.greaterThan(0)) {
+    throw new Error("INITIAL_USD_TO_NGN_RATE must be greater than zero");
+  }
+  return rate;
+};
+
 async function seed() {
+  const [activePricingSettings, latestPricingSettings] = await Promise.all([
+    prismaClient.pricingSettings.findFirst({ where: { active: true } }),
+    prismaClient.pricingSettings.findFirst({ orderBy: { version: "desc" } }),
+  ]);
+  const initialRate = activePricingSettings
+    ? undefined
+    : readInitialUsdToNgnRate(process.env.INITIAL_USD_TO_NGN_RATE);
+
   const hashedPassword = await hashPassword(ADMIN_PASSWORD);
 
   const admin = await prismaClient.user.upsert({
@@ -177,8 +268,6 @@ async function seed() {
         update: {
           name: plan.name,
           description: plan.description,
-          priceUsdCents: plan.priceUsdCents,
-          priceNgnKobo: plan.priceNgnKobo,
         },
         create: {
           verificationTypeId: verificationType.id,
@@ -202,6 +291,50 @@ async function seed() {
         sortOrder: index,
       })),
     });
+  }
+
+  for (const tier of verificationTiers) {
+    await prismaClient.verificationTier.upsert({
+      where: { code: tier.code },
+      update: {
+        name: tier.name,
+        description: tier.description,
+      },
+      create: tier,
+    });
+  }
+
+  for (const plan of monitoringPlans) {
+    await prismaClient.monitoringPlan.upsert({
+      where: { code: plan.code },
+      update: {
+        name: plan.name,
+        description: plan.description,
+      },
+      create: plan,
+    });
+  }
+
+  if (!activePricingSettings && initialRate) {
+    await prismaClient.pricingSettings.create({
+      data: {
+        version: (latestPricingSettings?.version ?? 0) + 1,
+        usdToNgnRate: initialRate,
+        roundingRule: NgnRoundingRule.NEAREST_KOBO,
+        active: true,
+        updatedById: admin.id,
+      },
+    });
+    logger.info("Initial USD to NGN pricing settings seeded from environment");
+  } else {
+    if (process.env.INITIAL_USD_TO_NGN_RATE && activePricingSettings) {
+      logger.warn(
+        `Ignoring INITIAL_USD_TO_NGN_RATE because an active pricing configuration already exists; admin-managed pricing remains unchanged version=${activePricingSettings.version}`,
+      );
+    }
+    logger.info(
+      `Existing active USD to NGN rate preserved version=${activePricingSettings?.version}`,
+    );
   }
 
   logger.info("Verification services, types, and plans seeded successfully");

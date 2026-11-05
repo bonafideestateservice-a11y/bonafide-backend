@@ -5,6 +5,7 @@ const prismaMock = {
   webhookEvent: { findUnique: jest.fn(), upsert: jest.fn(), update: jest.fn() },
   transaction: { findUnique: jest.fn(), findFirst: jest.fn(), upsert: jest.fn() },
   stripeSubscription: { findUnique: jest.fn(), update: jest.fn(), upsert: jest.fn() },
+  monitoringSubscription: { findUnique: jest.fn(), updateMany: jest.fn() },
   $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
 };
 const lifecycle = {
@@ -15,6 +16,8 @@ const lifecycle = {
   announceSubscriptionEnded: jest.fn(),
   recordFailedRenewal: jest.fn(),
 };
+const mockActivateMonitoring = jest.fn();
+const mockCreateRenewalSnapshot = jest.fn(() => ({ version: 1 }));
 
 jest.mock("../../../../libs/stripe", () => ({
   getStripeClient: () => ({
@@ -24,6 +27,10 @@ jest.mock("../../../../libs/stripe", () => ({
 }));
 jest.mock("../../../../utils/prisma", () => ({ prismaClient: prismaMock }));
 jest.mock("../../../../api/services/database/verification-lifecycle", () => lifecycle);
+jest.mock("../../../../api/services/database/pricing", () => ({
+  activateMonitoringForPaidTransaction: mockActivateMonitoring,
+  createMonitoringRenewalSnapshot: mockCreateRenewalSnapshot,
+}));
 jest.mock("../../../../events", () => ({
   appEvents: { emit: jest.fn() },
   AppEventTypes: { PAYMENT_RECEIVED: "PAYMENT_RECEIVED" },
@@ -72,6 +79,8 @@ describe("stripeWebhook (unit)", () => {
     jest.clearAllMocks();
     prismaMock.webhookEvent.findUnique.mockResolvedValue(null);
     prismaMock.stripeSubscription.findUnique.mockResolvedValue(storedSubscription);
+    prismaMock.monitoringSubscription.findUnique.mockResolvedValue(null);
+    tx.transaction.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it("rejects a request without a signature", async () => {
@@ -191,6 +200,84 @@ describe("stripeWebhook (unit)", () => {
       currency: "usd",
     });
     expect(prismaMock.stripeSubscription.update).not.toHaveBeenCalled();
+  });
+
+  it("creates a monitoring period from a paid Stripe renewal invoice", async () => {
+    prismaMock.monitoringSubscription.findUnique.mockResolvedValue({
+      id: "monitoring-sub-1",
+      verificationRequestId: "vr-1",
+      providerPriceVersionId: "price-v1",
+      customerCode: "cus_1",
+      emailToken: null,
+      monitoringPlanId: "monitor-monthly",
+      interval: "MONTHLY",
+      intervalCount: 1,
+      planVersion: 1,
+      priceUsdCents: 6000,
+      checksPerPeriod: 2,
+      reportsPerPeriod: 1,
+      consentAt: new Date("2026-10-01T00:00:00Z"),
+    });
+    prismaMock.transaction.findUnique.mockResolvedValue(null);
+    prismaMock.transaction.upsert.mockResolvedValue({
+      id: "renewal-1",
+      verificationRequestId: "vr-1",
+    });
+
+    await run("invoice.paid", {
+      id: "in_monitoring",
+      subscription: "sub_monitoring",
+      billing_reason: "subscription_cycle",
+      amount_paid: 6000,
+      currency: "usd",
+      created: 1,
+      lines: { data: [{ period: { start: 100, end: 200 } }] },
+    });
+
+    expect(prismaMock.transaction.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { providerRef: "in_monitoring" },
+        create: expect.objectContaining({
+          verificationRequestId: "vr-1",
+          purpose: "RENEWAL",
+          providerPriceVersionId: "price-v1",
+          status: "SUCCESS",
+        }),
+      }),
+    );
+    expect(mockActivateMonitoring).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transactionId: "renewal-1",
+        providerSubscriptionId: "sub_monitoring",
+        periodStart: new Date(100_000),
+        periodEnd: new Date(200_000),
+      }),
+    );
+  });
+
+  it("retries subscription updates that arrive before the initial payment settles", async () => {
+    prismaMock.transaction.findUnique.mockResolvedValue({
+      id: "txn-1",
+      status: "PENDING",
+      provider: "STRIPE",
+      pricingSnapshot: { monitoring: { planId: "monitor-monthly" } },
+      verificationRequestId: "vr-1",
+      verificationRequest: { userId: "user-1" },
+    });
+    const metadata = {
+      userId: "user-1",
+      verificationRequestId: "vr-1",
+      transactionId: "txn-1",
+      description: "Verification + monitoring",
+    };
+
+    const res = await run("customer.subscription.updated", {
+      ...subscription("active"),
+      metadata,
+    });
+
+    expect(res.sendStatus).toHaveBeenCalledWith(500);
+    expect(mockActivateMonitoring).not.toHaveBeenCalled();
   });
 
   describe("customer.subscription.updated", () => {

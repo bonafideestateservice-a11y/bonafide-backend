@@ -3,6 +3,7 @@ import {
   DocumentType,
   Prisma,
   ReportReviewStatus,
+  VerificationTierCode,
   VerificationStatus,
 } from "@prisma/client";
 import { appEvents, AppEventTypes } from "../../../../../events";
@@ -12,6 +13,11 @@ import {
   toVerificationReportChecklist,
   verificationReportChecklistLabels,
 } from "../../../../services/verification-report-checklist";
+import {
+  getMissingVerificationReportFields,
+  getVerificationReportSections,
+  isVerificationReportSectionComplete,
+} from "../../../../services/verification-report-sections";
 import {
   isRecurringRequest,
   nextStatusAfterRecurringReport,
@@ -192,6 +198,16 @@ export type SubmitAgentReportResult =
       remainingItems: string[];
     }
   | {
+      kind: "INCOMPLETE_REPORT_DATA";
+      progressPercent: number;
+      remainingFields: string[];
+    }
+  | {
+      kind: "INCOMPLETE_SITE_VISITS";
+      progressPercent: number;
+      remainingSiteVisits: number;
+    }
+  | {
       kind: "SUBMITTED";
       id: string;
       reviewStatus: ReportReviewStatus;
@@ -228,73 +244,112 @@ export const submitAgentAssignmentReport = async (
   try {
     let uploadedReport: { reportId: string; verificationRequestId: string } | undefined;
     const result = await prismaClient.$transaction(
+      
       async (transaction) => {
-        const assignment = await transaction.agentAssignment.findFirst({
-          where: { id: assignmentId, agentId },
-          select: {
-            id: true,
-            verificationRequestId: true,
-            transactionId: true,
-            additionalNotes: true,
-            checklistItems: { select: { label: true, status: true } },
-          },
-        });
+          const assignment = await transaction.agentAssignment.findFirst({
+            where: { id: assignmentId, agentId },
+            select: {
+              id: true,
+              verificationRequestId: true,
+              transactionId: true,
+              additionalNotes: true,
+            transaction: {
+              select: {
+                subscriptionPeriod: {
+                  select: {
+                    id: true,
+                    periodStart: true,
+                    periodEnd: true,
+                    requiredSiteVisits: true,
+                    completedSiteVisits: true,
+                  },
+                },
+              },
+            },
+              checklistItems: {
+              select: {
+                label: true,
+                sectionKey: true,
+                result: true,
+                status: true,
+                media: {
+                  select: {
+                    url: true,
+                    fileName: true,
+                    fileType: true,
+                    fileSizeBytes: true,
+                  },
+                  orderBy: { createdAt: "asc" },
+                },
+              },
+            },
+            verificationRequest: {
+              select: {
+                verificationTierId: true,
+                verificationTier: { select: { id: true, name: true, code: true } },
+                monitoringPlanId: true,
+                monitoringPlan: { select: { id: true, name: true, code: true } },
+                recurringConsent: true,
+              },
+            },
+            },
+          });
 
-        if (!assignment) return null;
+      if (!assignment) return null;
 
-        const totalItems = assignment.checklistItems.length;
-        const completedItems = assignment.checklistItems.filter(
-          (item) => item.status === "COMPLETE",
-        ).length;
-        const progressPercent = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
-        const remainingItems = totalItems
-          ? assignment.checklistItems
-              .filter((item) => item.status !== "COMPLETE")
-              .map((item) => item.label)
-          : [...verificationReportChecklistLabels];
+      const totalItems = assignment.checklistItems.length;
+      const completedItems = assignment.checklistItems.filter(
+        (item) => item.status === "COMPLETE",
+      ).length;
+      const progressPercent = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
+      const remainingItems = totalItems
+        ? assignment.checklistItems
+            .filter((item) => item.status !== "COMPLETE")
+            .map((item) => item.label)
+        : [...verificationReportChecklistLabels];
 
         if (remainingItems.length > 0) {
           return { kind: "INCOMPLETE_CHECKLIST" as const, progressPercent, remainingItems };
         }
 
-        const { verificationRequestId } = assignment;
-        const reportSelect = { id: true, reviewStatus: true, generatedAt: true } as const;
-        const existingReport = assignment.transactionId
-          ? await transaction.verificationReport.findUnique({
-              where: { transactionId: assignment.transactionId },
-              select: reportSelect,
-            })
-          : await transaction.verificationReport.findFirst({
-              where: { verificationRequestId, transactionId: null },
-              select: reportSelect,
-            });
-
-        const generatedAt = new Date();
-        const report =
-          existingReport ??
-          (await transaction.verificationReport.create({
-            data: {
-              verificationRequest: { connect: { id: verificationRequestId } },
-              agent: { connect: { id: agentId } },
-              ...(assignment.transactionId
-                ? { transaction: { connect: { id: assignment.transactionId } } }
-                : {}),
-              additionalNotes: assignment.additionalNotes,
-              reportUrl: reportDocument.url,
-              reviewStatus: ReportReviewStatus.APPROVED,
-              generatedAt,
-            },
+      const { verificationRequestId } = assignment;
+      const reportSelect = { id: true, reviewStatus: true, generatedAt: true } as const;
+      const existingReport = assignment.transactionId
+        ? await transaction.verificationReport.findUnique({
+            where: { transactionId: assignment.transactionId },
             select: reportSelect,
-          }));
-
-        if (!existingReport) {
-          uploadedReport = { reportId: report.id, verificationRequestId };
-        } else {
-          await transaction.verificationReport.update({
-            where: { id: report.id },
-            data: { reportUrl: reportDocument.url, reviewStatus: ReportReviewStatus.APPROVED },
+          })
+        : await transaction.verificationReport.findFirst({
+            where: { verificationRequestId, transactionId: null },
+            select: reportSelect,
           });
-        }
+
+      const generatedAt = new Date();
+      const report =
+        existingReport ??
+        (await transaction.verificationReport.create({
+          data: {
+            verificationRequest: { connect: { id: verificationRequestId } },
+            agent: { connect: { id: agentId } },
+            ...(assignment.transactionId
+              ? { transaction: { connect: { id: assignment.transactionId } } }
+              : {}),
+            additionalNotes: assignment.additionalNotes,
+            reportUrl: reportDocument.url,
+            reviewStatus: ReportReviewStatus.PENDING,
+            generatedAt,
+          },
+          select: reportSelect,
+        }));
+
+      if (!existingReport) {
+        uploadedReport = { reportId: report.id, verificationRequestId };
+      } else {
+        await transaction.verificationReport.update({
+          where: { id: report.id },
+          data: { reportUrl: reportDocument.url },
+        });
+      }
 
         await transaction.document.deleteMany({
           where: {
@@ -345,19 +400,14 @@ export const submitAgentAssignmentReport = async (
           });
         }
 
-        return {
-          kind: "SUBMITTED" as const,
-          id: report.id,
-          reviewStatus: report.reviewStatus,
-          generatedAt: report.generatedAt ?? generatedAt,
-          reportDocument: savedReportDocument,
-        };
-      },
-      {
-        maxWait: 5000,
-        timeout: 20000,
-      },
-    );
+      return {
+        kind: "SUBMITTED" as const,
+        id: report.id,
+        reviewStatus: report.reviewStatus,
+        generatedAt: report.generatedAt ?? generatedAt,
+        reportDocument: savedReportDocument,
+      };
+    });
 
     if (uploadedReport) {
       appEvents.emit(AppEventTypes.REPORT_UPLOADED, {
@@ -382,7 +432,15 @@ export type AgentAssignmentReport = {
   };
   address: string;
   photos: { url: string; label: string }[];
-  checklist: ReturnType<typeof toVerificationReportChecklist>;
+  checklist: (
+    | ReturnType<typeof toVerificationReportChecklist>[number]
+    | {
+        label: string;
+        status: "PENDING" | "COMPLETE" | null;
+        sectionKey: string;
+        result: Prisma.JsonValue;
+      }
+  )[];
   additionalNotes: string;
   reportUrl: string | null;
   reportDocument: {
@@ -397,8 +455,11 @@ export type AgentAssignmentReport = {
 type ReportViewSource = {
   details: Prisma.JsonValue;
   user: { fullName: string; phone: string | null; email: string };
+  tierCode: VerificationTierCode | null;
   checklistItems: {
     label: string;
+    sectionKey: string | null;
+    result: Prisma.JsonValue;
     status: "PENDING" | "COMPLETE";
     sortOrder: number;
     media: { url: string }[];
@@ -432,7 +493,27 @@ const toReportView = (source: ReportViewSource): AgentAssignmentReport => {
     photos: source.checklistItems.flatMap((item) =>
       item.media.map((media) => ({ url: media.url, label: item.label })),
     ),
-    checklist: toVerificationReportChecklist(source.checklistItems),
+    checklist: source.tierCode
+      ? source.checklistItems.length > 0
+        ? source.checklistItems.flatMap((item) =>
+            item.sectionKey
+              ? [
+                  {
+                    label: item.label,
+                    status: item.status,
+                    sectionKey: item.sectionKey,
+                    result: item.result,
+                  },
+                ]
+              : [],
+          )
+        : (getVerificationReportSections(source.tierCode) ?? []).map((section) => ({
+            label: section.label,
+            status: null,
+            sectionKey: section.key,
+            result: null,
+          }))
+      : toVerificationReportChecklist(source.checklistItems),
     additionalNotes: source.additionalNotes ?? "",
     reportUrl: source.reportUrl ?? source.reportDocument?.url ?? null,
     reportDocument: source.reportDocument,
@@ -440,7 +521,14 @@ const toReportView = (source: ReportViewSource): AgentAssignmentReport => {
 };
 
 const reportChecklistSelect = {
-  select: { label: true, status: true, sortOrder: true, media: { select: { url: true } } },
+  select: {
+    label: true,
+    sectionKey: true,
+    result: true,
+    status: true,
+    sortOrder: true,
+    media: { select: { url: true } },
+  },
   orderBy: { sortOrder: "asc" },
 } satisfies Prisma.VerificationChecklistItemFindManyArgs;
 
@@ -476,6 +564,7 @@ export const getAgentAssignmentReport = async (
         verificationRequest: {
           select: {
             details: true,
+            verificationTier: { select: { code: true } },
             user: { select: { fullName: true, phone: true, email: true } },
             reports: {
               select: {
@@ -506,6 +595,7 @@ export const getAgentAssignmentReport = async (
     return toReportView({
       details: assignment.verificationRequest.details,
       user: assignment.verificationRequest.user,
+      tierCode: assignment.verificationRequest.verificationTier?.code ?? null,
       checklistItems: assignment.checklistItems,
       additionalNotes: assignment.additionalNotes,
       reportUrl:
@@ -549,6 +639,7 @@ export const getAgentReportById = async (
         reviewStatus: true,
         reportUrl: true,
         additionalNotes: true,
+        verificationTier: { select: { code: true } },
         checklistItems: reportChecklistSelect,
         media: {
           where: { documentType: DocumentType.REPORT_DOCUMENT },
@@ -580,6 +671,7 @@ export const getAgentReportById = async (
       ...toReportView({
         details: report.verificationRequest.details,
         user: report.verificationRequest.user,
+        tierCode: report.verificationTier?.code ?? null,
         checklistItems: report.checklistItems,
         additionalNotes: report.additionalNotes,
         reportUrl: report.reportUrl,

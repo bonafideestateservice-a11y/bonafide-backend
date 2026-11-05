@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
 import { getVerificationRequestTracking } from "../../../../../api/client/verification/handlers/get-verification-request-tracking";
 import * as databaseService from "../../../../../api/client/verification/services/database/verification-request";
 import { ApiError, HttpStatusCode, NotFoundError } from "../../../../../exceptions";
@@ -14,7 +14,7 @@ describe("GET /verification-requests/:id/tracking - Unit", () => {
   beforeEach(() => {
     req = {
       params: { id: "req-123" },
-      user: { id: "user-123" } as any,
+      user: { id: "user-123" } as CustomRequest["user"],
     };
     res = {
       status: jest.fn().mockReturnThis(),
@@ -59,18 +59,57 @@ describe("GET /verification-requests/:id/tracking - Unit", () => {
         completedAt: null,
         progressPercent: 10,
         checklistItems: [
-          { status: "COMPLETE", media: [{ url: "http://example.com/photo1.jpg", fileName: "photo1.jpg" }] },
-          { status: "PENDING", media: [] }
+          {
+            status: "COMPLETE",
+            media: [{ url: "http://example.com/photo1.jpg", fileName: "photo1.jpg" }],
+          },
+          { status: "PENDING", media: [] },
         ],
         agent: {
           name: "John Doe",
-          user: { profilePhoto: "http://example.com/john.jpg" }
-        }
+          user: { profilePhoto: "http://example.com/john.jpg" },
+        },
       },
-      reports: []
+      reports: [],
+      monitoringSubscriptions: [
+        {
+          status: "ACTIVE",
+          interval: "MONTHLY",
+          monitoringPlan: { code: "MONTHLY" },
+        },
+      ],
+      subscriptionPeriods: [
+        {
+          id: "period-1",
+          paidTransactionId: "transaction-1",
+          status: "IN_PROGRESS",
+          periodStart: new Date("2023-12-01T00:00:00Z"),
+          periodEnd: new Date("2024-01-01T00:00:00Z"),
+          requiredSiteVisits: 2,
+          completedSiteVisits: 1,
+          requiredReports: 1,
+          reportCount: 0,
+          siteVisits: [
+            {
+              id: "visit-1",
+              visitNumber: 1,
+              status: "COMPLETED",
+              completedAt: new Date("2023-12-05T11:00:00Z"),
+            },
+            {
+              id: "visit-2",
+              visitNumber: 2,
+              status: "PENDING",
+              completedAt: null,
+            },
+          ],
+        },
+      ],
     };
 
-    (databaseService.getVerificationRequestTrackingForUser as jest.Mock).mockResolvedValue(mockTracking);
+    (databaseService.getVerificationRequestTrackingForUser as jest.Mock).mockResolvedValue(
+      mockTracking,
+    );
 
     await getVerificationRequestTracking(req as Request, res as Response, next);
 
@@ -83,6 +122,32 @@ describe("GET /verification-requests/:id/tracking - Unit", () => {
         verificationType: { name: "Property Verification" },
         address: "123 Main St",
         progressPercent: 50, // 1/2 complete
+        monitoring: {
+          status: "ACTIVE",
+          plan: "MONTHLY",
+          currentPeriod: {
+            startsAt: "2023-12-01T00:00:00.000Z",
+            endsAt: "2024-01-01T00:00:00.000Z",
+            checksIncluded: 2,
+            checksCompleted: 1,
+            reportStatus: "PENDING",
+            siteVisits: [
+              {
+                id: "visit-1",
+                visitNumber: 1,
+                status: "COMPLETED",
+                completedAt: "2023-12-05T11:00:00.000Z",
+              },
+              {
+                id: "visit-2",
+                visitNumber: 2,
+                status: "PENDING",
+                completedAt: null,
+              },
+            ],
+          },
+          cancelAtPeriodEnd: false,
+        },
         timeline: {
           requestSubmittedAt: "2023-12-14T15:39:00.000Z",
           agentAssignedAt: "2023-12-15T09:12:00.000Z",
@@ -94,16 +159,14 @@ describe("GET /verification-requests/:id/tracking - Unit", () => {
           firstName: "John",
           lastName: "Doe",
           isVerified: true,
-          photoUrl: "http://example.com/john.jpg"
+          photoUrl: "http://example.com/john.jpg",
         },
-        inspectionUploads: [
-          { url: "http://example.com/photo1.jpg", label: "photo1.jpg" }
-        ],
+        inspectionUploads: [{ url: "http://example.com/photo1.jpg", label: "photo1.jpg" }],
         notificationPreferences: {
           notifyOnInspectionStart: true,
-          notifyOnReportReady: true
-        }
-      })
+          notifyOnReportReady: true,
+        },
+      }),
     });
   });
 

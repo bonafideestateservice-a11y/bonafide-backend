@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { PaymentProvider, PaymentStatus, Prisma } from "@prisma/client";
+import { MonitoringSubscription, PaymentProvider, PaymentStatus, Prisma } from "@prisma/client";
 import { Request, Response } from "express";
 import { getStripeClient } from "../../libs/stripe";
 import {
@@ -17,6 +17,10 @@ import {
   markRequestPaid,
   markRequestPaymentFailed,
 } from "../services/database/verification-lifecycle";
+import {
+  activateMonitoringForPaidTransaction,
+  createMonitoringRenewalSnapshot,
+} from "../services/database/pricing";
 
 type RequestWithRawBody = Request & { rawBody?: Buffer };
 
@@ -70,8 +74,43 @@ const getSubscriptionDetails = (subscription: Stripe.Subscription) => {
   return {
     priceId: item?.price.id,
     currentPeriodEnd: toDate(item?.current_period_end),
+    currentPeriodStart: toDate(item?.current_period_start),
     lastRenewalDate: toDate(item?.current_period_start),
   };
+};
+
+const renewalSnapshot = (
+  subscription: MonitoringSubscription,
+  amountMinor: number,
+  currency: string,
+) => {
+  if (
+    !subscription.monitoringPlanId ||
+    !subscription.interval ||
+    !subscription.planVersion ||
+    !subscription.intervalCount ||
+    !subscription.priceUsdCents ||
+    !subscription.checksPerPeriod ||
+    !subscription.reportsPerPeriod ||
+    !subscription.providerPriceVersionId ||
+    !subscription.consentAt
+  ) {
+    throw new Error(`Stripe monitoring terms are incomplete subscriptionId=${subscription.id}`);
+  }
+  return createMonitoringRenewalSnapshot({
+    provider: PaymentProvider.STRIPE,
+    currency,
+    planId: subscription.monitoringPlanId,
+    planCode: subscription.interval,
+    planVersion: subscription.planVersion,
+    intervalCount: subscription.intervalCount,
+    amountUsdCents: subscription.priceUsdCents,
+    amountMinor,
+    checksPerPeriod: subscription.checksPerPeriod,
+    reportsPerPeriod: subscription.reportsPerPeriod,
+    providerPriceVersionId: subscription.providerPriceVersionId,
+    consentAt: subscription.consentAt,
+  });
 };
 
 type PaymentTransaction = Prisma.TransactionGetPayload<{
@@ -113,8 +152,8 @@ const markTransactionSuccessful = async (
     return null;
   }
 
-  await prismaClient.$transaction(async (tx) => {
-    await tx.transaction.updateMany({
+  const newlyPaid = await prismaClient.$transaction(async (tx) => {
+    const updated = await tx.transaction.updateMany({
       where: { id: transaction.id, status: { not: PaymentStatus.SUCCESS } },
       data: {
         status: PaymentStatus.SUCCESS,
@@ -124,6 +163,7 @@ const markTransactionSuccessful = async (
       },
     });
     await markRequestPaid(tx, transaction.verificationRequestId);
+    return updated.count > 0;
   });
 
   const paidTransaction = await prismaClient.transaction.findUnique({
@@ -138,7 +178,7 @@ const markTransactionSuccessful = async (
     },
   });
 
-  if (paidTransaction) emitPaymentReceived(paidTransaction);
+  if (paidTransaction && newlyPaid) emitPaymentReceived(paidTransaction);
 
   return paidTransaction;
 };
@@ -151,7 +191,11 @@ const upsertSubscription = async (
     where: { id: metadata.transactionId },
     include: { verificationRequest: true },
   });
-  if (!transaction || transaction.verificationRequest.userId !== metadata.userId) {
+  if (
+    !transaction ||
+    transaction.verificationRequest.userId !== metadata.userId ||
+    transaction.verificationRequestId !== metadata.verificationRequestId
+  ) {
     logger.warn(`Stripe subscription transaction not found subscriptionId=${subscription.id}`);
     return;
   }
@@ -160,11 +204,71 @@ const upsertSubscription = async (
   if (!details.priceId) {
     throw new Error(`Stripe subscription has no price subscriptionId=${subscription.id}`);
   }
+  const active = isActiveSubscription(subscription.status);
+  if (transaction.provider === PaymentProvider.STRIPE && transaction.pricingSnapshot) {
+    if (transaction.status !== PaymentStatus.SUCCESS) {
+      throw new Error(
+        `Stripe subscription payment is not settled subscriptionId=${subscription.id}`,
+      );
+    }
+    const periodStart = details.currentPeriodStart ?? transaction.paidAt;
+    const periodEnd = details.currentPeriodEnd;
+    if (!periodStart || !periodEnd) {
+      throw new Error(`Stripe subscription period is missing subscriptionId=${subscription.id}`);
+    }
+    const previous = await prismaClient.monitoringSubscription.findUnique({
+      where: {
+        provider_providerSubscriptionId: {
+          provider: PaymentProvider.STRIPE,
+          providerSubscriptionId: subscription.id,
+        },
+      },
+      select: { status: true },
+    });
+    const activated = await activateMonitoringForPaidTransaction({
+      transactionId: transaction.id,
+      provider: PaymentProvider.STRIPE,
+      providerSubscriptionId: subscription.id,
+      startedAt: periodStart,
+      periodStart,
+      periodEnd,
+    });
+    if (!activated) {
+      throw new Error(
+        `Stripe subscription has no monitoring selection subscriptionId=${subscription.id}`,
+      );
+    }
+
+    const terminal = previous?.status === "DISABLED" || previous?.status === "EXPIRED";
+    if (!terminal) {
+      await prismaClient.monitoringSubscription.updateMany({
+        where: {
+          provider: PaymentProvider.STRIPE,
+          providerSubscriptionId: subscription.id,
+        },
+        data: {
+          status:
+            subscription.status === "unpaid" ? "PAYMENT_FAILED" : active ? "ACTIVE" : "DISABLED",
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          ...(subscription.status === "canceled" ? { cancelledAt: new Date() } : {}),
+        },
+      });
+    }
+    if (!active) {
+      await settleInactiveSubscription(
+        metadata.verificationRequestId,
+        subscription.status,
+        previous?.status === "ACTIVE",
+      );
+    }
+    return;
+  }
+
   if (!transaction.verificationRequest.verificationPlanId) {
     throw new Error(`Verification request has no plan transactionId=${metadata.transactionId}`);
   }
 
-  const active = isActiveSubscription(subscription.status);
   const previous = await prismaClient.stripeSubscription.findUnique({
     where: { subscriptionId: subscription.id },
     select: { status: true },
@@ -198,6 +302,33 @@ const upsertSubscription = async (
 
 /** customer.subscription.deleted: no more renewals will be charged. */
 const endSubscription = async (subscriptionId: string) => {
+  const monitoringSubscription = await prismaClient.monitoringSubscription.findUnique({
+    where: {
+      provider_providerSubscriptionId: {
+        provider: PaymentProvider.STRIPE,
+        providerSubscriptionId: subscriptionId,
+      },
+    },
+  });
+  if (monitoringSubscription) {
+    await prismaClient.monitoringSubscription.updateMany({
+      where: {
+        provider: PaymentProvider.STRIPE,
+        providerSubscriptionId: subscriptionId,
+        status: { notIn: ["DISABLED", "EXPIRED"] },
+      },
+      data: { status: "DISABLED", cancelledAt: new Date() },
+    });
+    await completeRequestIfFinished(prismaClient, monitoringSubscription.verificationRequestId);
+    if (
+      monitoringSubscription.status === "ACTIVE" ||
+      monitoringSubscription.status === "NON_RENEWING"
+    ) {
+      announceSubscriptionEnded(monitoringSubscription.verificationRequestId);
+    }
+    return;
+  }
+
   const subscription = await prismaClient.stripeSubscription.findUnique({
     where: { subscriptionId },
   });
@@ -219,6 +350,33 @@ const endSubscription = async (subscriptionId: string) => {
  * subscription update (unpaid/canceled) or deletion.
  */
 const recordFailedInvoice = async (subscriptionId: string, invoice: Stripe.Invoice) => {
+  const monitoringSubscription = await prismaClient.monitoringSubscription.findUnique({
+    where: {
+      provider_providerSubscriptionId: {
+        provider: PaymentProvider.STRIPE,
+        providerSubscriptionId: subscriptionId,
+      },
+    },
+  });
+  if (monitoringSubscription) {
+    const snapshot = renewalSnapshot(
+      monitoringSubscription,
+      invoice.amount_due ?? 0,
+      (invoice.currency ?? "usd").toUpperCase(),
+    );
+    await recordFailedRenewal({
+      verificationRequestId: monitoringSubscription.verificationRequestId,
+      providerRef: invoice.id,
+      amountInCents: invoice.amount_due ?? 0,
+      currency: (invoice.currency ?? "usd").toUpperCase(),
+      provider: PaymentProvider.STRIPE,
+      providerPriceVersionId: monitoringSubscription.providerPriceVersionId ?? undefined,
+      stripeSubscriptionId: subscriptionId,
+      pricingSnapshot: snapshot,
+    });
+    return;
+  }
+
   const subscription = await prismaClient.stripeSubscription.findUnique({
     where: { subscriptionId },
     select: { verificationRequestId: true },
@@ -252,16 +410,128 @@ const recordRenewalPayment = async (invoice: Stripe.Invoice) => {
     currency?: string | null;
     status_transitions?: { paid_at?: number | null };
   };
+  const paidAt = invoiceWithSubscription.status_transitions?.paid_at
+    ? new Date(invoiceWithSubscription.status_transitions.paid_at * 1000)
+    : new Date(invoice.created * 1000);
   const subscriptionId = invoiceSubscriptionId(invoice);
   if (!subscriptionId) {
     logger.warn(`Stripe invoice has no subscription invoiceId=${invoice.id}`);
     return;
   }
 
+  const monitoringSubscription = await prismaClient.monitoringSubscription.findUnique({
+    where: {
+      provider_providerSubscriptionId: {
+        provider: PaymentProvider.STRIPE,
+        providerSubscriptionId: subscriptionId,
+      },
+    },
+  });
+  if (monitoringSubscription) {
+    if (invoice.billing_reason === "subscription_create") {
+      const initialTransaction = await prismaClient.transaction.findFirst({
+        where: {
+          stripeSubscriptionId: subscriptionId,
+          provider: PaymentProvider.STRIPE,
+          purpose: "INITIAL_PURCHASE",
+          status: PaymentStatus.SUCCESS,
+        },
+      });
+      if (initialTransaction) return;
+      throw new Error(
+        `Stripe initial checkout is not settled yet subscriptionId=${subscriptionId}`,
+      );
+    }
+
+    const periodLine = invoice.lines?.data.find(
+      (line) => line.period?.start !== undefined && line.period?.end !== undefined,
+    );
+    let periodStart = periodLine?.period.start ? toDate(periodLine.period.start) : null;
+    let periodEnd = periodLine?.period.end ? toDate(periodLine.period.end) : null;
+    if (!periodStart || !periodEnd) {
+      const stripeSubscription = await getStripeClient().subscriptions.retrieve(subscriptionId);
+      const details = getSubscriptionDetails(stripeSubscription);
+      periodStart ??= details.currentPeriodStart;
+      periodEnd ??= details.currentPeriodEnd;
+    }
+    if (!periodStart || !periodEnd) {
+      throw new Error(`Stripe renewal period is missing invoiceId=${invoice.id}`);
+    }
+
+    const amountInCents = invoiceWithSubscription.amount_paid ?? 0;
+    const currency = (invoiceWithSubscription.currency ?? "usd").toUpperCase();
+    const snapshot = renewalSnapshot(monitoringSubscription, amountInCents, currency);
+    const existing = await prismaClient.transaction.findUnique({
+      where: { providerRef: invoice.id },
+    });
+    const transaction = await prismaClient.transaction.upsert({
+      where: { providerRef: invoice.id },
+      create: {
+        verificationRequestId: monitoringSubscription.verificationRequestId,
+        amountInCents,
+        currency,
+        method: "CARD",
+        provider: PaymentProvider.STRIPE,
+        purpose: "RENEWAL",
+        providerPriceVersionId: monitoringSubscription.providerPriceVersionId,
+        monitoringAmountUsdCents: monitoringSubscription.priceUsdCents,
+        totalUsdCents: monitoringSubscription.priceUsdCents,
+        pricingSnapshot: snapshot,
+        status: PaymentStatus.SUCCESS,
+        providerRef: invoice.id,
+        stripeSubscriptionId: subscriptionId,
+        paidAt,
+      },
+      update: {
+        amountInCents,
+        currency,
+        provider: PaymentProvider.STRIPE,
+        purpose: "RENEWAL",
+        providerPriceVersionId: monitoringSubscription.providerPriceVersionId,
+        monitoringAmountUsdCents: monitoringSubscription.priceUsdCents,
+        totalUsdCents: monitoringSubscription.priceUsdCents,
+        pricingSnapshot: snapshot,
+        status: PaymentStatus.SUCCESS,
+        stripeSubscriptionId: subscriptionId,
+        paidAt,
+      },
+    });
+    await markRequestPaid(prismaClient, transaction.verificationRequestId);
+    await activateMonitoringForPaidTransaction({
+      transactionId: transaction.id,
+      provider: PaymentProvider.STRIPE,
+      providerSubscriptionId: subscriptionId,
+      customerCode: monitoringSubscription.customerCode ?? undefined,
+      emailToken: monitoringSubscription.emailToken ?? undefined,
+      startedAt: periodStart,
+      periodStart,
+      periodEnd,
+    });
+
+    const paidTransaction = await prismaClient.transaction.findUnique({
+      where: { id: transaction.id },
+      include: {
+        verificationRequest: {
+          include: {
+            user: true,
+            verificationPlan: { include: { verificationType: true } },
+          },
+        },
+      },
+    });
+    if (paidTransaction && existing?.status !== PaymentStatus.SUCCESS) {
+      emitPaymentReceived(paidTransaction);
+    }
+    return paidTransaction;
+  }
+
   const subscription = await prismaClient.stripeSubscription.findUnique({
     where: { subscriptionId },
   });
   if (!subscription) {
+    if (invoice.billing_reason === "subscription_cycle") {
+      throw new Error(`Stripe renewal subscription is not stored subscriptionId=${subscriptionId}`);
+    }
     logger.warn(`Stripe subscription not found subscriptionId=${subscriptionId}`);
     return;
   }
@@ -273,9 +543,6 @@ const recordRenewalPayment = async (invoice: Stripe.Invoice) => {
     if (initialTransaction) return;
   }
 
-  const paidAt = invoiceWithSubscription.status_transitions?.paid_at
-    ? new Date(invoiceWithSubscription.status_transitions.paid_at * 1000)
-    : new Date(invoice.created * 1000);
   const transaction = await prismaClient.transaction.upsert({
     where: { providerRef: invoice.id },
     create: {

@@ -1,36 +1,64 @@
-const tx = { transaction: { findFirst: jest.fn(), update: jest.fn(), create: jest.fn() } };
 const prisma = {
-  verificationRequest: { findUnique: jest.fn(), update: jest.fn() },
+  verificationRequest: { findUnique: jest.fn(), updateMany: jest.fn() },
   transaction: { update: jest.fn(), updateMany: jest.fn() },
   $transaction: jest.fn(async (arg: unknown) =>
-    typeof arg === "function"
-      ? (arg as (t: typeof tx) => unknown)(tx)
-      : Promise.all(arg as unknown[]),
+    Array.isArray(arg) ? Promise.all(arg) : undefined,
   ),
 };
 jest.mock("../../../../../utils/prisma", () => ({ prismaClient: prisma }));
 jest.mock("../../../../../libs/stripe/stripe", () => ({ createStripeSession: jest.fn() }));
+jest.mock("../../../../../api/services/database/pricing", () => {
+  const actual = jest.requireActual("../../../../../api/services/database/pricing");
+  return {
+    ...actual,
+    findVerificationCheckoutPricing: jest.fn(),
+    createVerificationCheckoutTransactionData: jest.fn(() => ({ verificationRequestId: "r1" })),
+    reservePricedTransaction: jest.fn(),
+  };
+});
 jest.mock("../../../../../utils/logger", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
 }));
 
+import { VerificationStatus } from "@prisma/client";
 import { initializeVerificationPaymentStripe } from "../../../../../api/client/verification/handlers/initialize-verification-payment-stripe";
+import {
+  createVerificationCheckoutTransactionData,
+  findVerificationCheckoutPricing,
+  PricingRecordError,
+  reservePricedTransaction,
+} from "../../../../../api/services/database/pricing";
 import { createStripeSession } from "../../../../../libs/stripe/stripe";
 import { callHandler, errorStatus } from "../../../../helpers/http";
 
 const mockedSession = createStripeSession as jest.Mock;
-const plan = {
-  frequency: "ONE_TIME",
-  priceUsdCents: 4500,
-  priceNgnKobo: 7200000,
-  stripePriceId: "price_1",
-};
-const verificationRequest = (overrides: object = {}) => ({
-  id: "r1",
+const mockedPricing = findVerificationCheckoutPricing as jest.Mock;
+const mockedTransactionData = createVerificationCheckoutTransactionData as jest.Mock;
+const mockedReservation = reservePricedTransaction as jest.Mock;
+const pricing = (overrides: object = {}) => ({
+  request: {
+    id: "r1",
+    verificationTier: { name: "Standard" },
+    monitoringPlan: null,
+    user: { email: "c@example.com" },
+  },
+  tierPriceVersion: { providerPriceId: "price_standard" },
+  monitoringPriceVersion: null,
+  verificationAmountUsdCents: 6000,
+  verificationAmountNgnKobo: 9000000,
+  monitoringAmountUsdCents: 0,
+  monitoringAmountNgnKobo: 0,
+  totalUsdCents: 6000,
+  totalNgnKobo: 9000000,
+  amountMinor: 6000,
+  currency: "USD",
+  pricingSettings: null,
+  quote: null,
+  ...overrides,
+});
+const request = (overrides: object = {}) => ({
   userId: "u1",
-  status: "DRAFT",
-  user: { countryCode: "US" },
-  verificationPlan: plan,
+  status: VerificationStatus.DRAFT,
   ...overrides,
 });
 const call = (user: object | null = { id: "u1" }) =>
@@ -42,17 +70,29 @@ const call = (user: object | null = { id: "u1" }) =>
 describe("initializeVerificationPaymentStripe (unit)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    prisma.verificationRequest.findUnique.mockResolvedValue(verificationRequest());
-    tx.transaction.findFirst.mockResolvedValue(null);
-    tx.transaction.create.mockResolvedValue({ id: "t1", authorizationUrl: null });
-    mockedSession.mockResolvedValue("https://checkout.stripe.com/c/pay/cs_1");
+    prisma.verificationRequest.findUnique.mockResolvedValue(request());
+    mockedPricing.mockResolvedValue(pricing());
+    mockedTransactionData.mockReturnValue({ verificationRequestId: "r1" });
+    mockedReservation.mockResolvedValue({
+      transaction: { id: "t1", authorizationUrl: null, providerRef: null },
+      reused: false,
+    });
+    mockedSession.mockResolvedValue({
+      id: "cs_1",
+      url: "https://checkout.stripe.com/c/pay/cs_1",
+    });
   });
 
-  it("starts a one-time Stripe checkout and returns its URL", async () => {
+  it("creates a Stripe session with the active fixed-price package", async () => {
     const { res } = await call();
 
+    expect(mockedPricing).toHaveBeenCalledWith({
+      requestId: "r1",
+      userId: "u1",
+      provider: "STRIPE",
+    });
     expect(mockedSession).toHaveBeenCalledWith({
-      priceId: "price_1",
+      lineItems: [{ price: "price_standard", quantity: 1 }],
       mode: "payment",
       metadata: expect.objectContaining({
         userId: "u1",
@@ -62,47 +102,71 @@ describe("initializeVerificationPaymentStripe (unit)", () => {
     });
     expect(prisma.transaction.update).toHaveBeenCalledWith({
       where: { id: "t1" },
-      data: { authorizationUrl: "https://checkout.stripe.com/c/pay/cs_1" },
+      data: {
+        providerRef: "cs_1",
+        authorizationUrl: "https://checkout.stripe.com/c/pay/cs_1",
+      },
     });
-    expect(prisma.verificationRequest.update).toHaveBeenCalledWith({
-      where: { id: "r1" },
+    expect(prisma.verificationRequest.updateMany).toHaveBeenCalledWith({
+      where: { id: "r1", status: { in: expect.any(Array) } },
       data: { status: "PENDING_PAYMENT" },
     });
-    expect(res.json).toHaveBeenCalledWith({ url: "https://checkout.stripe.com/c/pay/cs_1" });
-  });
-
-  it("uses subscription mode for recurring plans", async () => {
-    prisma.verificationRequest.findUnique.mockResolvedValue(
-      verificationRequest({ verificationPlan: { ...plan, frequency: "MONTHLY" } }),
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://checkout.stripe.com/c/pay/cs_1",
+        sessionId: "cs_1",
+        transactionId: "t1",
+      }),
     );
-    await call();
-    expect(mockedSession).toHaveBeenCalledWith(expect.objectContaining({ mode: "subscription" }));
   });
 
-  it("returns the open checkout instead of starting a second one", async () => {
-    tx.transaction.findFirst.mockResolvedValue({
-      id: "t0",
-      status: "PENDING",
-      currency: "USD",
-      authorizationUrl: "https://checkout.stripe.com/c/pay/cs_0",
+  it("uses a one-time package and recurring monitoring price in subscription mode", async () => {
+    mockedPricing.mockResolvedValue(
+      pricing({
+        request: {
+          id: "r1",
+          verificationTier: { name: "Standard" },
+          monitoringPlan: { name: "Monthly" },
+          user: { email: "c@example.com" },
+        },
+        monitoringPriceVersion: { providerPriceId: "price_monthly" },
+        monitoringAmountUsdCents: 6000,
+      }),
+    );
+
+    await call();
+
+    expect(mockedSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "subscription",
+        lineItems: [
+          { price: "price_standard", quantity: 1 },
+          { price: "price_monthly", quantity: 1 },
+        ],
+      }),
+    );
+  });
+
+  it("reuses a matching open checkout", async () => {
+    mockedReservation.mockResolvedValue({
+      transaction: {
+        id: "t0",
+        status: "PENDING",
+        currency: "USD",
+        providerRef: "cs_0",
+        authorizationUrl: "https://checkout.stripe.com/c/pay/cs_0",
+      },
+      reused: true,
     });
     const { res } = await call();
+
     expect(mockedSession).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ url: "https://checkout.stripe.com/c/pay/cs_0" });
-  });
-
-  it("does not reuse a pending checkout created in another currency", async () => {
-    tx.transaction.findFirst.mockResolvedValue({
-      id: "t0",
-      status: "PENDING",
-      currency: "NGN",
-      authorizationUrl: "https://checkout.stripe.com/c/pay/cs_0",
-    });
-
-    const { next } = await call();
-
-    expect(errorStatus(next)).toBe(409);
-    expect(mockedSession).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://checkout.stripe.com/c/pay/cs_0",
+        sessionId: "cs_0",
+      }),
+    );
   });
 
   it.each([
@@ -110,36 +174,21 @@ describe("initializeVerificationPaymentStripe (unit)", () => {
     ["an unknown request", { id: "u1" }, null, 404],
     ["another client's request", { id: "u1" }, { userId: "u2" }, 403],
     ["a request that isn't payable", { id: "u1" }, { status: "COMPLETED" }, 409],
-    ["no plan selected", { id: "u1" }, { verificationPlan: null }, 400],
-    ["country not selected", { id: "u1" }, { user: { countryCode: null } }, 400],
-    ["Nigerian country", { id: "u1" }, { user: { countryCode: "NG" } }, 400],
-    [
-      "a plan not set up in Stripe",
-      { id: "u1" },
-      { verificationPlan: { ...plan, stripePriceId: null } },
-      400,
-    ],
   ])("returns the right error for %s", async (_label, user, overrides, status) => {
     prisma.verificationRequest.findUnique.mockResolvedValue(
-      overrides === null ? null : verificationRequest(overrides as object),
+      overrides === null ? null : request(overrides as object),
     );
     expect(errorStatus((await call(user as object | null)).next)).toBe(status);
     expect(mockedSession).not.toHaveBeenCalled();
   });
 
-  it("returns 409 when the request has already been paid or a payment is mid-start", async () => {
-    tx.transaction.findFirst.mockResolvedValueOnce({ id: "t0", status: "SUCCESS" });
-    expect(errorStatus((await call()).next)).toBe(409);
-    tx.transaction.findFirst.mockResolvedValueOnce({
-      id: "t0",
-      status: "PENDING",
-      currency: "USD",
-      authorizationUrl: null,
-    });
-    const { next } = await call();
-    expect(next.mock.calls[0][0].message).toBe(
-      "A payment is already being initialized for this request.",
+  it("rejects a checkout when the pricing service reports a missing accepted quote", async () => {
+    mockedPricing.mockRejectedValue(
+      new PricingRecordError("INVALID_STATE", "An accepted Premium quote is required"),
     );
+    const { next } = await call();
+    expect(errorStatus(next)).toBe(409);
+    expect(mockedSession).not.toHaveBeenCalled();
   });
 
   it("marks the reserved payment FAILED and returns 500 when Stripe fails", async () => {

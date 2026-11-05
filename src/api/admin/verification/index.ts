@@ -16,11 +16,23 @@ import { getAgentAssignmentReportHandler } from "./handlers/get-agent-assignment
 import { assignVerificationRequestAgent } from "./handlers/assign-verification-request-agent";
 import { unassignVerificationRequestAgent } from "./handlers/unassign-verification-request-agent";
 import { getAgentReport } from "./handlers/get-agent-report";
+import { getAdminPricingCatalog } from "./handlers/get-pricing-catalog";
+import { patchAdminPricingCatalog } from "./handlers/patch-pricing-catalog";
+import { issueVerificationRequestQuote } from "./handlers/issue-verification-request-quote";
 import multer from "multer";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
+
+router.get("/verification/pricing", checkJwt, checkIsAdmin, getAdminPricingCatalog);
+router.patch("/verification/pricing", checkJwt, checkIsAdmin, patchAdminPricingCatalog);
+router.post(
+  "/verification-requests/:id/quote",
+  checkJwt,
+  checkIsAdmin,
+  issueVerificationRequestQuote,
+);
 
 /**
  * @swagger
@@ -107,23 +119,32 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *           description: ACCEPTED if the assignment was ASSIGNED; otherwise its current status is kept.
  *         checklist:
  *           type: array
- *           description: The five fixed verification sections, in sortOrder order.
+ *           description: The sections required for the selected tier, in sortOrder order.
  *           items:
  *             type: object
- *             required: [id, label, status, requiresMedia]
+ *             required: [id, label, sectionKey, status, requiresMedia, fields]
  *             properties:
  *               id: { type: string, example: cm9item0001 }
- *               label:
- *                 type: string
- *                 enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification]
+ *               label: { type: string, example: Physical/site visit }
+ *               sectionKey: { type: string, nullable: true, example: site_visit }
  *               status:
  *                 type: string
  *                 enum: [PENDING]
  *                 description: Always PENDING in this response, even for items already completed.
  *               requiresMedia:
  *                 type: boolean
- *                 description: Always true; media is required for every checklist section.
+ *                 description: Whether at least one supporting upload is required.
  *                 example: true
+ *               fields:
+ *                 type: array
+ *                 items: { $ref: '#/components/schemas/AdminVerificationReportSectionField' }
+ *     AdminVerificationReportSectionField:
+ *       type: object
+ *       required: [key, label, type]
+ *       properties:
+ *         key: { type: string, example: visitOutcome }
+ *         label: { type: string, example: Visit outcome }
+ *         type: { type: string, enum: [text, number] }
  *     AdminVerificationReportSubmitted:
  *       type: object
  *       required: [id, reviewStatus, generatedAt, reportDocument]
@@ -149,26 +170,44 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *         progressPercent: { type: integer, minimum: 0, maximum: 100, example: 60 }
  *         remainingItems:
  *           type: array
- *           description: Labels of checklist items that are not COMPLETE.
+ *           description: Labels of tier-required checklist items that are incomplete or missing required uploads.
  *           items: { type: string }
  *           example: [Physical verification, Valuation verification]
+ *     AdminVerificationIncompleteReportData:
+ *       type: object
+ *       required: [error, progressPercent, remainingFields]
+ *       properties:
+ *         error: { type: string, enum: [INCOMPLETE_REPORT_DATA] }
+ *         progressPercent: { type: integer, minimum: 0, maximum: 100, example: 60 }
+ *         remainingFields:
+ *           type: array
+ *           description: Tier-specific required fields that have no valid value.
+ *           items: { type: string }
+ *           example: ["Valuation amount", "Valuation basis"]
+ *     AdminVerificationIncompleteSiteVisits:
+ *       type: object
+ *       required: [error, progressPercent, remainingSiteVisits]
+ *       properties:
+ *         error: { type: string, enum: [INCOMPLETE_SITE_VISITS] }
+ *         progressPercent: { type: integer, minimum: 0, maximum: 100, example: 50 }
+ *         remainingSiteVisits: { type: integer, minimum: 0, example: 1 }
  *     AdminVerificationReportPhoto:
  *       type: object
  *       required: [url, label]
  *       properties:
  *         url: { type: string, format: uri, example: "https://res.cloudinary.com/demo/image/upload/frontage.jpg" }
- *         label: { type: string, description: Label of the checklist section the media belongs to., enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification], example: Physical verification }
+ *         label: { type: string, description: Label of the checklist section the media belongs to., example: Physical/site visit }
  *     AdminVerificationReportChecklistItem:
  *       type: object
  *       required: [label, status]
  *       properties:
- *         label:
- *           type: string
- *           enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification]
+ *         label: { type: string, example: Physical/site visit }
  *         status:
  *           type: string
  *           nullable: true
  *           enum: [PENDING, COMPLETE]
+ *         sectionKey: { type: string, nullable: true, example: site_visit }
+ *         result: { type: object, nullable: true, additionalProperties: true }
  *     AdminVerificationReportDocument:
  *       type: object
  *       required: [id, url, fileName, fileType, fileSizeBytes]
@@ -228,30 +267,64 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *           nullable: true
  *     AdminVerificationChecklistItem:
  *       type: object
- *       required: [id, label, status, media]
+ *       required: [id, label, sectionKey, status, result, fields, media]
  *       properties:
  *         id: { type: string, example: cm9item0001 }
- *         label:
- *           type: string
- *           enum: [Physical verification, Court/crime verification, Title deeds and documentation verification, Valuation verification, Amenities and environment verification]
+ *         label: { type: string, example: Physical/site visit }
+ *         sectionKey: { type: string, nullable: true, example: site_visit }
  *         status: { $ref: '#/components/schemas/AdminVerificationChecklistItemStatus' }
+ *         result: { type: object, nullable: true, additionalProperties: true }
+ *         fields:
+ *           type: array
+ *           items: { $ref: '#/components/schemas/AdminVerificationReportSectionField' }
  *         media:
  *           type: array
  *           items:
  *             type: object
- *             required: [url]
+ *             required: [id, url, fileName, fileType, fileSizeBytes]
  *             properties:
+ *               id: { type: string, example: cm9document0001 }
  *               url: { type: string, format: uri, example: "https://res.cloudinary.com/demo/image/upload/frontage.jpg" }
+ *               fileName: { type: string, example: frontage.jpg }
+ *               fileType: { type: string, example: image/jpeg }
+ *               fileSizeBytes: { type: integer, example: 245760 }
  *     AdminVerificationAssignmentChecklist:
  *       type: object
- *       required: [checklistItems, clientDocuments, client, additionalNotes, progressPercent, payment]
+ *       required: [checklistItems, verificationTier, period, clientDocuments, client, additionalNotes, progressPercent, payment]
  *       properties:
  *         checklistItems:
  *           type: array
  *           description: >
- *             The five fixed verification sections ordered by sortOrder after the assignment is
- *             started; empty before it is started. Each section can have its own status and media.
+ *             The sections for the selected tier ordered by sortOrder; empty before the assignment
+ *             is started. Each section contains its structured result, form fields and uploads.
  *           items: { $ref: '#/components/schemas/AdminVerificationChecklistItem' }
+ *         verificationTier:
+ *           type: object
+ *           nullable: true
+ *           properties:
+ *             id: { type: string, example: cmtier0001 }
+ *             name: { type: string, example: Standard }
+ *             code: { type: string, enum: [BASIC, STANDARD, PREMIUM] }
+ *         period:
+ *           type: object
+ *           nullable: true
+ *           description: The subscription period covered by this assignment, when applicable.
+ *           properties:
+ *             id: { type: string, example: cmperiod0001 }
+ *             periodStart: { type: string, format: date-time }
+ *             periodEnd: { type: string, format: date-time }
+ *             requiredSiteVisits: { type: integer }
+ *             completedSiteVisits: { type: integer }
+ *             siteVisits:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 required: [id, visitNumber, status, completedAt]
+ *                 properties:
+ *                   id: { type: string, example: cmvisit0001 }
+ *                   visitNumber: { type: integer, example: 1 }
+ *                   status: { type: string, enum: [PENDING, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED] }
+ *                   completedAt: { type: string, format: date-time, nullable: true }
  *         clientDocuments:
  *           type: array
  *           description: Documents the client uploaded with the request (not checklist or report media), oldest first.
@@ -289,13 +362,20 @@ const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
  *           description: >
  *             New item status. COMPLETED and any letter case are also accepted (saved as COMPLETE).
  *             Leave it out to keep the current status, e.g. when only adding photos.
+ *         result:
+ *           type: object
+ *           description: Flat JSON object with the values for this section's required fields.
+ *           additionalProperties:
+ *             oneOf:
+ *               - type: string
+ *               - type: number
+ *               - type: boolean
+ *               - type: "null"
  *         media:
  *           type: array
  *           description: >
  *             Files to upload to Cloudinary and attach to the item (appended to existing media).
- *             No count, size or type limit is enforced; application/pdf is uploaded as a raw
- *             file and everything else as an image (non-image files are rejected by Cloudinary,
- *             which surfaces as a 500).
+ *             Includes supporting documents, images or videos where required by the tier.
  *           items: { type: string, format: binary }
  *     AdminVerificationUpdateNotesRequest:
  *       type: object
@@ -622,10 +702,10 @@ router.delete(
  *     tags: [Admin Verification]
  *     summary: Start (accept) one of the caller's agent assignments
  *     description: >
- *       Creates the five fixed checklist sections (Physical verification, Court/crime
- *       verification, Title deeds and documentation verification, Valuation verification, and
- *       Amenities and environment verification) the first time it is called (and sets
- *       progressPercent to 0), and moves an ASSIGNED assignment to ACCEPTED, which notifies the
+ *       Creates the checklist sections required by the request's selected tier the first time it
+ *       is called (or adds any missing tier sections to an existing checklist), and recomputes
+ *       progressPercent. Requests without a tier retain the five legacy sections. Moves an ASSIGNED
+ *       assignment to ACCEPTED, which notifies the
  *       client that the inspection has started. Calling it again is idempotent: the checklist is
  *       not recreated and other statuses are left unchanged.
  *       Only the caller's own assignments are found; callers without a VerificationAgent record
@@ -679,9 +759,9 @@ router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent,
  *     tags: [Admin Verification]
  *     summary: Submit the verification report for one of the caller's assignments
  *     description: >
- *       Requires a valid PDF file in the multipart `report_document` field and all five checklist
- *       sections to be COMPLETE. An assignment without initialized checklist items is treated as
- *       incomplete; the 409 response lists every remaining section and current progress.
+ *       Requires a valid PDF file in the multipart `report_document` field. Tiered requests must
+ *       complete every package-specific checklist section, required structured field, and required
+ *       supporting upload. Requests without a tier retain the legacy checklist behavior.
  *       Creates a PENDING report for the assignment's paid period, or updates the existing report
  *       and replaces its report document if already created. The uploaded file is saved as a
  *       report document, assignment notes are copied, checklist items are linked to the report,
@@ -743,10 +823,14 @@ router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent,
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       409:
- *         description: Some checklist items are not COMPLETE or the checklist was not initialized. Note this body is not the ErrorResponse shape.
+ *         description: A tier-specific checklist, required upload, or structured report field is incomplete. This body is not the ErrorResponse shape.
  *         content:
  *           application/json:
- *             schema: { $ref: '#/components/schemas/AdminVerificationIncompleteChecklist' }
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/AdminVerificationIncompleteChecklist'
+ *                 - $ref: '#/components/schemas/AdminVerificationIncompleteReportData'
+ *                 - $ref: '#/components/schemas/AdminVerificationIncompleteSiteVisits'
  *       500:
  *         description: Unexpected database error.
  *         content:
@@ -876,12 +960,11 @@ router.get(
  * /api/{version}/admin/verification/agent-assignments/{id}/checklist/{itemId}:
  *   patch:
  *     tags: [Admin Verification]
- *     summary: Update a checklist item's status and optionally attach media
+ *     summary: Update a checklist section's result, status, and supporting media
  *     description: >
- *       Updates one of the five fixed sections (Physical verification, Court/crime verification,
- *       Title deeds and documentation verification, Valuation verification, or Amenities and
- *       environment verification). Uploads any `media` files to Cloudinary, sets the item's status
- *       (if sent), attaches the files to the item, and recomputes the assignment's progressPercent.
+ *       Updates a tier-specific or legacy checklist section. Saves the optional flat JSON `result`,
+ *       uploads any `media` files to Cloudinary, sets the item's status (if sent), attaches the
+ *       files to the item, and recomputes the assignment's progressPercent.
  *       Media files are uploaded
  *       before the item is looked up, so they are uploaded even when the request then 404s.
  *     security:
@@ -912,9 +995,10 @@ router.get(
  *         application/json:
  *           schema:
  *             type: object
- *             description: Status-only update without files.
+ *             description: JSON result/status update without files.
  *             properties:
  *               status: { type: string, enum: [PENDING, COMPLETE], description: "COMPLETED and any letter case are also accepted. Leave out to keep the current status." }
+ *               result: { type: object, additionalProperties: true }
  *     responses:
  *       200:
  *         description: The updated checklist item with all of its media.
@@ -922,7 +1006,7 @@ router.get(
  *           application/json:
  *             schema: { $ref: '#/components/schemas/AdminVerificationChecklistItem' }
  *       400:
- *         description: "status is present but not PENDING, COMPLETE or COMPLETED (`Status must be PENDING or COMPLETE.`)."
+ *         description: Status or result is invalid.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }

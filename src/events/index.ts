@@ -11,6 +11,8 @@ export enum AppEventTypes {
   INSPECTION_STARTED = "INSPECTION_STARTED",
   PAYMENT_FAILED = "PAYMENT_FAILED",
   SUBSCRIPTION_ENDED = "SUBSCRIPTION_ENDED",
+  PREMIUM_QUOTE_ISSUED = "PREMIUM_QUOTE_ISSUED",
+  PREMIUM_QUOTE_ACCEPTED = "PREMIUM_QUOTE_ACCEPTED",
   PROPERTY_REQUEST_CREATED = "PROPERTY_REQUEST_CREATED",
   PROPERTY_REQUEST_UPDATED = "PROPERTY_REQUEST_UPDATED",
   PROPERTY_PAYMENT_RECEIVED = "PROPERTY_PAYMENT_RECEIVED",
@@ -77,6 +79,18 @@ export interface SubscriptionEndedPayload {
   verificationRequestId: string;
 }
 
+export interface PremiumQuoteIssuedPayload {
+  quoteId: string;
+  reviewUrl: string;
+}
+
+export interface PremiumQuoteAcceptedPayload {
+  quoteId: string;
+  provider: string;
+  currency: string;
+  checkoutUrl: string;
+}
+
 export interface PropertyRequestCreatedPayload {
   propertyRequestId: string;
 }
@@ -111,6 +125,8 @@ export interface AppEventPayloads {
   [AppEventTypes.INSPECTION_STARTED]: InspectionStartedPayload;
   [AppEventTypes.PAYMENT_FAILED]: PaymentFailedPayload;
   [AppEventTypes.SUBSCRIPTION_ENDED]: SubscriptionEndedPayload;
+  [AppEventTypes.PREMIUM_QUOTE_ISSUED]: PremiumQuoteIssuedPayload;
+  [AppEventTypes.PREMIUM_QUOTE_ACCEPTED]: PremiumQuoteAcceptedPayload;
   [AppEventTypes.PROPERTY_REQUEST_CREATED]: PropertyRequestCreatedPayload;
   [AppEventTypes.PROPERTY_REQUEST_UPDATED]: PropertyRequestUpdatedPayload;
   [AppEventTypes.PROPERTY_PAYMENT_RECEIVED]: PropertyPaymentPayload;

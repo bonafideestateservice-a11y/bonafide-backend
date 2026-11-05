@@ -267,9 +267,13 @@ describe("GET /api/v1/client/verification-requests/:id/report/full (integration,
     expect(res.body.data.property.type).toBe("Residential");
     expect(res.body.data.property.plotSize).toBe("1000sqm");
     expect(res.body.data.property.builtYear).toBe("2015");
-    expect(res.body.data.agent.firstName).toBe("Agent");
-    expect(res.body.data.agent.lastName).toBe("Full");
-    expect(res.body.data.agentNotes).toBe("The property is in great shape.");
+    expect(res.body.data.providerName).toBe("Bonafide");
+    expect(res.body.data.verificationTier).toBeNull();
+    expect(res.body.data.subscriptionPeriod).toBeNull();
+    expect(res.body.data).not.toHaveProperty("agent");
+    expect(res.body.data).not.toHaveProperty("agentNotes");
+    expect(JSON.stringify(res.body.data)).not.toContain("Agent Full");
+    expect(JSON.stringify(res.body.data)).not.toContain("The property is in great shape.");
     expect(res.body.data.summary).toBe("Executive summary details here.");
     expect(res.body.data.ownershipFindings).toBe("Verified and Clean");
     expect(res.body.data.findings).toHaveLength(1);

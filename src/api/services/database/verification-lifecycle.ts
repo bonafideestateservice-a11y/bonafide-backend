@@ -1,9 +1,11 @@
 import { appEvents, AppEventTypes } from "../../../events";
 import {
   PaymentStatus,
+  PaymentProvider,
   PaystackSubscriptionStatus,
   Prisma,
   StripeSubscriptionStatus,
+  TransactionPurpose,
   VERIFICATION_FREQUENCY,
   VerificationStatus,
 } from "@prisma/client";
@@ -125,8 +127,21 @@ export const recordFailedRenewal = async (params: {
   providerRef: string;
   amountInCents: number;
   currency: string;
+  provider?: PaymentProvider;
+  providerPriceVersionId?: string;
+  stripeSubscriptionId?: string;
+  pricingSnapshot?: Prisma.InputJsonValue;
 }) => {
-  const { verificationRequestId, providerRef, amountInCents, currency } = params;
+  const {
+    verificationRequestId,
+    providerRef,
+    amountInCents,
+    currency,
+    provider,
+    providerPriceVersionId,
+    stripeSubscriptionId,
+    pricingSnapshot,
+  } = params;
   if (await prismaClient.transaction.findUnique({ where: { providerRef } })) return;
 
   try {
@@ -139,6 +154,15 @@ export const recordFailedRenewal = async (params: {
           method: "CARD",
           status: PaymentStatus.FAILED,
           providerRef,
+          ...(provider
+            ? {
+                provider,
+                purpose: TransactionPurpose.RENEWAL,
+                providerPriceVersionId,
+                stripeSubscriptionId,
+                pricingSnapshot,
+              }
+            : {}),
         },
       });
       await markRequestPaymentFailed(tx, verificationRequestId);

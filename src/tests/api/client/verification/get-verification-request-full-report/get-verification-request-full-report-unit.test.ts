@@ -113,6 +113,9 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
           { label: "Ownership", value: "Fully Verified", status: "good" },
           { label: "Physical Condition", value: "Needs paint", status: "warning" },
         ],
+        verificationTier: null,
+        subscriptionPeriod: null,
+        providerName: "Bonafide",
         checklist: [
           { label: "Physical verification", status: "COMPLETE" },
           { label: "Court/crime verification", status: "PENDING" },
@@ -125,14 +128,106 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
           { url: "http://example.com/photo1.jpg", label: "Front Door" },
           { url: "http://example.com/photo2.jpg", label: "Backyard" },
         ],
-        agentNotes: "Agent noted some things.",
-        agent: {
-          firstName: "Jane",
-          lastName: "Smith",
-        },
         feedback: null,
       },
     });
+  });
+
+  it("returns tiered findings and attribution without agent identity or internal notes", async () => {
+    (databaseService.getVerificationRequestFullReportData as jest.Mock).mockResolvedValue({
+      id: "req-123",
+      userId: "user-1",
+      user: { fullName: "John Anderson", phone: null, email: "john@example.com" },
+      details: {},
+      reports: [
+        {
+          id: "rep-tiered",
+          generatedAt: new Date("2026-11-05T10:00:00Z"),
+          reviewStatus: "APPROVED",
+          summary: "Premium report",
+          findings: {
+            tier: { id: "private-tier-id", code: "PREMIUM", name: "Premium" },
+            period: {
+              id: "private-period-id",
+              periodStart: "2026-11-01T00:00:00.000Z",
+              periodEnd: "2026-12-01T00:00:00.000Z",
+              requiredSiteVisits: 2,
+              completedSiteVisits: 1,
+            },
+            sections: [
+              {
+                key: "site_visit",
+                label: "Physical/site visit",
+                result: { visitOutcome: "Property inspected", notes: "Exterior checked." },
+                media: [{ url: "https://cdn.test/site.jpg", fileName: "site.jpg" }],
+              },
+              {
+                key: "valuation",
+                label: "Property valuation",
+                result: { amount: 85000000, currency: "NGN", basis: "Comparable local sales" },
+                media: [],
+              },
+            ],
+          },
+          tierNameSnapshot: "Premium",
+          packageScopeSnapshot: {
+            tier: { id: "private-tier-id", code: "PREMIUM", name: "Premium" },
+            period: {
+              periodStart: "2026-11-01T00:00:00.000Z",
+              periodEnd: "2026-12-01T00:00:00.000Z",
+              requiredSiteVisits: 2,
+              completedSiteVisits: 1,
+            },
+          },
+          agent: { name: "Private Agent Name" },
+          additionalNotes: "Internal-only notes",
+          checklistItems: [
+            {
+              label: "Physical/site visit",
+              status: "COMPLETE",
+              sortOrder: 0,
+              sectionKey: "site_visit",
+              result: { visitOutcome: "Property inspected", notes: "Exterior checked." },
+              media: [{ url: "https://cdn.test/site.jpg", fileName: "site.jpg" }],
+            },
+          ],
+          rating: null,
+          clientComment: null,
+          ratedAt: null,
+          media: [],
+        },
+      ],
+      agentAssignment: null,
+    });
+
+    await getVerificationRequestFullReport(req as Request, res as Response, next);
+
+    const data = (res.json as jest.Mock).mock.calls[0][0].data;
+    expect(data).toMatchObject({
+      verificationTier: { code: "PREMIUM", name: "Premium" },
+      subscriptionPeriod: {
+        startsAt: "2026-11-01T00:00:00.000Z",
+        endsAt: "2026-12-01T00:00:00.000Z",
+        checksIncluded: 2,
+        checksCompleted: 1,
+      },
+      providerName: "Bonafide",
+      findings: {
+        physicalVisit: { outcome: "Property inspected", notes: "Exterior checked." },
+        valuation: { amount: 85000000, currency: "NGN", basis: "Comparable local sales" },
+      },
+      checklist: [
+        {
+          sectionKey: "site_visit",
+          result: { visitOutcome: "Property inspected", notes: "Exterior checked." },
+          media: [{ url: "https://cdn.test/site.jpg", fileName: "site.jpg" }],
+        },
+      ],
+    });
+    expect(data).not.toHaveProperty("agent");
+    expect(data).not.toHaveProperty("agentNotes");
+    expect(JSON.stringify(data)).not.toContain("Private Agent Name");
+    expect(JSON.stringify(data)).not.toContain("Internal-only notes");
   });
 
   it("returns 403 when the request belongs to another client", async () => {

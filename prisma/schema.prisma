@@ -8,36 +8,40 @@ datasource db {
 }
 
 model User {
-  id                    String                 @id @default(uuid())
-  fullName              String
-  email                 String                 @unique
-  phone                 String?
-  location              String?
-  countryCode           String?                @db.VarChar(2)
-  profilePhoto          String?
-  termsAndCondition     Boolean                @default(false)
-  password              String?
-  provider              String?                @default("local")
-  providerId            String?                @unique
-  role                  ROLE                   @default(CLIENT)
+  id                      String                   @id @default(uuid())
+  fullName                String
+  email                   String                   @unique
+  phone                   String?
+  location                String?
+  countryCode             String?                  @db.VarChar(2)
+  profilePhoto            String?
+  termsAndCondition       Boolean                  @default(false)
+  password                String?
+  provider                String?                  @default("local")
+  providerId              String?                  @unique
+  role                    ROLE                     @default(CLIENT)
   // Suspended users can't log in or use their token.
-  status                UserStatus             @default(ACTIVE)
+  status                  UserStatus               @default(ACTIVE)
   // Set when an admin creates the account with a password; cleared when the user changes it.
-  mustChangePassword    Boolean                @default(false)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  passwordResetTokens   PasswordResetToken[]
-  verificationRequests  VerificationRequest[]
-  verificationAgent     VerificationAgent?
-  paystackCustomerCode  String?                @unique
-  paystackSubscriptions PaystackSubscription[]
-  stripeSubscriptions   StripeSubscription[]
-  notifications         Notification[]         @relation("UserNotifications")
-  fcmTokens             FCMToken[]
-  notificationSettings  NotificationSettings?
-  propertyInquiries     PropertyInquiry[]
-  propertyFavorites     PropertyFavorite[]
-  propertyRequests      PropertyRequest[]
+  mustChangePassword      Boolean                  @default(false)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  passwordResetTokens     PasswordResetToken[]
+  verificationRequests    VerificationRequest[]
+  verificationAgent       VerificationAgent?
+  paystackCustomerCode    String?                  @unique
+  paystackSubscriptions   PaystackSubscription[]
+  stripeSubscriptions     StripeSubscription[]
+  pricingSettings         PricingSettings[]
+  premiumQuotesIssued     PremiumQuote[]           @relation("PremiumQuoteIssuer")
+  monitoringSubscriptions MonitoringSubscription[]
+  notifications           Notification[]           @relation("UserNotifications")
+  fcmTokens               FCMToken[]
+  notificationSettings    NotificationSettings?
+  propertyInquiries       PropertyInquiry[]
+  propertyFavorites       PropertyFavorite[]
+  propertyRequests        PropertyRequest[]
+  ProviderPriceVersion    ProviderPriceVersion[]
 
   @@index([role, createdAt])
   @@index([createdAt])
@@ -77,6 +81,66 @@ enum VERIFICATION_FREQUENCY {
   ONE_TIME
   MONTHLY
   QUARTERLY
+}
+
+enum VerificationTierCode {
+  BASIC
+  STANDARD
+  PREMIUM
+}
+
+enum MonitoringInterval {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+}
+
+enum NgnRoundingRule {
+  NEAREST_KOBO
+}
+
+enum ProviderPriceSyncStatus {
+  PENDING
+  READY
+  FAILED
+  INACTIVE
+}
+
+enum PremiumQuoteStatus {
+  REQUESTED
+  ISSUED
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+enum MonitoringSubscriptionStatus {
+  ACTIVE
+  NON_RENEWING
+  PAYMENT_FAILED
+  DISABLED
+  EXPIRED
+}
+
+enum SubscriptionPeriodStatus {
+  PAID
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
+enum SiteVisitStatus {
+  PENDING
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TransactionPurpose {
+  INITIAL_PURCHASE
+  PREMIUM_QUOTE
+  RENEWAL
 }
 
 enum AgentAssignmentStatus {
@@ -139,9 +203,11 @@ model VerificationPlan {
   paystackNgnPlanCode String?                @unique
   stripePriceId       String?                @unique
 
-  verificationRequests  VerificationRequest[]
-  paystackSubscriptions PaystackSubscription[]
-  stripeSubscriptions   StripeSubscription[]
+  verificationRequests          VerificationRequest[]
+  paystackSubscriptions         PaystackSubscription[]
+  stripeSubscriptions           StripeSubscription[]
+  providerPriceVersions         ProviderPriceVersion[]
+  legacyMonitoringSubscriptions MonitoringSubscription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -150,8 +216,112 @@ model VerificationPlan {
   @@index([verificationTypeId])
 }
 
+model VerificationTier {
+  id               String               @id @default(cuid())
+  code             VerificationTierCode @unique
+  name             String
+  description      String
+  priceUsdCents    Int?
+  quoteRequired    Boolean              @default(false)
+  minQuoteUsdCents Int?
+  maxQuoteUsdCents Int?
+  version          Int                  @default(1)
+  active           Boolean              @default(true)
+
+  verificationRequests  VerificationRequest[]
+  reports               VerificationReport[]
+  quotes                PremiumQuote[]
+  providerPriceVersions ProviderPriceVersion[]
+  transactions          Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, code])
+}
+
+model MonitoringPlan {
+  id               String             @id @default(cuid())
+  code             MonitoringInterval @unique
+  name             String
+  description      String?
+  priceUsdCents    Int
+  intervalCount    Int                @default(1)
+  checksPerPeriod  Int
+  reportsPerPeriod Int                @default(1)
+  version          Int                @default(1)
+  active           Boolean            @default(true)
+
+  verificationRequests  VerificationRequest[]
+  subscriptions         MonitoringSubscription[]
+  periods               SubscriptionPeriod[]
+  providerPriceVersions ProviderPriceVersion[]
+  quotes                PremiumQuote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, code])
+}
+
+model PricingSettings {
+  id           String          @id @default(cuid())
+  version      Int             @unique
+  usdToNgnRate Decimal         @db.Decimal(18, 8)
+  roundingRule NgnRoundingRule @default(NEAREST_KOBO)
+  active       Boolean         @default(false)
+  updatedById  String?
+  updatedBy    User?           @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  quotes PremiumQuote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+  @@index([updatedById])
+}
+
+model ProviderPriceVersion {
+  id                       String                  @id @default(cuid())
+  verificationTierId       String?
+  verificationTier         VerificationTier?       @relation(fields: [verificationTierId], references: [id], onDelete: Restrict)
+  monitoringPlanId         String?
+  monitoringPlan           MonitoringPlan?         @relation(fields: [monitoringPlanId], references: [id], onDelete: Restrict)
+  legacyVerificationPlanId String?
+  legacyVerificationPlan   VerificationPlan?       @relation(fields: [legacyVerificationPlanId], references: [id], onDelete: Restrict)
+  provider                 PaymentProvider
+  providerProductId        String?
+  providerPriceId          String?
+  currency                 String                  @db.VarChar(3)
+  amountMinor              Int
+  usdAmountCents           Int
+  version                  Int
+  interval                 MonitoringInterval?
+  intervalCount            Int?
+  syncStatus               ProviderPriceSyncStatus @default(PENDING)
+  syncError                String?
+  activeForNewCheckout     Boolean                 @default(false)
+  syncedById               String?
+  syncedBy                 User?                   @relation(fields: [syncedById], references: [id], onDelete: SetNull)
+
+  transactions  Transaction[]
+  subscriptions MonitoringSubscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([verificationTierId, provider, version])
+  @@unique([monitoringPlanId, provider, version])
+  @@unique([legacyVerificationPlanId, provider, version])
+  @@unique([provider, providerPriceId])
+  @@index([provider, currency, activeForNewCheckout])
+  @@index([syncStatus])
+}
+
 enum VerificationStatus {
   DRAFT
+  QUOTE_REQUIRED
   PENDING_PAYMENT
   PAYMENT_FAILED
   SUBMITTED
@@ -205,26 +375,38 @@ model VerificationRequest {
   verificationType        VerificationType   @relation(fields: [verificationTypeId], references: [id])
   verificationPlanId      String?
   verificationPlan        VerificationPlan?  @relation(fields: [verificationPlanId], references: [id])
+  verificationTierId      String?
+  verificationTier        VerificationTier?  @relation(fields: [verificationTierId], references: [id], onDelete: SetNull)
+  monitoringPlanId        String?
+  monitoringPlan          MonitoringPlan?    @relation(fields: [monitoringPlanId], references: [id], onDelete: SetNull)
+  recurringConsent        Boolean            @default(false)
+  recurringConsentAt      DateTime?
   status                  VerificationStatus @default(DRAFT)
   details                 Json
   additionalNote          String?
   notifyOnInspectionStart Boolean            @default(true)
   notifyOnReportReady     Boolean            @default(true)
 
-  documents            Document[]
-  transactions         Transaction[]
-  reports              VerificationReport[]
-  agentAssignment      AgentAssignment?
-  paystackSubscription PaystackSubscription?
-  stripeSubscription   StripeSubscription?
-  notifications        Notification[]
-  activityLogs         ActivityLog[]
+  documents               Document[]
+  transactions            Transaction[]
+  reports                 VerificationReport[]
+  agentAssignment         AgentAssignment?
+  paystackSubscription    PaystackSubscription?
+  stripeSubscription      StripeSubscription?
+  premiumQuotes           PremiumQuote[]
+  monitoringSubscriptions MonitoringSubscription[]
+  subscriptionPeriods     SubscriptionPeriod[]
+  siteVisits              SiteVisit[]
+  notifications           Notification[]
+  activityLogs            ActivityLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([verificationTypeId])
+  @@index([verificationTierId])
+  @@index([monitoringPlanId])
 }
 
 model Document {
@@ -235,6 +417,8 @@ model Document {
   verificationReport    VerificationReport?        @relation(fields: [verificationReportId], references: [id], onDelete: SetNull)
   checklistItemId       String?
   checklistItem         VerificationChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  siteVisitId           String?
+  siteVisit             SiteVisit?                 @relation(fields: [siteVisitId], references: [id], onDelete: SetNull)
   documentType          DocumentType               @default(VERIFICATION_DOCUMENT)
   url                   String
   fileName              String
@@ -246,6 +430,7 @@ model Document {
   @@index([verificationRequestId])
   @@index([verificationReportId])
   @@index([checklistItemId])
+  @@index([siteVisitId])
   @@index([verificationReportId, documentType])
 }
 
@@ -353,6 +538,8 @@ model VerificationChecklistItem {
   reportId          String?
   report            VerificationReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
   label             String
+  sectionKey        String?
+  result            Json?
   status            ChecklistItemStatus @default(PENDING)
   sortOrder         Int
   media             Document[]
@@ -365,23 +552,39 @@ model VerificationChecklistItem {
 }
 
 model Transaction {
-  id                    String              @id @default(cuid())
-  verificationRequestId String
-  verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id])
-  amountInCents         Int
-  currency              String              @default("NGN")
-  method                PaymentMethod
-  status                PaymentStatus       @default(PENDING)
-  providerRef           String?             @unique
-  stripeSubscriptionId  String?
-  authorizationUrl      String?
-  accessCode            String?
-  paidAt                DateTime?
+  id                       String                @id @default(cuid())
+  verificationRequestId    String
+  verificationRequest      VerificationRequest   @relation(fields: [verificationRequestId], references: [id])
+  amountInCents            Int
+  currency                 String                @default("NGN")
+  provider                 PaymentProvider?
+  purpose                  TransactionPurpose?
+  verificationTierId       String?
+  verificationTier         VerificationTier?     @relation(fields: [verificationTierId], references: [id], onDelete: SetNull)
+  providerPriceVersionId   String?
+  providerPriceVersion     ProviderPriceVersion? @relation(fields: [providerPriceVersionId], references: [id], onDelete: SetNull)
+  premiumQuoteId           String?
+  premiumQuote             PremiumQuote?         @relation(fields: [premiumQuoteId], references: [id], onDelete: SetNull)
+  tierAmountUsdCents       Int?
+  monitoringAmountUsdCents Int?
+  totalUsdCents            Int?
+  fxRate                   Decimal?              @db.Decimal(18, 8)
+  fxRateVersion            Int?
+  fxRoundingRule           NgnRoundingRule?
+  pricingSnapshot          Json?
+  method                   PaymentMethod
+  status                   PaymentStatus         @default(PENDING)
+  providerRef              String?               @unique
+  stripeSubscriptionId     String?
+  authorizationUrl         String?
+  accessCode               String?
+  paidAt                   DateTime?
   // When an agent was assigned to this paid period (for the pending-requests trend).
-  assignedAt            DateTime?
+  assignedAt               DateTime?
 
-  agentAssignments AgentAssignment[]
-  report           VerificationReport?
+  agentAssignments   AgentAssignment[]
+  report             VerificationReport?
+  subscriptionPeriod SubscriptionPeriod?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -453,6 +656,12 @@ model VerificationReport {
   id                    String                      @id @default(cuid())
   verificationRequestId String
   verificationRequest   VerificationRequest         @relation(fields: [verificationRequestId], references: [id])
+  verificationTierId    String?
+  verificationTier      VerificationTier?           @relation(fields: [verificationTierId], references: [id], onDelete: SetNull)
+  tierNameSnapshot      String?
+  packageScopeSnapshot  Json?
+  subscriptionPeriodId  String?                     @unique
+  subscriptionPeriod    SubscriptionPeriod?         @relation(fields: [subscriptionPeriodId], references: [id], onDelete: SetNull)
   // The payment for the period this report covers (one report per paid period).
   transactionId         String?                     @unique
   transaction           Transaction?                @relation(fields: [transactionId], references: [id])
@@ -479,6 +688,133 @@ model VerificationReport {
 
   @@index([viewedAt])
   @@index([verificationRequestId, generatedAt])
+}
+
+model PremiumQuote {
+  id                    String              @id @default(cuid())
+  verificationRequestId String
+  verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id], onDelete: Cascade)
+  verificationTierId    String
+  verificationTier      VerificationTier    @relation(fields: [verificationTierId], references: [id], onDelete: Restrict)
+  monitoringPlanId      String?
+  monitoringPlan        MonitoringPlan?     @relation(fields: [monitoringPlanId], references: [id], onDelete: SetNull)
+  pricingSettingsId     String?
+  pricingSettings       PricingSettings?    @relation(fields: [pricingSettingsId], references: [id], onDelete: SetNull)
+  quoteUsdCents         Int?
+  quoteNgnKobo          Int?
+  usdToNgnRate          Decimal?            @db.Decimal(18, 8)
+  rateVersion           Int?
+  roundingRule          NgnRoundingRule?
+  tierVersion           Int?
+  status                PremiumQuoteStatus  @default(REQUESTED)
+  expiresAt             DateTime?
+  issuedById            String?
+  issuedBy              User?               @relation("PremiumQuoteIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+  acceptedAt            DateTime?
+  cancelledAt           DateTime?
+
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([verificationRequestId, createdAt])
+  @@index([status, expiresAt])
+}
+
+model MonitoringSubscription {
+  id                       String                       @id @default(cuid())
+  userId                   String
+  user                     User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  verificationRequestId    String
+  verificationRequest      VerificationRequest          @relation(fields: [verificationRequestId], references: [id], onDelete: Restrict)
+  monitoringPlanId         String?
+  monitoringPlan           MonitoringPlan?              @relation(fields: [monitoringPlanId], references: [id], onDelete: SetNull)
+  legacyVerificationPlanId String?
+  legacyVerificationPlan   VerificationPlan?            @relation(fields: [legacyVerificationPlanId], references: [id], onDelete: SetNull)
+  providerPriceVersionId   String?
+  providerPriceVersion     ProviderPriceVersion?        @relation(fields: [providerPriceVersionId], references: [id], onDelete: SetNull)
+  provider                 PaymentProvider
+  providerSubscriptionId   String?
+  customerCode             String?
+  emailToken               String?
+  status                   MonitoringSubscriptionStatus @default(ACTIVE)
+  planVersion              Int?
+  interval                 MonitoringInterval?
+  intervalCount            Int?
+  priceUsdCents            Int?
+  checksPerPeriod          Int?
+  reportsPerPeriod         Int?
+  consentAt                DateTime?
+  startedAt                DateTime?
+  currentPeriodStart       DateTime?
+  currentPeriodEnd         DateTime?
+  cancelledAt              DateTime?
+  disabledAt               DateTime?
+
+  periods SubscriptionPeriod[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerSubscriptionId])
+  @@index([verificationRequestId, createdAt])
+  @@index([userId])
+  @@index([monitoringPlanId])
+  @@index([legacyVerificationPlanId])
+  @@index([status, currentPeriodEnd])
+}
+
+model SubscriptionPeriod {
+  id                       String                   @id @default(cuid())
+  verificationRequestId    String
+  verificationRequest      VerificationRequest      @relation(fields: [verificationRequestId], references: [id], onDelete: Restrict)
+  monitoringSubscriptionId String
+  monitoringSubscription   MonitoringSubscription   @relation(fields: [monitoringSubscriptionId], references: [id], onDelete: Restrict)
+  monitoringPlanId         String?
+  monitoringPlan           MonitoringPlan?          @relation(fields: [monitoringPlanId], references: [id], onDelete: SetNull)
+  paidTransactionId        String                   @unique
+  paidTransaction          Transaction              @relation(fields: [paidTransactionId], references: [id], onDelete: Restrict)
+  status                   SubscriptionPeriodStatus @default(PAID)
+  periodStart              DateTime
+  periodEnd                DateTime
+  requiredSiteVisits       Int
+  completedSiteVisits      Int                      @default(0)
+  requiredReports          Int                      @default(1)
+  reportCount              Int                      @default(0)
+  delayResolution          String?
+
+  siteVisits SiteVisit[]
+  report     VerificationReport?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([verificationRequestId, periodStart])
+  @@index([monitoringSubscriptionId, periodStart])
+  @@index([status, periodEnd])
+}
+
+model SiteVisit {
+  id                    String              @id @default(cuid())
+  verificationRequestId String
+  verificationRequest   VerificationRequest @relation(fields: [verificationRequestId], references: [id], onDelete: Restrict)
+  subscriptionPeriodId  String?
+  subscriptionPeriod    SubscriptionPeriod? @relation(fields: [subscriptionPeriodId], references: [id], onDelete: Restrict)
+  visitNumber           Int
+  status                SiteVisitStatus     @default(PENDING)
+  scheduledAt           DateTime?
+  completedAt           DateTime?
+  location              Json?
+  checklist             Json?
+  documents             Document[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([subscriptionPeriodId, visitNumber])
+  @@index([verificationRequestId, status])
+  @@index([scheduledAt])
 }
 
 model WebhookEvent {
