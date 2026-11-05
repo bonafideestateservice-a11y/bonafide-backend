@@ -567,8 +567,8 @@ export const startAgentAssignment = async (
           })),
         };
       },
-      { timeout: 15000 },
-    , { maxWait: 5000, timeout: 20000 });
+      { maxWait: 5000, timeout: 20000 },
+    );
 
     if (startedEvent) {
       appEvents.emit(AppEventTypes.INSPECTION_STARTED, {
