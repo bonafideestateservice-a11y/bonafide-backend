@@ -926,7 +926,7 @@ export const activateProviderPriceVersionsBatch = async (
       return activatedIds.length
         ? tx.providerPriceVersion.findMany({ where: { id: { in: activatedIds } } })
         : [];
-    });
+    }, { timeout: 30_000 });
     logger.info(`Provider price versions activated count=${activeVersions.length}`);
     return activeVersions;
   } catch (error) {
