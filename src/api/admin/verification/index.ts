@@ -25,8 +25,8 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
 
-router.get("/verification/pricing", checkJwt, checkIsAdmin, getAdminPricingCatalog);
-router.patch("/verification/pricing", checkJwt, checkIsAdmin, patchAdminPricingCatalog);
+router.get(["/verification/pricing", "/pricing"], checkJwt, checkIsAdmin, getAdminPricingCatalog);
+router.patch(["/verification/pricing", "/pricing"], checkJwt, checkIsAdmin, patchAdminPricingCatalog);
 router.post(
   "/verification-requests/:id/quote",
   checkJwt,
