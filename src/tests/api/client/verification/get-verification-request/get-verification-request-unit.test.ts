@@ -54,6 +54,9 @@ describe("getVerificationRequest handler (unit)", () => {
         priceUsdCents: 4500,
         priceNgnKobo: 7200000,
       },
+      verificationTier: null,
+      monitoringPlan: null,
+      recurringConsent: false,
     });
     const { req, res, next } = buildMockReqRes("user-1");
 
@@ -78,6 +81,69 @@ describe("getVerificationRequest handler (unit)", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("returns selected tier pricing and monitoring consent for a modern pricing request", async () => {
+    mockedGetVerificationRequestDetailsForUser.mockResolvedValue({
+      id: "request-1",
+      status: "DRAFT",
+      details: { propertyAddress: "12 Admiralty Way" },
+      createdAt: new Date("2026-11-05T10:00:00.000Z"),
+      verificationType: { name: "Property Verification" },
+      verificationPlan: null,
+      verificationTier: {
+        id: "tier-standard",
+        code: "STANDARD",
+        name: "Standard",
+        description: "Property title and court checks",
+        priceUsdCents: 6000,
+        quoteRequired: false,
+      },
+      monitoringPlan: {
+        id: "plan-monthly",
+        code: "MONTHLY",
+        name: "Monthly monitoring",
+        priceUsdCents: 6000,
+        intervalCount: 1,
+        checksPerPeriod: 2,
+        reportsPerPeriod: 1,
+      },
+      recurringConsent: true,
+    });
+    const { req, res, next } = buildMockReqRes("user-1");
+
+    await getVerificationRequest(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(HttpStatusCode.OK);
+    expect(res.json).toHaveBeenCalledWith({
+      id: "request-1",
+      status: "DRAFT",
+      verificationType: { name: "Property Verification" },
+      details: { propertyAddress: "12 Admiralty Way" },
+      plan: null,
+      pricing: {
+        verificationTier: {
+          id: "tier-standard",
+          code: "STANDARD",
+          name: "Standard",
+          description: "Property title and court checks",
+          priceUsdCents: 6000,
+          quoteRequired: false,
+        },
+        monitoringPlan: {
+          id: "plan-monthly",
+          code: "MONTHLY",
+          name: "Monthly monitoring",
+          priceUsdCents: 6000,
+          intervalCount: 1,
+          checksPerPeriod: 2,
+          reportsPerPeriod: 1,
+        },
+        recurringConsent: true,
+      },
+      createdAt: "2026-11-05T10:00:00.000Z",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("returns 404 when the request has no selected plan", async () => {
     mockedGetVerificationRequestDetailsForUser.mockResolvedValue({
       id: "request-1",
@@ -86,6 +152,9 @@ describe("getVerificationRequest handler (unit)", () => {
       createdAt: new Date(),
       verificationType: { name: "Property Verification" },
       verificationPlan: null,
+      verificationTier: null,
+      monitoringPlan: null,
+      recurringConsent: false,
     });
     const { req, res, next } = buildMockReqRes("user-1");
 

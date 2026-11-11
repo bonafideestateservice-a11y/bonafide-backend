@@ -220,7 +220,38 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           properties:
  *             name: { type: string, example: Property Verification }
  *         details: { $ref: '#/components/schemas/ClientVerificationDetails' }
- *         plan: { $ref: '#/components/schemas/ClientVerificationPlanPricing' }
+ *         plan:
+ *           allOf:
+ *             - $ref: '#/components/schemas/ClientVerificationPlanPricing'
+ *           nullable: true
+ *         pricing:
+ *           type: object
+ *           description: Present when pricing was selected from the verification-tier catalogue.
+ *           required: [verificationTier, monitoringPlan, recurringConsent]
+ *           properties:
+ *             verificationTier:
+ *               type: object
+ *               required: [id, code, name, description, priceUsdCents, quoteRequired]
+ *               properties:
+ *                 id: { type: string, example: cm1vtier0001 }
+ *                 code: { type: string, enum: [BASIC, STANDARD, PREMIUM], example: STANDARD }
+ *                 name: { type: string, example: Standard }
+ *                 description: { type: string, example: Property title and court checks }
+ *                 priceUsdCents: { type: integer, nullable: true, example: 6000 }
+ *                 quoteRequired: { type: boolean, example: false }
+ *             monitoringPlan:
+ *               type: object
+ *               nullable: true
+ *               required: [id, code, name, priceUsdCents, intervalCount, checksPerPeriod, reportsPerPeriod]
+ *               properties:
+ *                 id: { type: string, example: cm1mplan0001 }
+ *                 code: { type: string, enum: [WEEKLY, MONTHLY, QUARTERLY], example: MONTHLY }
+ *                 name: { type: string, example: Monthly monitoring }
+ *                 priceUsdCents: { type: integer, example: 6000 }
+ *                 intervalCount: { type: integer, example: 1 }
+ *                 checksPerPeriod: { type: integer, example: 2 }
+ *                 reportsPerPeriod: { type: integer, example: 1 }
+ *             recurringConsent: { type: boolean, example: true }
  *         createdAt: { type: string, format: date-time, example: "2026-10-07T09:30:00.000Z" }
  *     ClientVerificationPlanSelection:
  *       type: object
@@ -776,8 +807,8 @@ router.get("/verification-requests/reports-summary", checkJwt, getVerificationRe
  * /api/{version}/client/verification-requests/{id}:
  *   get:
  *     tags: [Verification]
- *     summary: Get one of the user's verification requests with its selected plan
- *     description: Used for the payment summary. Requests owned by another user return 404. A request with no plan selected yet also returns 404.
+ *     summary: Get one of the user's verification requests with its selected pricing
+ *     description: Returns a legacy plan or the selected verification tier and optional monitoring plan. Requests owned by another user or with no selected pricing return 404.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -802,7 +833,7 @@ router.get("/verification-requests/reports-summary", checkJwt, getVerificationRe
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  *       404:
- *         description: The request does not exist or belongs to another user ("Verification request not found."), or no plan is selected ("Verification plan not selected.")
+ *         description: The request does not exist or belongs to another user ("Verification request not found."), or neither a legacy plan nor a verification tier is selected ("Verification plan not selected.")
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }

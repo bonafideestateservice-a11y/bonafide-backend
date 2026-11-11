@@ -31,7 +31,7 @@ export const getVerificationRequest = async (
       return next(new NotFoundError("Verification request not found."));
     }
 
-    if (!verificationRequest.verificationPlan) {
+    if (!verificationRequest.verificationPlan && !verificationRequest.verificationTier) {
       return next(new NotFoundError("Verification plan not selected."));
     }
 
@@ -40,10 +40,21 @@ export const getVerificationRequest = async (
       status: verificationRequest.status,
       verificationType: verificationRequest.verificationType,
       details: verificationRequest.details,
-      plan: {
-        ...verificationRequest.verificationPlan,
-        paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
-      },
+      plan: verificationRequest.verificationPlan
+        ? {
+            ...verificationRequest.verificationPlan,
+            paymentProviders: { USD: "STRIPE", NGN: "PAYSTACK" },
+          }
+        : null,
+      ...(verificationRequest.verificationTier
+        ? {
+            pricing: {
+              verificationTier: verificationRequest.verificationTier,
+              monitoringPlan: verificationRequest.monitoringPlan,
+              recurringConsent: verificationRequest.recurringConsent,
+            },
+          }
+        : {}),
       createdAt: verificationRequest.createdAt.toISOString(),
     });
   } catch (error) {

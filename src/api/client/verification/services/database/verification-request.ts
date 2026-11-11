@@ -65,6 +65,28 @@ export type VerificationRequestDetails = Prisma.VerificationRequestGetPayload<{
         priceNgnKobo: true;
       };
     };
+    verificationTier: {
+      select: {
+        id: true;
+        code: true;
+        name: true;
+        description: true;
+        priceUsdCents: true;
+        quoteRequired: true;
+      };
+    };
+    monitoringPlan: {
+      select: {
+        id: true;
+        code: true;
+        name: true;
+        priceUsdCents: true;
+        intervalCount: true;
+        checksPerPeriod: true;
+        reportsPerPeriod: true;
+      };
+    };
+    recurringConsent: true;
   };
 }>;
 
@@ -89,6 +111,28 @@ export const getVerificationRequestDetailsForUser = async (
             priceNgnKobo: true,
           },
         },
+        verificationTier: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            description: true,
+            priceUsdCents: true,
+            quoteRequired: true,
+          },
+        },
+        monitoringPlan: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            priceUsdCents: true,
+            intervalCount: true,
+            checksPerPeriod: true,
+            reportsPerPeriod: true,
+          },
+        },
+        recurringConsent: true,
       },
     });
     logger.info(
