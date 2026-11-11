@@ -54,6 +54,10 @@ describe("submitAgentAssignmentReport (service)", () => {
       progressPercent: 50,
       remainingSiteVisits: 1,
     });
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      maxWait: 5000,
+      timeout: 20000,
+    });
     expect(transaction.agentAssignment.findFirst).toHaveBeenCalled();
     expect(transaction.agentAssignment.findFirst).toHaveBeenCalledTimes(1);
   });

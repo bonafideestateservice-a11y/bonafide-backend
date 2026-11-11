@@ -244,15 +244,14 @@ export const submitAgentAssignmentReport = async (
   try {
     let uploadedReport: { reportId: string; verificationRequestId: string } | undefined;
     const result = await prismaClient.$transaction(
-      
       async (transaction) => {
-          const assignment = await transaction.agentAssignment.findFirst({
-            where: { id: assignmentId, agentId },
-            select: {
-              id: true,
-              verificationRequestId: true,
-              transactionId: true,
-              additionalNotes: true,
+        const assignment = await transaction.agentAssignment.findFirst({
+          where: { id: assignmentId, agentId },
+          select: {
+            id: true,
+            verificationRequestId: true,
+            transactionId: true,
+            additionalNotes: true,
             transaction: {
               select: {
                 subscriptionPeriod: {
@@ -266,7 +265,7 @@ export const submitAgentAssignmentReport = async (
                 },
               },
             },
-              checklistItems: {
+            checklistItems: {
               select: {
                 label: true,
                 sectionKey: true,
@@ -292,81 +291,81 @@ export const submitAgentAssignmentReport = async (
                 recurringConsent: true,
               },
             },
-            },
-          });
+          },
+        });
 
-      if (!assignment) return null;
+        if (!assignment) return null;
 
-      const period = assignment.transaction?.subscriptionPeriod;
-      if (
-        period &&
-        period.requiredSiteVisits > 0 &&
-        period.completedSiteVisits < period.requiredSiteVisits
-      ) {
-        const remainingSiteVisits = period.requiredSiteVisits - period.completedSiteVisits;
-        const progressPercent = Math.round(
-          (period.completedSiteVisits / period.requiredSiteVisits) * 100,
-        );
-        return {
-          kind: "INCOMPLETE_SITE_VISITS" as const,
-          progressPercent,
-          remainingSiteVisits,
-        };
-      }
+        const period = assignment.transaction?.subscriptionPeriod;
+        if (
+          period &&
+          period.requiredSiteVisits > 0 &&
+          period.completedSiteVisits < period.requiredSiteVisits
+        ) {
+          const remainingSiteVisits = period.requiredSiteVisits - period.completedSiteVisits;
+          const progressPercent = Math.round(
+            (period.completedSiteVisits / period.requiredSiteVisits) * 100,
+          );
+          return {
+            kind: "INCOMPLETE_SITE_VISITS" as const,
+            progressPercent,
+            remainingSiteVisits,
+          };
+        }
 
-      const totalItems = assignment.checklistItems.length;
-      const completedItems = assignment.checklistItems.filter(
-        (item) => item.status === "COMPLETE",
-      ).length;
-      const progressPercent = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
-      const remainingItems = totalItems
-        ? assignment.checklistItems
-            .filter((item) => item.status !== "COMPLETE")
-            .map((item) => item.label)
-        : [...verificationReportChecklistLabels];
+        const totalItems = assignment.checklistItems.length;
+        const completedItems = assignment.checklistItems.filter(
+          (item) => item.status === "COMPLETE",
+        ).length;
+        const progressPercent = totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
+        const remainingItems = totalItems
+          ? assignment.checklistItems
+              .filter((item) => item.status !== "COMPLETE")
+              .map((item) => item.label)
+          : [...verificationReportChecklistLabels];
 
         if (remainingItems.length > 0) {
           return { kind: "INCOMPLETE_CHECKLIST" as const, progressPercent, remainingItems };
         }
 
-      const { verificationRequestId } = assignment;
-      const reportSelect = { id: true, reviewStatus: true, generatedAt: true } as const;
-      const existingReport = assignment.transactionId
-        ? await transaction.verificationReport.findUnique({
-            where: { transactionId: assignment.transactionId },
+        const { verificationRequestId } = assignment;
+        const reportSelect = { id: true, reviewStatus: true, generatedAt: true } as const;
+        const existingReport = assignment.transactionId
+          ? await transaction.verificationReport.findUnique({
+              where: { transactionId: assignment.transactionId },
+              select: reportSelect,
+            })
+          : await transaction.verificationReport.findFirst({
+              where: { verificationRequestId, transactionId: null },
+              select: reportSelect,
+            });
+
+        const generatedAt = new Date();
+        const report =
+          existingReport ??
+          (await transaction.verificationReport.create({
+            data: {
+              verificationRequest: { connect: { id: verificationRequestId } },
+              agent: { connect: { id: agentId } },
+              ...(assignment.transactionId
+                ? { transaction: { connect: { id: assignment.transactionId } } }
+                : {}),
+              additionalNotes: assignment.additionalNotes,
+              reportUrl: reportDocument.url,
+              reviewStatus: ReportReviewStatus.PENDING,
+              generatedAt,
+            },
             select: reportSelect,
-          })
-        : await transaction.verificationReport.findFirst({
-            where: { verificationRequestId, transactionId: null },
-            select: reportSelect,
+          }));
+
+        if (!existingReport) {
+          uploadedReport = { reportId: report.id, verificationRequestId };
+        } else {
+          await transaction.verificationReport.update({
+            where: { id: report.id },
+            data: { reportUrl: reportDocument.url },
           });
-
-      const generatedAt = new Date();
-      const report =
-        existingReport ??
-        (await transaction.verificationReport.create({
-          data: {
-            verificationRequest: { connect: { id: verificationRequestId } },
-            agent: { connect: { id: agentId } },
-            ...(assignment.transactionId
-              ? { transaction: { connect: { id: assignment.transactionId } } }
-              : {}),
-            additionalNotes: assignment.additionalNotes,
-            reportUrl: reportDocument.url,
-            reviewStatus: ReportReviewStatus.PENDING,
-            generatedAt,
-          },
-          select: reportSelect,
-        }));
-
-      if (!existingReport) {
-        uploadedReport = { reportId: report.id, verificationRequestId };
-      } else {
-        await transaction.verificationReport.update({
-          where: { id: report.id },
-          data: { reportUrl: reportDocument.url },
-        });
-      }
+        }
 
         await transaction.document.deleteMany({
           where: {
@@ -417,14 +416,16 @@ export const submitAgentAssignmentReport = async (
           });
         }
 
-      return {
-        kind: "SUBMITTED" as const,
-        id: report.id,
-        reviewStatus: report.reviewStatus,
-        generatedAt: report.generatedAt ?? generatedAt,
-        reportDocument: savedReportDocument,
-      };
-    });
+        return {
+          kind: "SUBMITTED" as const,
+          id: report.id,
+          reviewStatus: report.reviewStatus,
+          generatedAt: report.generatedAt ?? generatedAt,
+          reportDocument: savedReportDocument,
+        };
+      },
+      { maxWait: 5000, timeout: 20000 },
+    );
 
     if (uploadedReport) {
       appEvents.emit(AppEventTypes.REPORT_UPLOADED, {
