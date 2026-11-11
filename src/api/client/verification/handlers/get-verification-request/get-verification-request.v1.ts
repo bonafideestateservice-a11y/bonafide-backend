@@ -40,6 +40,8 @@ export const getVerificationRequest = async (
       status: verificationRequest.status,
       verificationType: verificationRequest.verificationType,
       details: verificationRequest.details,
+      intendedUse: verificationRequest.intendedUse,
+      additionalNote: verificationRequest.additionalNote,
       plan: verificationRequest.verificationPlan
         ? {
             ...verificationRequest.verificationPlan,

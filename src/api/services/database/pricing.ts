@@ -50,6 +50,7 @@ export interface UpdateVerificationRequestPricingData {
 export interface IssuePremiumQuoteData {
   quoteId: string;
   issuedById: string;
+  scopeSummary: string | null;
   quoteUsdCents: number;
   quoteNgnKobo: number;
   usdToNgnRate: string;
@@ -565,6 +566,11 @@ export interface ActivateProviderPriceVersionsData {
 
 export interface ActivateProviderPriceVersionsBatchData {
   activations: ActivateProviderPriceVersionsData[];
+  quoteRanges?: {
+    id: string;
+    minQuoteUsdCents: number;
+    maxQuoteUsdCents: number;
+  }[];
   pricingSettings?: {
     usdToNgnRate: Prisma.Decimal;
     updatedById: string;
@@ -797,136 +803,156 @@ export const activateProviderPriceVersionsBatch = async (
   data: ActivateProviderPriceVersionsBatchData,
 ): Promise<ProviderPriceVersion[]> => {
   try {
-    const activeVersions = await prismaClient.$transaction(async (tx) => {
-      const activatedIds: string[] = [];
-      const seenTargets = new Set<string>();
+    const activeVersions = await prismaClient.$transaction(
+      async (tx) => {
+        const activatedIds: string[] = [];
+        const seenTargets = new Set<string>();
 
-      for (const activation of data.activations) {
-        const targetKey =
-          "verificationTierId" in activation.target
-            ? `tier:${activation.target.verificationTierId}`
-            : `monitoring:${activation.target.monitoringPlanId}`;
-        if (seenTargets.has(targetKey)) {
-          throw new PricingRecordError(
-            "INVALID_SELECTION",
-            "A pricing target can only be activated once per update",
-          );
-        }
-        seenTargets.add(targetKey);
+        for (const activation of data.activations) {
+          const targetKey =
+            "verificationTierId" in activation.target
+              ? `tier:${activation.target.verificationTierId}`
+              : `monitoring:${activation.target.monitoringPlanId}`;
+          if (seenTargets.has(targetKey)) {
+            throw new PricingRecordError(
+              "INVALID_SELECTION",
+              "A pricing target can only be activated once per update",
+            );
+          }
+          seenTargets.add(targetKey);
 
-        const records = await tx.providerPriceVersion.findMany({
-          where: { ...activation.target, version: activation.version },
-        });
-        if (records.length !== activation.prices.length) {
-          throw new PricingRecordError(
-            "INVALID_STATE",
-            "Required provider prices are not all synced",
-          );
-        }
-        for (const spec of activation.prices) {
-          const record = records.find(
-            (candidate) =>
-              candidate.provider === spec.provider && candidate.currency === spec.currency,
-          );
-          const providerReferencesExist =
-            record?.provider === PaymentProvider.STRIPE
-              ? !!record.providerProductId && !!record.providerPriceId
-              : record?.provider === PaymentProvider.PAYSTACK
-                ? spec.interval
-                  ? !!record.providerPriceId
-                  : record.providerPriceId === null
-                : false;
-          if (
-            !record ||
-            record.syncStatus !== ProviderPriceSyncStatus.READY ||
-            !sameProviderPrice(record, spec) ||
-            !providerReferencesExist
-          ) {
+          const records = await tx.providerPriceVersion.findMany({
+            where: { ...activation.target, version: activation.version },
+          });
+          if (records.length !== activation.prices.length) {
             throw new PricingRecordError(
               "INVALID_STATE",
-              "Provider price sync is incomplete or does not match the proposed terms",
+              "Required provider prices are not all synced",
             );
+          }
+          for (const spec of activation.prices) {
+            const record = records.find(
+              (candidate) =>
+                candidate.provider === spec.provider && candidate.currency === spec.currency,
+            );
+            const providerReferencesExist =
+              record?.provider === PaymentProvider.STRIPE
+                ? !!record.providerProductId && !!record.providerPriceId
+                : record?.provider === PaymentProvider.PAYSTACK
+                  ? spec.interval
+                    ? !!record.providerPriceId
+                    : record.providerPriceId === null
+                  : false;
+            if (
+              !record ||
+              record.syncStatus !== ProviderPriceSyncStatus.READY ||
+              !sameProviderPrice(record, spec) ||
+              !providerReferencesExist
+            ) {
+              throw new PricingRecordError(
+                "INVALID_STATE",
+                "Provider price sync is incomplete or does not match the proposed terms",
+              );
+            }
+          }
+
+          if ("verificationTierId" in activation.target) {
+            const tier = await tx.verificationTier.findFirst({
+              where: {
+                id: activation.target.verificationTierId,
+                active: true,
+                quoteRequired: false,
+              },
+              select: { id: true },
+            });
+            if (!tier) {
+              throw new PricingRecordError("INVALID_SELECTION", "Fixed-price tier not found");
+            }
+            await tx.providerPriceVersion.updateMany({
+              where: { verificationTierId: tier.id, activeForNewCheckout: true },
+              data: { activeForNewCheckout: false },
+            });
+            await tx.verificationTier.update({
+              where: { id: tier.id },
+              data: {
+                priceUsdCents: activation.usdAmountCents,
+                version: activation.version,
+              },
+            });
+          } else {
+            const plan = await tx.monitoringPlan.findUnique({
+              where: { id: activation.target.monitoringPlanId },
+              select: { id: true, active: true },
+            });
+            if (!plan?.active || !activation.monitoringTerms) {
+              throw new PricingRecordError(
+                "INVALID_SELECTION",
+                "Active monitoring plan terms are required",
+              );
+            }
+            await tx.providerPriceVersion.updateMany({
+              where: { monitoringPlanId: plan.id, activeForNewCheckout: true },
+              data: { activeForNewCheckout: false },
+            });
+            await tx.monitoringPlan.update({
+              where: { id: plan.id },
+              data: {
+                priceUsdCents: activation.usdAmountCents,
+                version: activation.version,
+                ...activation.monitoringTerms,
+              },
+            });
+          }
+
+          for (const record of records) {
+            const activated = await tx.providerPriceVersion.update({
+              where: { id: record.id },
+              data: { activeForNewCheckout: true },
+            });
+            activatedIds.push(activated.id);
           }
         }
 
-        if ("verificationTierId" in activation.target) {
+        for (const quoteRange of data.quoteRanges ?? []) {
           const tier = await tx.verificationTier.findFirst({
-            where: {
-              id: activation.target.verificationTierId,
-              active: true,
-              quoteRequired: false,
-            },
+            where: { id: quoteRange.id, active: true, quoteRequired: true },
             select: { id: true },
           });
           if (!tier) {
-            throw new PricingRecordError("INVALID_SELECTION", "Fixed-price tier not found");
+            throw new PricingRecordError("INVALID_SELECTION", "Quote-required tier not found");
           }
-          await tx.providerPriceVersion.updateMany({
-            where: { verificationTierId: tier.id, activeForNewCheckout: true },
-            data: { activeForNewCheckout: false },
-          });
           await tx.verificationTier.update({
             where: { id: tier.id },
             data: {
-              priceUsdCents: activation.usdAmountCents,
-              version: activation.version,
+              minQuoteUsdCents: quoteRange.minQuoteUsdCents,
+              maxQuoteUsdCents: quoteRange.maxQuoteUsdCents,
             },
           });
-        } else {
-          const plan = await tx.monitoringPlan.findUnique({
-            where: { id: activation.target.monitoringPlanId },
-            select: { id: true, active: true },
+        }
+
+        if (data.pricingSettings) {
+          const latest = await tx.pricingSettings.findFirst({ orderBy: { version: "desc" } });
+          await tx.pricingSettings.updateMany({
+            where: { active: true },
+            data: { active: false },
           });
-          if (!plan?.active || !activation.monitoringTerms) {
-            throw new PricingRecordError(
-              "INVALID_SELECTION",
-              "Active monitoring plan terms are required",
-            );
-          }
-          await tx.providerPriceVersion.updateMany({
-            where: { monitoringPlanId: plan.id, activeForNewCheckout: true },
-            data: { activeForNewCheckout: false },
-          });
-          await tx.monitoringPlan.update({
-            where: { id: plan.id },
+          await tx.pricingSettings.create({
             data: {
-              priceUsdCents: activation.usdAmountCents,
-              version: activation.version,
-              ...activation.monitoringTerms,
+              version: (latest?.version ?? 0) + 1,
+              usdToNgnRate: data.pricingSettings.usdToNgnRate,
+              roundingRule: NgnRoundingRule.NEAREST_KOBO,
+              active: true,
+              updatedById: data.pricingSettings.updatedById,
             },
           });
         }
 
-        for (const record of records) {
-          const activated = await tx.providerPriceVersion.update({
-            where: { id: record.id },
-            data: { activeForNewCheckout: true },
-          });
-          activatedIds.push(activated.id);
-        }
-      }
-
-      if (data.pricingSettings) {
-        const latest = await tx.pricingSettings.findFirst({ orderBy: { version: "desc" } });
-        await tx.pricingSettings.updateMany({
-          where: { active: true },
-          data: { active: false },
-        });
-        await tx.pricingSettings.create({
-          data: {
-            version: (latest?.version ?? 0) + 1,
-            usdToNgnRate: data.pricingSettings.usdToNgnRate,
-            roundingRule: NgnRoundingRule.NEAREST_KOBO,
-            active: true,
-            updatedById: data.pricingSettings.updatedById,
-          },
-        });
-      }
-
-      return activatedIds.length
-        ? tx.providerPriceVersion.findMany({ where: { id: { in: activatedIds } } })
-        : [];
-    }, { timeout: 30_000 });
+        return activatedIds.length
+          ? tx.providerPriceVersion.findMany({ where: { id: { in: activatedIds } } })
+          : [];
+      },
+      { timeout: 30_000 },
+    );
     logger.info(`Provider price versions activated count=${activeVersions.length}`);
     return activeVersions;
   } catch (error) {
@@ -1052,6 +1078,8 @@ export const createPremiumQuoteRequest = async (data: {
   verificationRequestId: string;
   verificationTierId: string;
   userId: string;
+  intendedUse: string;
+  notes?: string | null;
 }): Promise<PremiumQuote> => {
   try {
     const quote = await prismaClient.$transaction(async (tx) => {
@@ -1083,6 +1111,14 @@ export const createPremiumQuoteRequest = async (data: {
       if (existing) {
         throw new PricingRecordError("INVALID_STATE", "A Premium quote is already in progress");
       }
+
+      await tx.verificationRequest.update({
+        where: { id: request.id },
+        data: {
+          intendedUse: data.intendedUse,
+          ...(data.notes !== undefined ? { additionalNote: data.notes } : {}),
+        },
+      });
 
       return tx.premiumQuote.create({
         data: {
@@ -1208,6 +1244,7 @@ export const issuePremiumQuote = async (data: IssuePremiumQuoteData): Promise<Pr
         data: {
           quoteUsdCents: data.quoteUsdCents,
           quoteNgnKobo: data.quoteNgnKobo,
+          scopeSummary: data.scopeSummary,
           usdToNgnRate: data.usdToNgnRate,
           rateVersion: data.rateVersion,
           pricingSettingsId: data.pricingSettingsId,

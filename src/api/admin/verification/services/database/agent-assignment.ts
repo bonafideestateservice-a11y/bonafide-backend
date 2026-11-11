@@ -5,6 +5,7 @@ import {
   Prisma,
   SiteVisitStatus,
   UserStatus,
+  VerificationTierCode,
   VerificationStatus,
 } from "@prisma/client";
 import { appEvents, AppEventTypes } from "../../../../../events";
@@ -22,6 +23,15 @@ import {
   MAX_ACTIVE_ASSIGNMENTS,
   OPEN_ASSIGNMENT_STATUSES,
 } from "../../../authentication/services/database/agent";
+
+const legacyReportSections = getVerificationReportSections(VerificationTierCode.BASIC) ?? [];
+
+const findReportSection = (
+  reportSections: ReturnType<typeof getVerificationReportSections>,
+  item: { sectionKey: string | null; label: string },
+) =>
+  reportSections?.find((section) => section.key === item.sectionKey) ??
+  legacyReportSections.find((section) => section.label === item.label);
 
 export type AgentAssignmentInformation = Prisma.AgentAssignmentGetPayload<{
   select: {
@@ -405,6 +415,7 @@ export type StartedAgentAssignment = {
     sectionKey: string | null;
     status: "PENDING";
     requiresMedia: boolean;
+    mediaType: "PHOTO" | "DOCUMENT";
     fields: { key: string; label: string; type: "text" | "number" }[];
   }[];
 };
@@ -562,6 +573,8 @@ export const startAgentAssignment = async (
             requiresMedia:
               reportSections?.find((section) => section.key === item.sectionKey)?.requiresMedia ??
               true,
+            mediaType:
+              findReportSection(reportSections, item)?.mediaType ?? "DOCUMENT",
             fields:
               reportSections?.find((section) => section.key === item.sectionKey)?.fields ?? [],
           })),
@@ -591,6 +604,8 @@ export type AgentAssignmentChecklist = {
     sectionKey: string | null;
     status: "PENDING" | "COMPLETE";
     result: Prisma.JsonValue;
+    requiresMedia: boolean;
+    mediaType: "PHOTO" | "DOCUMENT";
     fields: { key: string; label: string; type: "text" | "number" }[];
     media: { id: string; url: string; fileName: string; fileType: string; fileSizeBytes: number }[];
   }[];
@@ -620,6 +635,8 @@ export type AgentAssignmentChecklist = {
     phone: string;
     email: string;
   };
+  intendedUse: string | null;
+  clientNotes: string | null;
   additionalNotes: string | null;
   progressPercent: number;
   payment: { status: string; amountInCents: number };
@@ -680,6 +697,8 @@ export const getAgentAssignmentChecklist = async (
         },
         verificationRequest: {
           select: {
+            intendedUse: true,
+            additionalNote: true,
             verificationTier: { select: { id: true, name: true, code: true } },
             user: { select: { fullName: true, phone: true, email: true } },
             documents: {
@@ -725,10 +744,16 @@ export const getAgentAssignmentChecklist = async (
       checklistItems: checklistItems.map((item) => ({
         ...item,
         fields: reportSections?.find((section) => section.key === item.sectionKey)?.fields ?? [],
+        requiresMedia:
+          reportSections?.find((section) => section.key === item.sectionKey)?.requiresMedia ?? true,
+        mediaType:
+          findReportSection(reportSections, item)?.mediaType ?? "DOCUMENT",
       })),
       verificationTier: assignment.verificationRequest.verificationTier,
       period: assignment.transaction?.subscriptionPeriod ?? null,
       clientDocuments: assignment.verificationRequest.documents,
+      intendedUse: assignment.verificationRequest.intendedUse,
+      clientNotes: assignment.verificationRequest.additionalNote,
       client: {
         firstName: names[0] || "",
         lastName: names.slice(1).join(" "),
@@ -760,6 +785,8 @@ export type UpdatedAgentChecklistItem = {
   sectionKey: string | null;
   status: "PENDING" | "COMPLETE";
   result: Prisma.JsonValue;
+  requiresMedia: boolean;
+  mediaType: "PHOTO" | "DOCUMENT";
   fields: { key: string; label: string; type: "text" | "number" }[];
   media: {
     id: string;
@@ -967,6 +994,11 @@ export const updateAgentChecklistItem = async (
         if (!updatedItem) return null;
         return {
           ...updatedItem,
+          requiresMedia:
+            reportSections?.find((section) => section.key === updatedItem.sectionKey)
+              ?.requiresMedia ?? true,
+          mediaType:
+            findReportSection(reportSections, updatedItem)?.mediaType ?? "DOCUMENT",
           fields:
             reportSections?.find((section) => section.key === updatedItem.sectionKey)?.fields ?? [],
         };

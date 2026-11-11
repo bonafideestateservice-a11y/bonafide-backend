@@ -13,6 +13,7 @@ export interface CreateVerificationRequestData {
   recurringConsentAt?: Date | null;
   status?: VerificationStatus;
   details: Prisma.InputJsonValue;
+  intendedUse?: string | null;
   additionalNote?: string | null;
 }
 
@@ -55,6 +56,8 @@ export type VerificationRequestDetails = Prisma.VerificationRequestGetPayload<{
     id: true;
     status: true;
     details: true;
+    intendedUse: true;
+    additionalNote: true;
     createdAt: true;
     verificationType: { select: { name: true } };
     verificationPlan: {
@@ -101,6 +104,8 @@ export const getVerificationRequestDetailsForUser = async (
         id: true,
         status: true,
         details: true,
+        intendedUse: true,
+        additionalNote: true,
         createdAt: true,
         verificationType: { select: { name: true } },
         verificationPlan: {

@@ -10,6 +10,7 @@ export type VerificationReportSection = {
   key: string;
   label: string;
   requiresMedia: boolean;
+  mediaType: "PHOTO" | "DOCUMENT";
   fields: VerificationReportSectionField[];
 };
 
@@ -20,6 +21,7 @@ const basicSections: VerificationReportSection[] = [
     key: "site_visit",
     label: "Physical verification",
     requiresMedia: true,
+    mediaType: "PHOTO",
     fields: [
       { key: "visitOutcome", label: "Visit outcome", type: "text" },
       { key: "notes", label: "Site observations", type: "text" },
@@ -29,6 +31,7 @@ const basicSections: VerificationReportSection[] = [
     key: "court_crime_verification",
     label: "Court/crime verification",
     requiresMedia: false,
+    mediaType: "DOCUMENT",
     fields: [
       { key: "outcome", label: "Verification outcome", type: "text" },
       { key: "notes", label: "Verification notes", type: "text" },
@@ -38,6 +41,7 @@ const basicSections: VerificationReportSection[] = [
     key: "title_deeds_verification",
     label: "Title deeds and documentation verification",
     requiresMedia: true,
+    mediaType: "DOCUMENT",
     fields: [
       { key: "outcome", label: "Verification outcome", type: "text" },
       { key: "notes", label: "Verification notes", type: "text" },
@@ -47,6 +51,7 @@ const basicSections: VerificationReportSection[] = [
     key: "valuation_verification",
     label: "Valuation verification",
     requiresMedia: false,
+    mediaType: "DOCUMENT",
     fields: [
       { key: "outcome", label: "Verification outcome", type: "text" },
       { key: "notes", label: "Verification notes", type: "text" },
@@ -56,6 +61,7 @@ const basicSections: VerificationReportSection[] = [
     key: "amenities_environment_verification",
     label: "Amenities and environment verification",
     requiresMedia: false,
+    mediaType: "PHOTO",
     fields: [
       { key: "outcome", label: "Verification outcome", type: "text" },
       { key: "notes", label: "Verification notes", type: "text" },
@@ -68,6 +74,7 @@ const standardSections: VerificationReportSection[] = [
     key: "land_registry_search",
     label: "Land registry check",
     requiresMedia: true,
+    mediaType: "DOCUMENT",
     fields: [
       { key: "outcome", label: "Search outcome", type: "text" },
       { key: "reference", label: "Search reference", type: "text" },
@@ -77,6 +84,7 @@ const standardSections: VerificationReportSection[] = [
     key: "court_records_search",
     label: "Court records search",
     requiresMedia: true,
+    mediaType: "DOCUMENT",
     fields: [
       { key: "outcome", label: "Search outcome", type: "text" },
       { key: "reference", label: "Search reference", type: "text" },
@@ -86,6 +94,7 @@ const standardSections: VerificationReportSection[] = [
     key: "local_intelligence",
     label: "Local intelligence gathering",
     requiresMedia: true,
+    mediaType: "DOCUMENT",
     fields: [{ key: "narrative", label: "Intelligence narrative", type: "text" }],
   },
 ];
@@ -95,6 +104,7 @@ const premiumSections: VerificationReportSection[] = [
     key: "valuation",
     label: "Property valuation",
     requiresMedia: true,
+    mediaType: "DOCUMENT",
     fields: [
       { key: "amount", label: "Valuation amount", type: "number" },
       { key: "currency", label: "Currency (ISO 4217)", type: "text" },
@@ -106,6 +116,7 @@ const premiumSections: VerificationReportSection[] = [
     key: "feasibility",
     label: "Feasibility report on the property’s intended use",
     requiresMedia: true,
+    mediaType: "DOCUMENT",
     fields: [
       { key: "outcome", label: "Feasibility outcome", type: "text" },
       { key: "assumptions", label: "Assumptions", type: "text" },

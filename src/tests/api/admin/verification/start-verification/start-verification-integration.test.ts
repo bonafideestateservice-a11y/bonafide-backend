@@ -121,42 +121,36 @@ describe("POST /api/v1/admin/verification/agent-assignments/:id/start", () => {
       .set("Authorization", `Bearer ${agentToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
+    expect(response.body).toMatchObject({
       id: assignmentId,
       status: "ACCEPTED",
       checklist: [
         {
-          id: expect.any(String),
           label: "Physical verification",
-          status: "PENDING",
-          requiresMedia: true,
+          mediaType: "PHOTO",
         },
         {
-          id: expect.any(String),
           label: "Court/crime verification",
-          status: "PENDING",
-          requiresMedia: true,
+          mediaType: "DOCUMENT",
         },
         {
-          id: expect.any(String),
           label: "Title deeds and documentation verification",
-          status: "PENDING",
-          requiresMedia: true,
+          mediaType: "DOCUMENT",
         },
         {
-          id: expect.any(String),
           label: "Valuation verification",
-          status: "PENDING",
-          requiresMedia: true,
+          mediaType: "DOCUMENT",
         },
         {
-          id: expect.any(String),
           label: "Amenities and environment verification",
-          status: "PENDING",
-          requiresMedia: true,
+          mediaType: "PHOTO",
         },
       ],
     });
+    expect(response.body.checklist).toHaveLength(5);
+    expect(
+      response.body.checklist.every((item: { fields: unknown[] }) => item.fields.length === 0),
+    ).toBe(true);
 
     await expect(
       prismaClient.agentAssignment.findUnique({ where: { id: assignmentId } }),

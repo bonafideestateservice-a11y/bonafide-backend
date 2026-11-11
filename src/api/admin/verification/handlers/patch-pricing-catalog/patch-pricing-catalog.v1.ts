@@ -70,6 +70,62 @@ const parseUpdates = (
   });
 };
 
+interface TierUpdate {
+  id: string;
+  priceUsdCents?: number;
+  minQuoteUsdCents?: number;
+  maxQuoteUsdCents?: number;
+}
+
+const parseTierUpdates = (value: unknown): TierUpdate[] => {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new BadRequestError("Tier updates must be an array.");
+  }
+
+  const seenIds = new Set<string>();
+  return value.map((item) => {
+    if (!item || typeof item !== "object") {
+      throw new BadRequestError("Tier updates must include an id and price or quote range.");
+    }
+
+    const update = item as Record<string, unknown>;
+    const id = typeof update.id === "string" ? update.id.trim() : "";
+    if (!id) {
+      throw new BadRequestError("Tier id is required for catalogue updates.");
+    }
+    if (seenIds.has(id)) {
+      throw new BadRequestError(`Tier ${id} is included more than once.`);
+    }
+
+    const parsed: TierUpdate = { id };
+    for (const field of ["priceUsdCents", "minQuoteUsdCents", "maxQuoteUsdCents"] as const) {
+      if (update[field] === undefined) continue;
+      const amount = typeof update[field] === "number" ? update[field] : Number(update[field]);
+      if (!Number.isSafeInteger(amount) || amount <= 0) {
+        throw new BadRequestError(`Tier ${id} has an invalid ${field}.`);
+      }
+      parsed[field] = amount;
+    }
+    if (
+      parsed.priceUsdCents === undefined &&
+      parsed.minQuoteUsdCents === undefined &&
+      parsed.maxQuoteUsdCents === undefined
+    ) {
+      throw new BadRequestError(`Tier ${id} must include a price or quote range update.`);
+    }
+    if (
+      parsed.priceUsdCents !== undefined &&
+      (parsed.minQuoteUsdCents !== undefined || parsed.maxQuoteUsdCents !== undefined)
+    ) {
+      throw new BadRequestError(`Tier ${id} cannot update a fixed price and quote range together.`);
+    }
+
+    seenIds.add(id);
+    return parsed;
+  });
+};
+
 export const patchAdminPricingCatalog = async (
   req: Request,
   res: Response,
@@ -89,7 +145,7 @@ export const patchAdminPricingCatalog = async (
       monitoringPlans?: unknown;
     };
     const proposedRate = parsePositiveRate(body.usdToNgnRate);
-    const tierUpdates = parseUpdates(body.tiers, "Tier");
+    const tierUpdates = parseTierUpdates(body.tiers);
     const monitoringUpdates = parseUpdates(body.monitoringPlans, "Monitoring plan");
     const catalogue = await getVerificationPricingCatalogue();
     const currentRate = catalogue.pricingSettings?.usdToNgnRate ?? null;
@@ -100,6 +156,11 @@ export const patchAdminPricingCatalog = async (
     }
 
     const syncTargets = new Map<string, { target: ProviderPriceTarget; usdAmountCents: number }>();
+    const quoteRangeUpdates: {
+      id: string;
+      minQuoteUsdCents: number;
+      maxQuoteUsdCents: number;
+    }[] = [];
     const addTier = (id: string, priceUsdCents: number) => {
       syncTargets.set(`tier:${id}`, {
         target: { verificationTierId: id },
@@ -137,12 +198,38 @@ export const patchAdminPricingCatalog = async (
 
     for (const update of tierUpdates) {
       const tier = catalogue.tiers.find(
-        (candidate) => candidate.id === update.id && candidate.active && !candidate.quoteRequired,
+        (candidate) => candidate.id === update.id && candidate.active,
       );
       if (!tier) {
         throw new BadRequestError(`Tier ${update.id} was not found or is not editable.`);
       }
-      addTier(update.id, update.priceUsdCents);
+      if (update.priceUsdCents !== undefined) {
+        if (tier.quoteRequired) {
+          throw new BadRequestError(`Tier ${update.id} does not have an editable fixed price.`);
+        }
+        addTier(update.id, update.priceUsdCents);
+      } else {
+        if (!tier.quoteRequired) {
+          throw new BadRequestError(`Tier ${update.id} does not have an editable quote range.`);
+        }
+        const minQuoteUsdCents = update.minQuoteUsdCents ?? tier.minQuoteUsdCents;
+        const maxQuoteUsdCents = update.maxQuoteUsdCents ?? tier.maxQuoteUsdCents;
+        if (
+          !Number.isSafeInteger(minQuoteUsdCents) ||
+          !Number.isSafeInteger(maxQuoteUsdCents) ||
+          minQuoteUsdCents === null ||
+          maxQuoteUsdCents === null ||
+          minQuoteUsdCents <= 0 ||
+          maxQuoteUsdCents < minQuoteUsdCents
+        ) {
+          throw new BadRequestError(`Tier ${update.id} has an invalid Premium quote range.`);
+        }
+        quoteRangeUpdates.push({
+          id: tier.id,
+          minQuoteUsdCents,
+          maxQuoteUsdCents,
+        });
+      }
     }
 
     for (const update of monitoringUpdates) {
@@ -177,6 +264,7 @@ export const patchAdminPricingCatalog = async (
 
     await activateProviderPriceVersionsBatch({
       activations,
+      ...(quoteRangeUpdates.length ? { quoteRanges: quoteRangeUpdates } : {}),
       ...(rateChanged && proposedRate
         ? { pricingSettings: { usdToNgnRate: proposedRate, updatedById: userId } }
         : {}),
@@ -185,7 +273,9 @@ export const patchAdminPricingCatalog = async (
     const settings = await getVerificationPricingCatalogue();
     res.status(HttpStatusCode.OK).json({
       status: "success",
-      message: "Pricing updated and synced to Stripe and Paystack for future checkouts.",
+      message: syncTargets.size
+        ? "Pricing updated and synced to Stripe and Paystack for future checkouts."
+        : "Pricing catalogue updated.",
       data: {
         pricingSettings: settings.pricingSettings
           ? {

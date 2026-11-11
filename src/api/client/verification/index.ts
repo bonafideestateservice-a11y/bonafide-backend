@@ -164,7 +164,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *             NGN: { type: string, enum: [PAYSTACK], example: PAYSTACK }
  *     ClientVerificationRequestCreated:
  *       type: object
- *       required: [id, status, verificationTypeId, details, additionalNote, createdAt]
+ *       required: [id, status, verificationTypeId, details, intendedUse, additionalNote, createdAt]
  *       properties:
  *         id: { type: string, example: cm1vreq0001 }
  *         status:
@@ -173,12 +173,13 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           description: Always DRAFT for a new request.
  *         verificationTypeId: { type: string, example: cm1vtype0001 }
  *         details: { $ref: '#/components/schemas/ClientVerificationDetails' }
+ *         intendedUse: { type: string, nullable: true, example: Residential rental investment }
  *         additionalNote: { type: string, nullable: true, example: Gate code is 1234 }
  *         createdAt: { type: string, format: date-time, example: "2026-10-07T09:30:00.000Z" }
  *     ClientVerificationRequestRecord:
  *       type: object
  *       description: The full verification request row as stored.
- *       required: [id, userId, verificationTypeId, verificationPlanId, status, details, additionalNote, notifyOnInspectionStart, notifyOnReportReady, createdAt, updatedAt]
+ *       required: [id, userId, verificationTypeId, verificationPlanId, status, details, intendedUse, additionalNote, notifyOnInspectionStart, notifyOnReportReady, createdAt, updatedAt]
  *       properties:
  *         id: { type: string, example: cm1vreq0001 }
  *         userId: { type: string, example: cm1user0001 }
@@ -186,6 +187,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         verificationPlanId: { type: string, nullable: true, example: cm1vplan0001 }
  *         status: { $ref: '#/components/schemas/ClientVerificationStatus' }
  *         details: { $ref: '#/components/schemas/ClientVerificationDetails' }
+ *         intendedUse: { type: string, nullable: true, example: Residential rental investment }
  *         additionalNote: { type: string, nullable: true, example: Gate code is 1234 }
  *         notifyOnInspectionStart: { type: boolean, example: true }
  *         notifyOnReportReady: { type: boolean, example: true }
@@ -210,7 +212,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *         updatedAt: { type: string, format: date-time, example: "2026-10-07T09:45:00.000Z" }
  *     ClientVerificationRequestDetail:
  *       type: object
- *       required: [id, status, verificationType, details, plan, createdAt]
+ *       required: [id, status, verificationType, details, intendedUse, additionalNote, plan, createdAt]
  *       properties:
  *         id: { type: string, example: cm1vreq0001 }
  *         status: { $ref: '#/components/schemas/ClientVerificationStatus' }
@@ -220,6 +222,8 @@ const upload = multer({ storage: multer.memoryStorage() });
  *           properties:
  *             name: { type: string, example: Property Verification }
  *         details: { $ref: '#/components/schemas/ClientVerificationDetails' }
+ *         intendedUse: { type: string, nullable: true, example: Residential rental investment }
+ *         additionalNote: { type: string, nullable: true, example: Gate code is 1234 }
  *         plan:
  *           allOf:
  *             - $ref: '#/components/schemas/ClientVerificationPlanPricing'
@@ -237,7 +241,13 @@ const upload = multer({ storage: multer.memoryStorage() });
  *                 code: { type: string, enum: [BASIC, STANDARD, PREMIUM], example: STANDARD }
  *                 name: { type: string, example: Standard }
  *                 description: { type: string, example: Property title and court checks }
+ *                 features:
+ *                   type: array
+ *                   description: Configured package bullet points.
+ *                   items: { type: string }
  *                 priceUsdCents: { type: integer, nullable: true, example: 6000 }
+ *                 minQuoteUsdCents: { type: integer, nullable: true, example: 10000 }
+ *                 maxQuoteUsdCents: { type: integer, nullable: true, example: 20000 }
  *                 quoteRequired: { type: boolean, example: false }
  *             monitoringPlan:
  *               type: object
@@ -680,10 +690,75 @@ router.get("/services/verification/verification-types", getVerificationTypes);
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get("/verification-types/:slug/plans", getVerificationTypesPlan);
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/quote:
+ *   post:
+ *     tags: [Verification]
+ *     summary: Request a Premium quote
+ *     description: >
+ *       Saves the intended use and optional client notes on the verification request, then creates
+ *       a quote request. Intended use is required either in this body or from the saved request.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string, enum: [v1], default: v1 }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               intendedUse: { type: string, example: Residential rental investment }
+ *               notes: { type: string, example: Please include a valuation of the existing structure. }
+ *     responses:
+ *       201:
+ *         description: Premium quote request created.
+ *       400:
+ *         description: Intended use is missing or request is not configured for Premium.
+ *       401:
+ *         description: Missing, invalid or expired token.
+ *       404:
+ *         description: Verification request not found.
+ */
+router.post("/verification-requests/:id/quote", checkJwt, postVerificationRequestQuote);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/quote:
+ *   get:
+ *     tags: [Verification]
+ *     summary: Read the latest Premium quote
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string, enum: [v1], default: v1 }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Quote details including the saved client-facing scope summary.
+ *       401:
+ *         description: Missing, invalid or expired token.
+ *       404:
+ *         description: Premium quote not found.
+ */
+router.get("/verification-requests/:id/quote", checkJwt, getVerificationRequestQuote);
 router.get("/verification-pricing/catalogue", checkJwt, getVerificationPricingCatalog);
 router.patch("/verification-requests/:id/pricing", checkJwt, patchVerificationRequestPricing);
-router.post("/verification-requests/:id/quote", checkJwt, postVerificationRequestQuote);
-router.get("/verification-requests/:id/quote", checkJwt, getVerificationRequestQuote);
 router.get(
   "/verification-requests/:id/checkout-summary",
   checkJwt,
@@ -701,7 +776,7 @@ router.post("/verification-requests/:id/quote/accept", checkJwt, acceptVerificat
  *       Creates a request in DRAFT status for the authenticated user. The required `details`
  *       fields depend on the slug of the verification type identified by `verificationTypeId`
  *       (see ClientVerificationDetails). String values are trimmed and unknown keys are dropped.
- *       An empty or whitespace-only `additionalNote` is stored as null.
+ *       An empty or whitespace-only `intendedUse` or `additionalNote` is stored as null.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -734,6 +809,10 @@ router.post("/verification-requests/:id/quote/accept", checkJwt, acceptVerificat
  *               additionalNote:
  *                 type: string
  *                 example: Gate code is 1234
+ *               intendedUse:
+ *                 type: string
+ *                 description: Optional intended use of the property, needed for Premium feasibility.
+ *                 example: Residential rental investment
  *           example:
  *             verificationTypeId: cm1vtype0001
  *             details:
@@ -741,6 +820,7 @@ router.post("/verification-requests/:id/quote/accept", checkJwt, acceptVerificat
  *               propertyType: COMPLETED_BUILDING
  *               propertyAddress: 12 Admiralty Way, Lekki Phase 1, Lagos
  *             additionalNote: Gate code is 1234
+ *             intendedUse: Residential rental investment
  *     responses:
  *       201:
  *         description: Draft verification request created

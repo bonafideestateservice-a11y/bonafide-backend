@@ -21,6 +21,16 @@ describe("tier-specific verification report sections", () => {
     expect(getVerificationReportSections(null)).toBeNull();
   });
 
+  it("declares the expected upload kind for report sections", () => {
+    const sections = getVerificationReportSections(VerificationTierCode.PREMIUM)!;
+
+    expect(sections.find((section) => section.key === "site_visit")?.mediaType).toBe("PHOTO");
+    expect(sections.find((section) => section.key === "title_deeds_verification")?.mediaType).toBe(
+      "DOCUMENT",
+    );
+    expect(sections.find((section) => section.key === "feasibility")?.mediaType).toBe("DOCUMENT");
+  });
+
   it.each([
     [
       1,

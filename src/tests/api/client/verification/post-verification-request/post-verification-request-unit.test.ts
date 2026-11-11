@@ -70,6 +70,7 @@ describe("postVerificationRequest handler (unit)", () => {
         propertyType: "COMPLETED_BUILDING",
         propertyAddress: "12 Admiralty Way",
       },
+      intendedUse: "Residential rental investment",
       additionalNote: "Inspect the foundation.",
       createdAt: new Date("2026-09-18T10:00:00.000Z"),
     });
@@ -81,6 +82,7 @@ describe("postVerificationRequest handler (unit)", () => {
           propertyType: " COMPLETED_BUILDING ",
           propertyAddress: " 12 Admiralty Way ",
         },
+        intendedUse: " Residential rental investment ",
         additionalNote: " Inspect the foundation. ",
       },
       "user-1",
@@ -97,6 +99,7 @@ describe("postVerificationRequest handler (unit)", () => {
         propertyType: "COMPLETED_BUILDING",
         propertyAddress: "12 Admiralty Way",
       },
+      intendedUse: "Residential rental investment",
       additionalNote: "Inspect the foundation.",
     });
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.CREATED);
@@ -109,6 +112,7 @@ describe("postVerificationRequest handler (unit)", () => {
         propertyType: "COMPLETED_BUILDING",
         propertyAddress: "12 Admiralty Way",
       },
+      intendedUse: "Residential rental investment",
       additionalNote: "Inspect the foundation.",
       createdAt: "2026-09-18T10:00:00.000Z",
     });
@@ -150,6 +154,7 @@ describe("postVerificationRequest handler (unit)", () => {
         projectType: "3 Storey Building",
         currentConstructionStage: "Foundation Completed",
       },
+      intendedUse: null,
       additionalNote: null,
       createdAt: new Date("2026-09-18T10:00:00.000Z"),
     });
@@ -176,6 +181,7 @@ describe("postVerificationRequest handler (unit)", () => {
         projectType: "3 Storey Building",
         currentConstructionStage: "Foundation Completed",
       },
+      intendedUse: null,
       additionalNote: null,
     });
     expect(res.status).toHaveBeenCalledWith(HttpStatusCode.CREATED);

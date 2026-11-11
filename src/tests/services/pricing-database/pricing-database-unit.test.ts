@@ -1,11 +1,13 @@
 const transaction = {
   verificationRequest: {
     findFirst: jest.fn(),
+    update: jest.fn(),
     updateMany: jest.fn(),
     findUniqueOrThrow: jest.fn(),
   },
   verificationTier: {
     findFirst: jest.fn(),
+    update: jest.fn(),
   },
   monitoringPlan: {
     findFirst: jest.fn(),
@@ -23,6 +25,7 @@ const transaction = {
   },
   providerPriceVersion: {
     findFirst: jest.fn(),
+    findMany: jest.fn(),
   },
   monitoringSubscription: {
     findUnique: jest.fn(),
@@ -80,10 +83,13 @@ import {
 import {
   acceptPremiumQuote,
   activateMonitoringForPaidTransaction,
+  activateProviderPriceVersionsBatch,
   createPaidSubscriptionPeriod,
   createVerificationCheckoutTransactionData,
+  createPremiumQuoteRequest,
   findVerificationCheckoutPricing,
   getVerificationPricingCatalogue,
+  issuePremiumQuote,
   reservePricedTransaction,
   updateVerificationRequestPricing,
 } from "../../../api/services/database/pricing";
@@ -113,6 +119,7 @@ describe("pricing database services", () => {
       recurringConsentAt: null,
       user: { countryCode: "US", email: "client@example.com", paystackCustomerCode: null },
     });
+
     prisma.pricingSettings.findFirst.mockResolvedValue({
       version: 3,
       usdToNgnRate: new Prisma.Decimal("1500"),
@@ -143,6 +150,109 @@ describe("pricing database services", () => {
         }),
       }),
     );
+  });
+
+  it("persists Premium intended use and client notes with the quote request", async () => {
+    const quote = {
+      id: "quote-1",
+      verificationRequestId: "request-1",
+      status: PremiumQuoteStatus.REQUESTED,
+    };
+    transaction.verificationRequest.findFirst.mockResolvedValue({
+      id: "request-1",
+      monitoringPlanId: null,
+    });
+    transaction.premiumQuote.findFirst.mockResolvedValue(null);
+    transaction.premiumQuote.create.mockResolvedValue(quote);
+
+    const result = await createPremiumQuoteRequest({
+      verificationRequestId: "request-1",
+      verificationTierId: "tier-premium",
+      userId: "client-1",
+      intendedUse: "Residential rental investment",
+      notes: "Assess access to the site.",
+    });
+
+    expect(transaction.verificationRequest.update).toHaveBeenCalledWith({
+      where: { id: "request-1" },
+      data: {
+        intendedUse: "Residential rental investment",
+        additionalNote: "Assess access to the site.",
+      },
+    });
+    expect(result).toBe(quote);
+  });
+
+  it("persists the admin-provided Premium quote scope summary", async () => {
+    transaction.premiumQuote.findUnique.mockResolvedValue({
+      id: "quote-1",
+      status: PremiumQuoteStatus.REQUESTED,
+      verificationTier: {
+        code: VerificationTierCode.PREMIUM,
+        quoteRequired: true,
+        minQuoteUsdCents: 10000,
+        maxQuoteUsdCents: 20000,
+        version: 1,
+      },
+    });
+    transaction.pricingSettings.findUnique.mockResolvedValue({
+      id: "pricing-1",
+      active: true,
+      version: 3,
+      usdToNgnRate: new Prisma.Decimal("1500"),
+      roundingRule: "NEAREST_KOBO",
+    });
+    transaction.premiumQuote.updateMany.mockResolvedValue({ count: 1 });
+    transaction.premiumQuote.findUniqueOrThrow.mockResolvedValue({
+      id: "quote-1",
+      scopeSummary: "Valuation and feasibility assessment",
+    });
+
+    await issuePremiumQuote({
+      quoteId: "quote-1",
+      issuedById: "admin-1",
+      scopeSummary: "Valuation and feasibility assessment",
+      quoteUsdCents: 15000,
+      quoteNgnKobo: 22500000,
+      usdToNgnRate: "1500",
+      rateVersion: 3,
+      pricingSettingsId: "pricing-1",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+
+    expect(transaction.premiumQuote.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          scopeSummary: "Valuation and feasibility assessment",
+        }),
+      }),
+    );
+  });
+
+  it("updates Premium quote bounds transactionally without provider-price activations", async () => {
+    transaction.verificationTier.findFirst.mockResolvedValue({ id: "tier-premium" });
+    transaction.verificationTier.update.mockResolvedValue({});
+    transaction.providerPriceVersion.findMany.mockResolvedValue([]);
+
+    await activateProviderPriceVersionsBatch({
+      activations: [],
+      quoteRanges: [
+        {
+          id: "tier-premium",
+          minQuoteUsdCents: 12000,
+          maxQuoteUsdCents: 25000,
+        },
+      ],
+    });
+
+    expect(transaction.verificationTier.findFirst).toHaveBeenCalledWith({
+      where: { id: "tier-premium", active: true, quoteRequired: true },
+      select: { id: true },
+    });
+    expect(transaction.verificationTier.update).toHaveBeenCalledWith({
+      where: { id: "tier-premium" },
+      data: { minQuoteUsdCents: 12000, maxQuoteUsdCents: 25000 },
+    });
   });
 
   it("charges the package plus the first monitoring period with Paystack", async () => {

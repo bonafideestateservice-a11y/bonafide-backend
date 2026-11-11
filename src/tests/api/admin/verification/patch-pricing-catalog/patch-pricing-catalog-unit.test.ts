@@ -42,6 +42,8 @@ const catalogue = (rate: string | null = "1500") => ({
       active: true,
       quoteRequired: true,
       priceUsdCents: null,
+      minQuoteUsdCents: 10000,
+      maxQuoteUsdCents: 20000,
     },
   ],
   monitoringPlans: [{ id: "plan_weekly", active: true, priceUsdCents: 10000 }],
@@ -155,6 +157,49 @@ describe("admin pricing catalogue provider sync", () => {
     mockGetCatalogue.mockResolvedValue(catalogue(null));
     const req = makeRequest({
       tiers: [{ id: "tier_standard", priceUsdCents: 7000 }],
+    });
+    const res = makeResponse();
+    const next = jest.fn() as NextFunction;
+
+    await patchAdminPricingCatalog(req, res, next);
+
+    expect(mockSyncProviderPrices).not.toHaveBeenCalled();
+    expect(mockActivateBatch).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.any(BadRequestError));
+  });
+
+  it("updates the Premium quote range without synchronizing payment-provider prices", async () => {
+    const req = makeRequest({
+      tiers: [{ id: "tier_premium", minQuoteUsdCents: 12000, maxQuoteUsdCents: 25000 }],
+    });
+    const res = makeResponse();
+    const next = jest.fn() as NextFunction;
+
+    await patchAdminPricingCatalog(req, res, next);
+
+    expect(mockSyncProviderPrices).not.toHaveBeenCalled();
+    expect(mockActivateBatch).toHaveBeenCalledWith({
+      activations: [],
+      quoteRanges: [
+        {
+          id: "tier_premium",
+          minQuoteUsdCents: 12000,
+          maxQuoteUsdCents: 25000,
+        },
+      ],
+    });
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Pricing catalogue updated.",
+        data: expect.objectContaining({ syncedTargets: 0 }),
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects a Premium quote range whose maximum is below its minimum", async () => {
+    const req = makeRequest({
+      tiers: [{ id: "tier_premium", minQuoteUsdCents: 25000, maxQuoteUsdCents: 12000 }],
     });
     const res = makeResponse();
     const next = jest.fn() as NextFunction;

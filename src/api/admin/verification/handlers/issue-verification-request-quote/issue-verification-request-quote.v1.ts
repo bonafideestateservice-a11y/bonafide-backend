@@ -83,6 +83,7 @@ export const issueVerificationRequestQuote = async (
     const issued = await issuePremiumQuote({
       quoteId: quote.id,
       issuedById: adminId,
+      scopeSummary: scopeSummary || null,
       quoteUsdCents: amountUsdCents,
       quoteNgnKobo: usdCentsToNgnKobo(amountUsdCents, settings.usdToNgnRate),
       usdToNgnRate: settings.usdToNgnRate.toString(),
@@ -104,7 +105,7 @@ export const issueVerificationRequestQuote = async (
       amountNgnKobo: issued.quoteNgnKobo,
       ngnConversionRate: issued.usdToNgnRate?.toString() ?? settings.usdToNgnRate.toString(),
       ngnRateVersion: issued.rateVersion ?? settings.version,
-      scopeSummary: scopeSummary || request.verificationTier?.description || null,
+      scopeSummary: issued.scopeSummary ?? request.verificationTier?.description ?? null,
       expiresAt: issued.expiresAt,
       issuedAt: issued.createdAt,
       notification: { emailStatus: "QUEUED" },

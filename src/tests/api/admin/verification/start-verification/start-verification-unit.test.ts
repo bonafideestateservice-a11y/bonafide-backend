@@ -42,6 +42,8 @@ describe("startVerification handler (unit)", () => {
           label: "Physical verification",
           status: "PENDING",
           requiresMedia: true,
+          mediaType: "PHOTO",
+          fields: [],
         },
       ],
     });
@@ -61,6 +63,8 @@ describe("startVerification handler (unit)", () => {
           label: "Physical verification",
           status: "PENDING",
           requiresMedia: true,
+          mediaType: "PHOTO",
+          fields: [],
         },
       ],
     });

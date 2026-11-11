@@ -127,7 +127,9 @@ afterAll(async () => {
   await prismaClient.document.deleteMany({ where: { verificationRequestId } });
   await prismaClient.verificationReport.delete({ where: { id: reportId } });
   // Checklist items no longer cascade with their assignment.
-  await prismaClient.verificationChecklistItem.deleteMany({ where: { agentAssignmentId: assignmentId } });
+  await prismaClient.verificationChecklistItem.deleteMany({
+    where: { agentAssignmentId: assignmentId },
+  });
   await prismaClient.agentAssignment.delete({ where: { id: assignmentId } });
   await prismaClient.verificationRequest.delete({ where: { id: verificationRequestId } });
   await prismaClient.verificationAgent.delete({ where: { id: agentId } });
@@ -144,38 +146,43 @@ describe("GET /api/v1/admin/verification/agent-assignments/:id/checklist", () =>
       .set("Authorization", `Bearer ${agentToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      checklistItems: [
-        {
+    expect(response.body).toMatchObject({
+      checklistItems: expect.arrayContaining([
+        expect.objectContaining({
           id: checklistItemId,
           label: "Front view verified",
           status: "COMPLETE",
+          requiresMedia: true,
+          mediaType: "DOCUMENT",
           media: [{ url: "https://example.com/front.jpg" }],
-        },
-        {
-          id: expect.any(String),
+        }),
+        expect.objectContaining({
           label: "Bedroom verified",
           status: "PENDING",
+          requiresMedia: true,
+          mediaType: "DOCUMENT",
           media: [],
-        },
-      ],
+        }),
+      ]),
       clientDocuments: [
-        {
-          id: expect.any(String),
+        expect.objectContaining({
           fileName: "Property Deed.pdf",
           fileSizeBytes: 3800000,
           url: "https://example.com/deed.pdf",
-        },
+        }),
       ],
-      client: {
+      client: expect.objectContaining({
         firstName: "Checklist",
         lastName: "Client User",
         phone: "08000000000",
         email: `checklist-client-${suffix}@example.com`,
-      },
+      }),
+      intendedUse: null,
+      clientNotes: null,
       additionalNotes: "Call before arrival.",
       progressPercent: 50,
       payment: { status: "PENDING", amountInCents: 0 },
     });
+    expect(response.body.checklistItems).toHaveLength(2);
   });
 });

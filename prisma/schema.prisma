@@ -221,6 +221,7 @@ model VerificationTier {
   code             VerificationTierCode @unique
   name             String
   description      String
+  features         String[]             @default([])
   priceUsdCents    Int?
   quoteRequired    Boolean              @default(false)
   minQuoteUsdCents Int?
@@ -383,6 +384,7 @@ model VerificationRequest {
   recurringConsentAt      DateTime?
   status                  VerificationStatus @default(DRAFT)
   details                 Json
+  intendedUse             String?
   additionalNote          String?
   notifyOnInspectionStart Boolean            @default(true)
   notifyOnReportReady     Boolean            @default(true)
@@ -706,6 +708,7 @@ model PremiumQuote {
   rateVersion           Int?
   roundingRule          NgnRoundingRule?
   tierVersion           Int?
+  scopeSummary          String?
   status                PremiumQuoteStatus  @default(REQUESTED)
   expiresAt             DateTime?
   issuedById            String?

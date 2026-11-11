@@ -25,8 +25,117 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 const adminOrAgent = checkRoles([ROLE.ADMIN, ROLE.AGENT]);
 
+/**
+ * @swagger
+ * /api/{version}/admin/pricing:
+ *   patch:
+ *     tags: [Admin Verification]
+ *     summary: Update package pricing and Premium quote bounds
+ *     description: >
+ *       Fixed-price tiers and monitoring plans are synchronized with Stripe and Paystack.
+ *       For Premium, send minQuoteUsdCents and/or maxQuoteUsdCents in a tier update; amounts are
+ *       USD cents and no payment-provider sync is needed for quote bounds.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string, enum: [v1], default: v1 }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               usdToNgnRate: { type: string, example: "1500" }
+ *               tiers:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [id]
+ *                   properties:
+ *                     id: { type: string, example: premium-tier-id }
+ *                     priceUsdCents: { type: integer, description: Fixed-price tier amount in USD cents. }
+ *                     minQuoteUsdCents: { type: integer, description: Minimum Premium quote amount in USD cents. }
+ *                     maxQuoteUsdCents: { type: integer, description: Maximum Premium quote amount in USD cents. }
+ *               monitoringPlans:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [id, priceUsdCents]
+ *                   properties:
+ *                     id: { type: string, example: monthly-plan-id }
+ *                     priceUsdCents: { type: integer, example: 7000 }
+ *           example:
+ *             tiers:
+ *               - id: premium-tier-id
+ *                 minQuoteUsdCents: 10000
+ *                 maxQuoteUsdCents: 20000
+ *     responses:
+ *       200:
+ *         description: Pricing catalogue updated; fixed-price changes are synced to payment providers.
+ *       400:
+ *         description: Invalid catalogue update or Premium quote range.
+ *       401:
+ *         description: Missing, invalid or expired token.
+ *       403:
+ *         description: Caller is not an admin.
+ *       500:
+ *         description: Pricing update or provider synchronization failed.
+ */
 router.get(["/verification/pricing", "/pricing"], checkJwt, checkIsAdmin, getAdminPricingCatalog);
-router.patch(["/verification/pricing", "/pricing"], checkJwt, checkIsAdmin, patchAdminPricingCatalog);
+router.patch(
+  ["/verification/pricing", "/pricing"],
+  checkJwt,
+  checkIsAdmin,
+  patchAdminPricingCatalog,
+);
+
+/**
+ * @swagger
+ * /api/{version}/admin/verification-requests/{id}/quote:
+ *   post:
+ *     tags: [Admin Verification]
+ *     summary: Issue a Premium quote
+ *     description: Issues the quote and sends the supplied scope summary in the client email and quote response.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string, enum: [v1], default: v1 }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [amountUsdCents, expiresAt]
+ *             properties:
+ *               amountUsdCents: { type: integer, description: USD cents within the configured Premium quote range., example: 15000 }
+ *               scopeSummary: { type: string, description: Client-facing summary saved with this quote., example: Valuation and feasibility assessment }
+ *               expiresAt: { type: string, format: date-time }
+ *     responses:
+ *       201:
+ *         description: Premium quote issued and client notification queued.
+ *       400:
+ *         description: Invalid quote amount or expiry.
+ *       401:
+ *         description: Missing, invalid or expired token.
+ *       403:
+ *         description: Caller is not an admin.
+ *       404:
+ *         description: Verification request or quote request not found.
+ *       500:
+ *         description: Quote issuance or notification failed.
+ */
 router.post(
   "/verification-requests/:id/quote",
   checkJwt,
@@ -122,7 +231,7 @@ router.post(
  *           description: The sections required for the selected tier, in sortOrder order.
  *           items:
  *             type: object
- *             required: [id, label, sectionKey, status, requiresMedia, fields]
+ *             required: [id, label, sectionKey, status, requiresMedia, mediaType, fields]
  *             properties:
  *               id: { type: string, example: cm9item0001 }
  *               label: { type: string, example: Physical/site visit }
@@ -135,6 +244,11 @@ router.post(
  *                 type: boolean
  *                 description: Whether at least one supporting upload is required.
  *                 example: true
+ *               mediaType:
+ *                 type: string
+ *                 enum: [PHOTO, DOCUMENT]
+ *                 description: Expected upload kind for this checklist section.
+ *                 example: PHOTO
  *               fields:
  *                 type: array
  *                 items: { $ref: '#/components/schemas/AdminVerificationReportSectionField' }
@@ -267,13 +381,15 @@ router.post(
  *           nullable: true
  *     AdminVerificationChecklistItem:
  *       type: object
- *       required: [id, label, sectionKey, status, result, fields, media]
+ *       required: [id, label, sectionKey, status, result, requiresMedia, mediaType, fields, media]
  *       properties:
  *         id: { type: string, example: cm9item0001 }
  *         label: { type: string, example: Physical/site visit }
  *         sectionKey: { type: string, nullable: true, example: site_visit }
  *         status: { $ref: '#/components/schemas/AdminVerificationChecklistItemStatus' }
  *         result: { type: object, nullable: true, additionalProperties: true }
+ *         requiresMedia: { type: boolean, example: true }
+ *         mediaType: { type: string, enum: [PHOTO, DOCUMENT], example: PHOTO }
  *         fields:
  *           type: array
  *           items: { $ref: '#/components/schemas/AdminVerificationReportSectionField' }
@@ -290,7 +406,7 @@ router.post(
  *               fileSizeBytes: { type: integer, example: 245760 }
  *     AdminVerificationAssignmentChecklist:
  *       type: object
- *       required: [checklistItems, verificationTier, period, clientDocuments, client, additionalNotes, progressPercent, payment]
+ *       required: [checklistItems, verificationTier, period, clientDocuments, client, intendedUse, clientNotes, additionalNotes, progressPercent, payment]
  *       properties:
  *         checklistItems:
  *           type: array
@@ -337,6 +453,8 @@ router.post(
  *               fileSizeBytes: { type: integer, example: 482113 }
  *               url: { type: string, format: uri, example: "https://res.cloudinary.com/demo/raw/upload/survey-plan.pdf" }
  *         client: { $ref: '#/components/schemas/AdminVerificationClientContact' }
+ *         intendedUse: { type: string, nullable: true, example: Residential rental investment }
+ *         clientNotes: { type: string, nullable: true, example: Please include a valuation of the existing structure. }
  *         additionalNotes: { type: string, nullable: true, example: Owner was present during inspection. }
  *         progressPercent:
  *           type: integer

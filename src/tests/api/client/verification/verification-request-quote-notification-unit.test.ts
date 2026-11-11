@@ -30,6 +30,7 @@ jest.mock("../../../../api/client/verification/services/verification-checkout", 
 
 import { PaymentProvider, Prisma } from "@prisma/client";
 import { issueVerificationRequestQuote } from "../../../../api/admin/verification/handlers/issue-verification-request-quote";
+import { getVerificationRequestQuote } from "../../../../api/client/verification/handlers/get-verification-request-quote";
 import { acceptVerificationRequestQuote } from "../../../../api/client/verification/handlers/accept-verification-request-quote";
 import { AppEventTypes } from "../../../../events";
 import { callHandler } from "../../../helpers/http";
@@ -42,6 +43,7 @@ const issuedQuote = {
   quoteNgnKobo: 22500000,
   usdToNgnRate: new Prisma.Decimal("1500"),
   rateVersion: 3,
+  scopeSummary: "Valuation and feasibility assessment",
   expiresAt: new Date("2026-11-18T23:59:59.000Z"),
   createdAt: new Date("2026-11-04T20:30:00.000Z"),
 };
@@ -83,6 +85,7 @@ describe("Premium quote notification flows", () => {
       params: { id: "request-1" },
       body: {
         amountUsdCents: 15000,
+        scopeSummary: "Valuation and feasibility assessment",
         expiresAt: "2026-11-18T23:59:59.000Z",
       },
       user: { id: "admin-1" },
@@ -92,8 +95,28 @@ describe("Premium quote notification flows", () => {
       quoteId: "quote-1",
       reviewUrl: "https://client.example.com/verification-requests/request-1/quote",
     });
+    expect(mockIssuePremiumQuote).toHaveBeenCalledWith(
+      expect.objectContaining({ scopeSummary: "Valuation and feasibility assessment" }),
+    );
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ notification: { emailStatus: "QUEUED" } }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns the saved Premium quote scope summary to the client", async () => {
+    mockFindPremiumQuote.mockResolvedValueOnce({
+      ...issuedQuote,
+      verificationTier: { description: "Generic Premium description" },
+    });
+
+    const { res, next } = await callHandler(getVerificationRequestQuote, {
+      params: { id: "request-1" },
+      user: { id: "user-1" },
+    });
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ scopeSummary: "Valuation and feasibility assessment" }),
     );
     expect(next).not.toHaveBeenCalled();
   });

@@ -1,7 +1,18 @@
-# Frontend handoff: verification pricing, reports, and admin review
+# Frontend handoff: verification pricing, reports, and agent workflow
 
 This note summarizes the backend contract and current gaps for the frontend. Paths below include
 the `/api/v1` prefix.
+
+## What “not available” means
+
+- **No real Basic/Standard/Premium report examples from staging:** we have not retrieved saved
+  report responses from staging for one request at each tier. The report section definitions and
+  API schema tell us the expected fields, and this note includes representative shapes, but those
+  are not copied from real reports. The catalogue and Premium quote flow were tested separately.
+
+The report flow remains agent submission followed by client access. Admin report approval and
+revision-request actions are not part of the agreed flow; the existing report status values do not
+imply that those admin actions are needed.
 
 ## Staging access and example-data limitation
 
@@ -146,6 +157,130 @@ client acceptance, or payment checkout.
 
 ## Premium quote flow
 
+The full flow starts when the client books a verification and ends when the admin issues the
+quote. Continue using the same verification request ID throughout.
+
+### 1. Client creates the booking
+
+```http
+POST /api/v1/client/verification-requests
+Authorization: Bearer <client-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "verificationTypeId": "verification-type-id",
+  "details": {
+    "propertyType": "Residential",
+    "propertyAddress": "12 Example Road, Lagos"
+  },
+  "additionalNote": "Optional note"
+}
+```
+
+`details` fields depend on the verification type. This creates a `DRAFT` request and returns its
+`id`; the create endpoint does not select a pricing tier.
+
+### 2. Client selects Premium on the booking
+
+Use the returned request ID:
+
+```http
+PATCH /api/v1/client/verification-requests/{id}/pricing
+Authorization: Bearer <client-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "verificationTierId": "premium-tier-id",
+  "monitoringPlanId": null,
+  "recurringConsent": false
+}
+```
+
+This returns `QUOTE_REQUIRED` for Premium. If monitoring is selected, recurring consent must be
+true.
+
+### 3. Client submits the quote request
+
+```http
+POST /api/v1/client/verification-requests/{id}/quote
+Authorization: Bearer <client-token>
+Content-Type: application/json
+```
+
+Send the property's intended use and, optionally, client notes. The backend requires intended use
+either in this body or already saved on the verification request, persists it for the feasibility
+report, and stores the notes on the request's `additionalNote` field:
+
+```json
+{
+  "intendedUse": "Residential rental investment",
+  "notes": "Please include a valuation of the existing structure."
+}
+```
+
+The backend creates a `REQUESTED` quote and returns its quote ID.
+
+### 4. Admin issues the quote
+
+```http
+POST /api/v1/admin/verification-requests/{id}/quote
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "amountUsdCents": 15000,
+  "scopeSummary": "Valuation and feasibility assessment",
+  "expiresAt": "2026-11-25T12:00:00.000Z"
+}
+```
+
+The amount must be inside the Premium range returned by the catalogue. The backend calculates
+NGN using the active rate, changes the quote from `REQUESTED` to `ISSUED`, and queues an email
+with a link to the client quote screen. The client must refresh/read that screen with
+`GET /api/v1/client/verification-requests/{id}/quote`.
+
+The backend requires an explicit `expiresAt`; it does not apply the frontend's two-week default.
+`scopeSummary` is saved on the quote and returned by the client quote read. If omitted, the client
+quote read falls back to the Premium tier description. An internal admin note is not supported.
+The email review link uses `CLIENT_APP_URL` from the backend environment; it appends
+`/verification-requests/{id}/quote` to that base URL.
+
+### 5. Client reviews and accepts
+
+The client reads the issued quote at `GET /api/v1/client/verification-requests/{id}/quote`, then
+accepts it:
+
+```http
+POST /api/v1/client/verification-requests/{id}/quote/accept
+Authorization: Bearer <client-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "quoteId": "quote-id-from-get"
+}
+```
+
+Acceptance requires an issued, unexpired quote. It starts checkout based on the client's saved
+country (`NG` → Paystack/NGN; other supported countries → Stripe/USD). The response contains
+`payment.checkoutUrl`, which the frontend should open.
+
+### Current implementation gaps
+
+- An expired quote cannot currently be reissued through this flow: the backend rejects acceptance
+  after expiry but does not automatically mark the quote `EXPIRED`; the admin issue endpoint only
+  issues a `REQUESTED` quote.
+- There is no separate internal admin note field.
+
+The sections below give the current request/read response details and staging test results.
+
 Use the same verification request ID throughout the flow:
 
 1. Select the Premium tier with
@@ -172,8 +307,9 @@ Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
-The current handler does not read or persist a request body. Intended-use and note fields sent by
-the frontend are currently ignored.
+The client may send intended use and notes in the request body. Intended use is required either in
+this body or already saved on the verification request; the backend persists it for the feasibility
+report. Notes, when provided, are saved as the request's `additionalNote`.
 
 Admin quote issuance:
 
@@ -185,14 +321,15 @@ Admin quote issuance:
 }
 ```
 
-`amountUsdCents` must be a positive number and `expiresAt` must be supplied. The backend calculates
-the NGN amount using the active pricing settings, queues an email, and returns both amounts, the
-rate/version, expiry, and notification status. The backend does not apply the frontend's
-two-week-default expiry automatically. Although `scopeSummary` is accepted on issuance, it is not
-stored in the quote; the client quote GET response currently uses the Premium tier description
-instead. An admin internal note is not supported.
+`amountUsdCents` must be within the configured Premium quote range and `expiresAt` must be
+supplied. The backend calculates the NGN amount using the active pricing settings, queues an email,
+and returns both amounts, the rate/version, expiry, and notification status. The backend does not
+apply the frontend's two-week-default expiry automatically. `scopeSummary` is saved on the quote
+and returned by the client quote GET; when omitted, the response falls back to the Premium tier
+description. An admin internal note is not supported.
 
-Client quote GET currently returns this shape:
+Client quote GET currently returns this shape (the scope summary is the text saved by the admin,
+or the Premium tier description when no custom scope was supplied):
 
 ```json
 {
@@ -203,7 +340,7 @@ Client quote GET currently returns this shape:
   "amountNgnKobo": 22500000,
   "ngnConversionRate": "1500",
   "ngnRateVersion": 3,
-  "scopeSummary": "Premium tier description",
+  "scopeSummary": "Valuation and feasibility assessment",
   "expiresAt": "2026-11-25T12:00:00.000Z",
   "acceptedAt": null
 }
@@ -211,6 +348,13 @@ Client quote GET currently returns this shape:
 
 The values above are illustrative, not live staging data. Quote status uses the quote lifecycle
 (`REQUESTED`, `ISSUED`, `ACCEPTED`, `EXPIRED`, `CANCELLED`).
+
+**Expiry behavior caveat:** the backend rejects acceptance when an issued quote's `expiresAt` is
+in the past, but does not automatically change its status from `ISSUED` to `EXPIRED`. The current
+admin issue handler only issues `REQUESTED` quotes, and the client quote-request flow treats an
+existing `ISSUED` quote as still in progress. Therefore, the frontend statement that expired quotes
+are marked `EXPIRED` and an admin can then issue a new quote is **not currently supported by the
+backend**; this needs a backend lifecycle/reissue change.
 
 Quote acceptance requires:
 
@@ -267,13 +411,13 @@ envelope with `status`, `message`, and `data`. `data` contains:
 - `pricingSettings`: the active rate/version and rounding settings, or `null` if none is active.
 
 Premium has no fixed `priceUsdCents` or `priceNgnKobo`; use `quoteRequired` and the optional
-`minQuoteUsdCents`/`maxQuoteUsdCents` for quote messaging. The catalogue does **not** return
-`features: string[]`. Tier descriptions are available, but structured package bullet lists are not;
-frontend-maintained bullets will need frontend updates when package scope changes.
+`minQuoteUsdCents`/`maxQuoteUsdCents` for quote messaging. Each tier also returns a configured
+`features: string[]` list for package bullets.
 
 The admin equivalent is `GET /api/v1/admin/pricing`. It uses the same catalogue data shape and
-requires an admin bearer token. Premium's stored quote range may be present in the tier record,
-but there is no separate quote-range editing field in the current pricing update handler.
+requires an admin bearer token. `PATCH /api/v1/admin/pricing` accepts
+`tiers: [{ "id": "<premium-tier-id>", "minQuoteUsdCents": 10000, "maxQuoteUsdCents": 20000 }]`
+to edit the Premium quote range (USD cents).
 
 ## Full client report: fields and checklist semantics
 
@@ -319,29 +463,27 @@ Section result field types currently support only `text` and `number`. Premium v
 fields are `outcome`, `assumptions`, and `constraints` (all text). There is no `textarea`,
 `currency`, `select`, or `options` field type in the backend schema.
 
-Each section specifies only `requiresMedia: boolean`; it does not declare whether the media should
-be a photo, video, or document. The upload route accepts files under `media` and does not provide
-a media-kind contract for the frontend to use.
+Each agent checklist section includes `requiresMedia: boolean` and `mediaType`, currently `PHOTO`
+or `DOCUMENT`, so the frontend can choose the right upload button without inferring from the
+section label. This indicates the expected upload kind; the upload endpoint continues to accept
+files under `media`.
 
-## Admin report-review endpoints
+## Report access and workflow
 
-The following are present:
+The existing agent-facing report endpoints are:
 
 - `GET /api/v1/admin/verification/agent-assignments/{id}/report` returns a report view for the
   caller's assignment. It is not a general report-ID lookup, and a recurring assignment may be
   deleted after submission.
 - `GET /api/v1/admin/verification/agents/reports` lists reports for the caller's verification
   agent record. `reviewStatus=ALL` includes pending reports; accepted filter values are `ALL`,
-  `APPROVED`, and `REVISION_REQUESTED`. The handler requires an agent record, so this is not a
-  reliable admin-wide review queue.
+  `APPROVED`, and `REVISION_REQUESTED`. The handler requires an agent record.
 - `GET /api/v1/admin/verification/agents/reports/{id}` reads a report by report ID for the
   caller's own agent record.
 
-The requested general admin endpoints `GET /admin/verification/reports/{id}` and
-`GET /admin/verification/agent-assignments/{id}/report` as a general admin review lookup are not
-implemented. There is also no endpoint found to approve a report or request revisions. Although
-the data model has `reviewStatus` values `PENDING`, `APPROVED`, and `REVISION_REQUESTED`, the
-frontend cannot currently perform those review actions through an API.
+Reports continue through the existing agent-submission and client-reading flow. There is no
+admin-wide report lookup or approval/revision action, by agreement; neither is required for the
+frontend checklist. The data model's `reviewStatus` values do not change this workflow.
 
 ## Backend source references
 
@@ -366,3 +508,20 @@ self-contained:
 - Client/admin pricing catalogues:
   [`src/api/client/verification/handlers/get-verification-pricing-catalog/get-verification-pricing-catalog.v1.ts`](../src/api/client/verification/handlers/get-verification-pricing-catalog/get-verification-pricing-catalog.v1.ts),
   [`src/api/admin/verification/handlers/get-pricing-catalog/get-pricing-catalog.v1.ts`](../src/api/admin/verification/handlers/get-pricing-catalog/get-pricing-catalog.v1.ts)
+
+## Focused test results
+
+The following local Jest suites passed on **2026-11-11**:
+
+- `src/tests/api/client/verification/verification-request-quote-notification-unit.test.ts`:
+  4 passed. This suite directly tests the admin quote-issuance handler's queued email and the
+  client's quote-acceptance checkout routing (Paystack for NG, Stripe otherwise).
+- `src/tests/api/admin/verification/patch-pricing-catalog/patch-pricing-catalog-unit.test.ts`:
+  4 passed. Covers admin catalogue updates/provider synchronization; it does not test quote
+  issuance.
+- `src/tests/jobs/notifications/event-handlers.test.ts`: 19 passed, including issued/accepted
+  Premium quote notifications.
+
+There is no dedicated test file under the admin verification tests for the Premium quote-issuance
+endpoint. The first suite above invokes the admin issuance handler directly, but does not test the
+HTTP route/middleware against a database or staging.

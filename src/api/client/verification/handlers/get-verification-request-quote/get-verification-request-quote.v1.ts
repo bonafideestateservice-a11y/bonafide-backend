@@ -39,7 +39,7 @@ export const getVerificationRequestQuote = async (
       amountNgnKobo: quote.quoteNgnKobo ?? null,
       ngnConversionRate: quote.usdToNgnRate?.toString() ?? null,
       ngnRateVersion: quote.rateVersion ?? null,
-      scopeSummary: quote.verificationTier?.description ?? null,
+      scopeSummary: quote.scopeSummary ?? quote.verificationTier?.description ?? null,
       expiresAt: quote.expiresAt,
       acceptedAt: quote.acceptedAt,
     };

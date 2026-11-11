@@ -53,10 +53,27 @@ export const postVerificationRequestQuote = async (
       );
     }
 
+    const body = req.body ?? {};
+    if (body.intendedUse !== undefined && typeof body.intendedUse !== "string") {
+      return next(new BadRequestError("Intended use must be a string."));
+    }
+    if (body.notes !== undefined && typeof body.notes !== "string") {
+      return next(new BadRequestError("Notes must be a string."));
+    }
+
+    const intendedUse =
+      typeof body.intendedUse === "string" ? body.intendedUse.trim() : request.intendedUse?.trim();
+    if (!intendedUse) {
+      return next(new BadRequestError("Intended use is required for a Premium quote request."));
+    }
+
+    const notes = typeof body.notes === "string" ? body.notes.trim() || null : undefined;
     const quote = await createPremiumQuoteRequest({
       verificationRequestId,
       verificationTierId: request.verificationTierId,
       userId,
+      intendedUse,
+      ...(notes !== undefined ? { notes } : {}),
     });
 
     res.status(HttpStatusCode.CREATED).json({

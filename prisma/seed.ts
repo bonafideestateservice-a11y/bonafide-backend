@@ -126,6 +126,12 @@ const verificationTiers = [
     name: "Basic",
     description:
       "One site visit, brief local enquiries, and photos or video where needed, with one short report.",
+    features: [
+      "One site visit",
+      "Brief local enquiries",
+      "Photos or video where needed",
+      "One short report",
+    ],
     priceUsdCents: 2500,
     quoteRequired: false,
     minQuoteUsdCents: null,
@@ -136,6 +142,13 @@ const verificationTiers = [
     name: "Standard",
     description:
       "Everything in Basic, plus a land registry check, court-records search, local intelligence gathering, and one detailed report.",
+    features: [
+      "Everything in Basic",
+      "Land registry check",
+      "Court-records search",
+      "Local intelligence gathering",
+      "One detailed report",
+    ],
     priceUsdCents: 6000,
     quoteRequired: false,
     minQuoteUsdCents: null,
@@ -146,6 +159,11 @@ const verificationTiers = [
     name: "Premium",
     description:
       "Everything in Standard, plus a property valuation and feasibility report for the property's intended use.",
+    features: [
+      "Everything in Standard",
+      "Property valuation",
+      "Feasibility report for the property's intended use",
+    ],
     priceUsdCents: null,
     quoteRequired: true,
     minQuoteUsdCents: 10000,
@@ -299,6 +317,7 @@ async function seed() {
       update: {
         name: tier.name,
         description: tier.description,
+        features: tier.features,
       },
       create: tier,
     });

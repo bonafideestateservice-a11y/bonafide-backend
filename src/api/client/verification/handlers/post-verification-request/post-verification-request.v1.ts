@@ -12,6 +12,7 @@ import { logger } from "../../../../../utils/logger";
 export interface CreateVerificationRequestBody {
   verificationTypeId?: unknown;
   details?: VerificationRequestDetails;
+  intendedUse?: unknown;
   additionalNote?: unknown;
 }
 
@@ -48,12 +49,16 @@ export const postVerificationRequest = async (
     if (body.additionalNote !== undefined && typeof body.additionalNote !== "string") {
       return next(new BadRequestError("Additional note must be a string."));
     }
+    if (body.intendedUse !== undefined && typeof body.intendedUse !== "string") {
+      return next(new BadRequestError("Intended use must be a string."));
+    }
 
     const verificationRequest = await createVerificationRequest({
       userId,
       verificationTypeId: body.verificationTypeId.trim(),
       status: "DRAFT",
       details: validatedDetails.details!,
+      intendedUse: typeof body.intendedUse === "string" ? body.intendedUse.trim() || null : null,
       additionalNote:
         typeof body.additionalNote === "string" ? body.additionalNote.trim() || null : null,
     });
@@ -63,6 +68,7 @@ export const postVerificationRequest = async (
       status: verificationRequest.status,
       verificationTypeId: verificationRequest.verificationTypeId,
       details: verificationRequest.details,
+      intendedUse: verificationRequest.intendedUse,
       additionalNote: verificationRequest.additionalNote,
       createdAt: verificationRequest.createdAt.toISOString(),
     });
