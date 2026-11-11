@@ -19,6 +19,10 @@ import {
   isVerificationReportSectionComplete,
 } from "../../../../services/verification-report-sections";
 import {
+  createVerificationReportFindings,
+  createVerificationReportSummary,
+} from "../../../../services/client-verification-report";
+import {
   isRecurringRequest,
   nextStatusAfterRecurringReport,
 } from "../../../../services/database/verification-lifecycle";
@@ -268,6 +272,7 @@ export const submitAgentAssignmentReport = async (
             checklistItems: {
               select: {
                 label: true,
+                sortOrder: true,
                 sectionKey: true,
                 result: true,
                 status: true,
@@ -281,14 +286,37 @@ export const submitAgentAssignmentReport = async (
                   orderBy: { createdAt: "asc" },
                 },
               },
+              orderBy: { sortOrder: "asc" },
             },
             verificationRequest: {
               select: {
                 verificationTierId: true,
-                verificationTier: { select: { id: true, name: true, code: true } },
+                verificationTier: {
+                  select: { id: true, name: true, code: true, description: true, features: true },
+                },
                 monitoringPlanId: true,
-                monitoringPlan: { select: { id: true, name: true, code: true } },
+                monitoringPlan: {
+                  select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                    description: true,
+                    intervalCount: true,
+                    checksPerPeriod: true,
+                    reportsPerPeriod: true,
+                  },
+                },
                 recurringConsent: true,
+                premiumQuotes: {
+                  where: { status: "ACCEPTED" },
+                  orderBy: { acceptedAt: "desc" },
+                  take: 1,
+                  select: {
+                    scopeSummary: true,
+                    quoteUsdCents: true,
+                    quoteNgnKobo: true,
+                  },
+                },
               },
             },
           },
@@ -329,6 +357,64 @@ export const submitAgentAssignmentReport = async (
         }
 
         const { verificationRequestId } = assignment;
+        const tier = assignment.verificationRequest.verificationTier;
+        const tierSnapshot = tier ? { id: tier.id, code: tier.code, name: tier.name } : null;
+        const checklistItems = assignment.checklistItems.map((item) => ({
+          label: item.label,
+          status: item.status,
+          sortOrder: item.sortOrder,
+          sectionKey: item.sectionKey,
+          result: item.result,
+          media: item.media,
+        }));
+        const reportSummary = createVerificationReportSummary(tier?.name, checklistItems);
+        const reportFindings = createVerificationReportFindings(tierSnapshot, checklistItems);
+        const packageScopeSnapshot: Prisma.InputJsonObject = {
+          ...(tier
+            ? {
+                tier: {
+                  id: tier.id,
+                  code: tier.code,
+                  name: tier.name,
+                  description: tier.description,
+                  features: tier.features,
+                },
+              }
+            : {}),
+          ...(assignment.verificationRequest.monitoringPlan
+            ? {
+                monitoringPlan: {
+                  id: assignment.verificationRequest.monitoringPlan.id,
+                  code: assignment.verificationRequest.monitoringPlan.code,
+                  name: assignment.verificationRequest.monitoringPlan.name,
+                  description: assignment.verificationRequest.monitoringPlan.description,
+                  intervalCount: assignment.verificationRequest.monitoringPlan.intervalCount,
+                  checksPerPeriod: assignment.verificationRequest.monitoringPlan.checksPerPeriod,
+                  reportsPerPeriod: assignment.verificationRequest.monitoringPlan.reportsPerPeriod,
+                },
+              }
+            : {}),
+          ...(assignment.verificationRequest.premiumQuotes[0]
+            ? {
+                quote: {
+                  scopeSummary: assignment.verificationRequest.premiumQuotes[0].scopeSummary,
+                  amountUsdCents: assignment.verificationRequest.premiumQuotes[0].quoteUsdCents,
+                  amountNgnKobo: assignment.verificationRequest.premiumQuotes[0].quoteNgnKobo,
+                },
+              }
+            : {}),
+          ...(period
+            ? {
+                period: {
+                  id: period.id,
+                  periodStart: period.periodStart.toISOString(),
+                  periodEnd: period.periodEnd.toISOString(),
+                  requiredSiteVisits: period.requiredSiteVisits,
+                  completedSiteVisits: period.completedSiteVisits,
+                },
+              }
+            : {}),
+        };
         const reportSelect = { id: true, reviewStatus: true, generatedAt: true } as const;
         const existingReport = assignment.transactionId
           ? await transaction.verificationReport.findUnique({
@@ -350,6 +436,17 @@ export const submitAgentAssignmentReport = async (
               ...(assignment.transactionId
                 ? { transaction: { connect: { id: assignment.transactionId } } }
                 : {}),
+              ...(assignment.verificationRequest.verificationTierId
+                ? {
+                    verificationTier: {
+                      connect: { id: assignment.verificationRequest.verificationTierId },
+                    },
+                    tierNameSnapshot: tier?.name ?? null,
+                  }
+                : {}),
+              packageScopeSnapshot,
+              summary: reportSummary,
+              findings: reportFindings,
               additionalNotes: assignment.additionalNotes,
               reportUrl: reportDocument.url,
               reviewStatus: ReportReviewStatus.PENDING,
@@ -363,7 +460,14 @@ export const submitAgentAssignmentReport = async (
         } else {
           await transaction.verificationReport.update({
             where: { id: report.id },
-            data: { reportUrl: reportDocument.url },
+            data: {
+              reportUrl: reportDocument.url,
+              verificationTierId: assignment.verificationRequest.verificationTierId,
+              tierNameSnapshot: tier?.name ?? null,
+              packageScopeSnapshot,
+              summary: reportSummary,
+              findings: reportFindings,
+            },
           });
         }
 

@@ -24,6 +24,7 @@ let clientId: string;
 let serviceId: string;
 let verificationTypeId: string;
 let verificationTierId: string;
+let clientToken: string;
 let createdTier = false;
 let verificationRequestId: string;
 let assignmentId: string;
@@ -49,6 +50,7 @@ beforeAll(async () => {
     },
   });
   clientId = client.id;
+  clientToken = generateToken({ id: client.id });
 
   const service = await prismaClient.service.create({
     data: { name: `Tiered Report Service ${suffix}`, slug: `tiered-report-service-${suffix}` },
@@ -253,6 +255,9 @@ describe("Tier-specific agent report workflow", () => {
     expect(report.packageScopeSnapshot).toMatchObject({
       tier: { id: verificationTierId, code: "BASIC" },
     });
+    expect(report.summary).toBe(
+      "Basic report includes 5 of 5 checklist sections marked complete. Review the section results and attached report for details.",
+    );
     expect(report.findings).toMatchObject({
       tier: { id: verificationTierId, code: "BASIC" },
       sections: [
@@ -344,5 +349,21 @@ describe("Tier-specific agent report workflow", () => {
         },
       },
     ]);
-  });
+
+    const clientReport = await request(app)
+      .get(`/api/v1/client/verification-requests/${verificationRequestId}/report/full`)
+      .set("Authorization", `Bearer ${clientToken}`);
+    expect(clientReport.status).toBe(200);
+    expect(clientReport.body.data).toMatchObject({
+      verificationTier: { code: "BASIC", name: "Basic" },
+      summary: report.summary,
+      findings: {
+        physicalVisit: { outcome: "Property accessible", notes: "Exterior inspected." },
+        titleDeedsVerification: {
+          outcome: "Title deeds verified",
+          notes: "Deed of assignment confirmed.",
+        },
+      },
+    });
+  }, 120000);
 });

@@ -14,6 +14,37 @@ export type ClientReportChecklistItem = {
   media?: { url: string; fileName?: string | null }[];
 };
 
+export const createVerificationReportSummary = (
+  tierName: string | null | undefined,
+  checklistItems: Pick<ClientReportChecklistItem, "status">[],
+): string => {
+  const completedCount = checklistItems.filter((item) => item.status === "COMPLETE").length;
+  const packageName = tierName?.trim() || "Verification";
+  return `${packageName} report includes ${completedCount} of ${checklistItems.length} checklist sections marked complete. Review the section results and attached report for details.`;
+};
+
+export const createVerificationReportFindings = (
+  tier: { id: string; code: string; name: string } | null,
+  checklistItems: ClientReportChecklistItem[],
+) => ({
+  ...(tier ? { tier } : {}),
+  sections: checklistItems.flatMap((item) =>
+    item.sectionKey
+      ? [
+          {
+            key: item.sectionKey,
+            label: item.label,
+            result: item.result ?? null,
+            media: (item.media ?? []).map(({ url, fileName }) => ({
+              url,
+              fileName: fileName ?? null,
+            })),
+          },
+        ]
+      : [],
+  ),
+});
+
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -88,6 +119,8 @@ const toClientFindings = (findings: unknown): unknown => {
   }
   return result;
 };
+
+export const toClientReportFindings = (findings: unknown): unknown => toClientFindings(findings);
 
 export const toClientVerificationReportView = (report: {
   findings: unknown;

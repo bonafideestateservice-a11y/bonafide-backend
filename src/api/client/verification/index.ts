@@ -543,7 +543,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  *             type: { type: string, example: COMPLETED_BUILDING }
  *             plotSize: { type: string, example: Not provided }
  *             builtYear: { type: string, example: "2019" }
- *         summary: { type: string, description: Empty string when the report has no summary., example: Property verified with no issues. }
+ *         summary: { type: string, description: Persisted report summary or a generated checklist-completion summary., example: "Premium report includes 10 of 10 checklist sections marked complete." }
  *         ownershipFindings:
  *           type: string
  *           description: >

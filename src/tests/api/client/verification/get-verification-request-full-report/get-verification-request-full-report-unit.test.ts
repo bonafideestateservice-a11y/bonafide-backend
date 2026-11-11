@@ -230,6 +230,63 @@ describe("GET /verification-requests/:id/report/full - Unit", () => {
     expect(JSON.stringify(data)).not.toContain("Internal-only notes");
   });
 
+  it("fills missing legacy report tier and summary from the request and checklist", async () => {
+    (databaseService.getVerificationRequestFullReportData as jest.Mock).mockResolvedValue({
+      id: "req-123",
+      userId: "user-1",
+      verificationTier: { id: "tier-premium", code: "PREMIUM", name: "Premium" },
+      user: { fullName: "John Anderson", phone: null, email: "john@example.com" },
+      details: {},
+      reports: [
+        {
+          id: "rep-legacy",
+          generatedAt: new Date("2026-11-05T10:00:00Z"),
+          reviewStatus: "PENDING",
+          summary: null,
+          findings: null,
+          tierNameSnapshot: null,
+          packageScopeSnapshot: null,
+          rating: null,
+          clientComment: null,
+          ratedAt: null,
+          checklistItems: [
+            {
+              label: "Property valuation",
+              status: "COMPLETE",
+              sortOrder: 1,
+              sectionKey: "valuation",
+              result: {
+                amount: 85000000,
+                currency: "NGN",
+                basis: "Comparable local sales",
+                comparableEvidence: "Synthetic test data",
+              },
+              media: [],
+            },
+          ],
+          media: [],
+        },
+      ],
+      agentAssignment: null,
+    });
+
+    await getVerificationRequestFullReport(req as Request, res as Response, next);
+
+    const data = (res.json as jest.Mock).mock.calls[0][0].data;
+    expect(data.verificationTier).toEqual({ code: "PREMIUM", name: "Premium" });
+    expect(data.summary).toBe(
+      "Premium report includes 1 of 1 checklist sections marked complete. Review the section results and attached report for details.",
+    );
+    expect(data.findings).toEqual({
+      valuation: {
+        amount: 85000000,
+        currency: "NGN",
+        basis: "Comparable local sales",
+        comparableEvidence: "Synthetic test data",
+      },
+    });
+  });
+
   it("returns 403 when the request belongs to another client", async () => {
     (databaseService.getVerificationRequestFullReportData as jest.Mock).mockResolvedValue({
       id: "req-123",

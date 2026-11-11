@@ -4,6 +4,9 @@ import { CustomRequest } from "../../../../../middlewares/check-jwt";
 import { getVerificationRequestFullReportData } from "../../services/database/verification-request";
 import { logger } from "../../../../../utils/logger";
 import {
+  createVerificationReportFindings,
+  createVerificationReportSummary,
+  toClientReportFindings,
   toClientReportChecklist,
   toClientReportDocument,
   toClientVerificationReportView,
@@ -63,8 +66,24 @@ export const getVerificationRequestFullReport = async (
     const checklistItems = report.checklistItems.length
       ? report.checklistItems
       : fullReport.agentAssignment?.checklistItems;
-    const checklist = toClientReportChecklist(checklistItems ?? []);
+    const reportChecklistItems = checklistItems ?? [];
+    const checklist = toClientReportChecklist(reportChecklistItems);
     const clientReport = toClientVerificationReportView(report);
+    const verificationTier =
+      clientReport.verificationTier ??
+      (fullReport.verificationTier
+        ? {
+            code: fullReport.verificationTier.code,
+            name: fullReport.verificationTier.name,
+          }
+        : null);
+    const findings =
+      clientReport.findings &&
+      (!Array.isArray(clientReport.findings) || clientReport.findings.length)
+        ? clientReport.findings
+        : toClientReportFindings(
+            createVerificationReportFindings(fullReport.verificationTier, reportChecklistItems),
+          );
     if (checklistItems) {
       for (const item of checklistItems) {
         if (item.media) {
@@ -120,10 +139,12 @@ export const getVerificationRequestFullReport = async (
         email: fullReport.user.email,
       },
       property: propertyDetails,
-      summary: report.summary || "",
+      summary:
+        report.summary?.trim() ||
+        createVerificationReportSummary(verificationTier?.name, reportChecklistItems),
       ownershipFindings,
-      findings: clientReport.findings ?? rawFindings,
-      verificationTier: clientReport.verificationTier,
+      findings: findings ?? rawFindings,
+      verificationTier,
       subscriptionPeriod: clientReport.subscriptionPeriod,
       providerName: "Bonafide",
       checklist,

@@ -590,6 +590,7 @@ export type VerificationRequestFullReport = Prisma.VerificationRequestGetPayload
     id: true;
     userId: true;
     details: true;
+    verificationTier: { select: { id: true; code: true; name: true } };
     user: { select: { fullName: true; phone: true; email: true } };
     reports: {
       select: {
@@ -663,6 +664,7 @@ export const getVerificationRequestFullReportData = async (
         id: true,
         userId: true,
         details: true,
+        verificationTier: { select: { id: true, code: true, name: true } },
         user: { select: { fullName: true, phone: true, email: true } },
         reports: {
           select: {

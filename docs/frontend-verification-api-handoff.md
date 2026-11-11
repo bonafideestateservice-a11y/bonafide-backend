@@ -430,6 +430,11 @@ details and feedback.
 For tiered reports:
 
 - `findings` may be a tiered object keyed by section, or a legacy array.
+- `verificationTier` is populated from the report's saved package snapshot; older reports without
+  a snapshot fall back to the request's current tier.
+- `summary` uses the saved report summary, or a generated checklist-completion summary when an
+  older report has no summary. This generated text describes checklist completion only; it does not
+  assert that a property's title, court records, valuation, or other findings are verified.
 - Checklist entries can contain `label`, `status`, `sectionKey`, `result`, and `media`.
 - Checklist `status` values are `PENDING` and **`COMPLETE`** (not `COMPLETED`).
 - Checklist media is returned as `{ "url": "...", "fileName": "..." }`.
