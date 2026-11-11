@@ -18,7 +18,7 @@ export type VerificationReportSectionResult = Record<string, string | number | b
 const basicSections: VerificationReportSection[] = [
   {
     key: "site_visit",
-    label: "Physical/site visit",
+    label: "Physical verification",
     requiresMedia: true,
     fields: [
       { key: "visitOutcome", label: "Visit outcome", type: "text" },
@@ -26,12 +26,39 @@ const basicSections: VerificationReportSection[] = [
     ],
   },
   {
-    key: "local_enquiries",
-    label: "Local enquiries",
+    key: "court_crime_verification",
+    label: "Court/crime verification",
     requiresMedia: false,
     fields: [
-      { key: "outcome", label: "Enquiry outcome", type: "text" },
-      { key: "notes", label: "Enquiry notes", type: "text" },
+      { key: "outcome", label: "Verification outcome", type: "text" },
+      { key: "notes", label: "Verification notes", type: "text" },
+    ],
+  },
+  {
+    key: "title_deeds_verification",
+    label: "Title deeds and documentation verification",
+    requiresMedia: true,
+    fields: [
+      { key: "outcome", label: "Verification outcome", type: "text" },
+      { key: "notes", label: "Verification notes", type: "text" },
+    ],
+  },
+  {
+    key: "valuation_verification",
+    label: "Valuation verification",
+    requiresMedia: false,
+    fields: [
+      { key: "outcome", label: "Verification outcome", type: "text" },
+      { key: "notes", label: "Verification notes", type: "text" },
+    ],
+  },
+  {
+    key: "amenities_environment_verification",
+    label: "Amenities and environment verification",
+    requiresMedia: false,
+    fields: [
+      { key: "outcome", label: "Verification outcome", type: "text" },
+      { key: "notes", label: "Verification notes", type: "text" },
     ],
   },
 ];
@@ -39,7 +66,7 @@ const basicSections: VerificationReportSection[] = [
 const standardSections: VerificationReportSection[] = [
   {
     key: "land_registry_search",
-    label: "Land-registry search",
+    label: "Land registry check",
     requiresMedia: true,
     fields: [
       { key: "outcome", label: "Search outcome", type: "text" },
@@ -48,7 +75,7 @@ const standardSections: VerificationReportSection[] = [
   },
   {
     key: "court_records_search",
-    label: "Court-records search",
+    label: "Court records search",
     requiresMedia: true,
     fields: [
       { key: "outcome", label: "Search outcome", type: "text" },
@@ -57,7 +84,7 @@ const standardSections: VerificationReportSection[] = [
   },
   {
     key: "local_intelligence",
-    label: "Local intelligence",
+    label: "Local intelligence gathering",
     requiresMedia: true,
     fields: [{ key: "narrative", label: "Intelligence narrative", type: "text" }],
   },
@@ -77,7 +104,7 @@ const premiumSections: VerificationReportSection[] = [
   },
   {
     key: "feasibility",
-    label: "Intended-use feasibility",
+    label: "Feasibility report on the property’s intended use",
     requiresMedia: true,
     fields: [
       { key: "outcome", label: "Feasibility outcome", type: "text" },

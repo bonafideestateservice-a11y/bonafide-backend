@@ -41,10 +41,16 @@ const toNonNegativeNumber = (value: unknown): number | null =>
 
 const publicFindingKeys: Record<string, string> = {
   site_visit: "physicalVisit",
+  court_crime_verification: "courtCrimeVerification",
+  title_deeds_verification: "titleDeedsVerification",
+  valuation_verification: "valuationVerification",
+  amenities_environment_verification: "amenitiesEnvironmentVerification",
   local_enquiries: "localEnquiries",
   land_registry_search: "landRegistry",
   court_records_search: "courtRecords",
   local_intelligence: "localIntelligence",
+  valuation: "valuation",
+  feasibility: "feasibility",
 };
 
 const toClientFindings = (findings: unknown): unknown => {

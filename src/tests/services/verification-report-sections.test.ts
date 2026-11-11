@@ -10,9 +10,9 @@ import { toClientVerificationReportView } from "../../api/services/client-verifi
 
 describe("tier-specific verification report sections", () => {
   it.each([
-    [VerificationTierCode.BASIC, 2],
-    [VerificationTierCode.STANDARD, 5],
-    [VerificationTierCode.PREMIUM, 7],
+    [VerificationTierCode.BASIC, 5],
+    [VerificationTierCode.STANDARD, 8],
+    [VerificationTierCode.PREMIUM, 10],
   ] as const)("returns the %s section set", (tierCode, expectedCount) => {
     expect(getVerificationReportSections(tierCode)).toHaveLength(expectedCount);
   });
@@ -22,9 +22,39 @@ describe("tier-specific verification report sections", () => {
   });
 
   it.each([
-    [1, ["site_visit", "local_enquiries"]],
-    [2, ["site_visit_1", "site_visit_2", "local_enquiries"]],
-    [3, ["site_visit_1", "site_visit_2", "site_visit_3", "local_enquiries"]],
+    [
+      1,
+      [
+        "site_visit",
+        "court_crime_verification",
+        "title_deeds_verification",
+        "valuation_verification",
+        "amenities_environment_verification",
+      ],
+    ],
+    [
+      2,
+      [
+        "site_visit_1",
+        "site_visit_2",
+        "court_crime_verification",
+        "title_deeds_verification",
+        "valuation_verification",
+        "amenities_environment_verification",
+      ],
+    ],
+    [
+      3,
+      [
+        "site_visit_1",
+        "site_visit_2",
+        "site_visit_3",
+        "court_crime_verification",
+        "title_deeds_verification",
+        "valuation_verification",
+        "amenities_environment_verification",
+      ],
+    ],
   ])("creates %i site-visit checklist section(s)", (count, expectedKeys) => {
     expect(
       getVerificationReportSections(VerificationTierCode.BASIC, count)?.map(

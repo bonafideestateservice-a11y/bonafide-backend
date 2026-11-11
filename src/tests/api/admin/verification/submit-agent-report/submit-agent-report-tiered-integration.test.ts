@@ -146,11 +146,18 @@ describe("Tier-specific agent report workflow", () => {
     expect(startResponse.status).toBe(200);
     expect(
       startResponse.body.checklist.map((item: { sectionKey: string }) => item.sectionKey),
-    ).toEqual(["site_visit", "local_enquiries"]);
+    ).toEqual([
+      "site_visit",
+      "court_crime_verification",
+      "title_deeds_verification",
+      "valuation_verification",
+      "amenities_environment_verification",
+    ]);
 
-    const siteVisit = startResponse.body.checklist[0];
-    const localEnquiries = startResponse.body.checklist[1];
+    const [siteVisit, courtCrime, titleDeeds, valuationVerif, amenitiesVerif] =
+      startResponse.body.checklist;
     const media = Buffer.from("site photo");
+    const docMedia = Buffer.from("title deed doc");
 
     const siteResponse = await request(app)
       .patch(
@@ -165,17 +172,66 @@ describe("Tier-specific agent report workflow", () => {
       .attach("media", media, { filename: "site.jpg", contentType: "image/jpeg" });
     expect(siteResponse.status).toBe(200);
 
-    const enquiryResponse = await request(app)
+    const courtResponse = await request(app)
       .patch(
-        `/api/v1/admin/verification/agent-assignments/${assignmentId}/checklist/${localEnquiries.id}`,
+        `/api/v1/admin/verification/agent-assignments/${assignmentId}/checklist/${courtCrime.id}`,
       )
       .set("Authorization", `Bearer ${agentToken}`)
       .field("status", "COMPLETE")
       .field(
         "result",
-        JSON.stringify({ outcome: "No disputes reported", notes: "Two nearby residents asked." }),
+        JSON.stringify({
+          outcome: "No court or crime records found",
+          notes: "Checked local records.",
+        }),
       );
-    expect(enquiryResponse.status).toBe(200);
+    expect(courtResponse.status).toBe(200);
+
+    const deedResponse = await request(app)
+      .patch(
+        `/api/v1/admin/verification/agent-assignments/${assignmentId}/checklist/${titleDeeds.id}`,
+      )
+      .set("Authorization", `Bearer ${agentToken}`)
+      .field("status", "COMPLETE")
+      .field(
+        "result",
+        JSON.stringify({
+          outcome: "Title deeds verified",
+          notes: "Deed of assignment confirmed.",
+        }),
+      )
+      .attach("media", docMedia, { filename: "deed.jpg", contentType: "image/jpeg" });
+    expect(deedResponse.status).toBe(200);
+
+    const valuationResponse = await request(app)
+      .patch(
+        `/api/v1/admin/verification/agent-assignments/${assignmentId}/checklist/${valuationVerif.id}`,
+      )
+      .set("Authorization", `Bearer ${agentToken}`)
+      .field("status", "COMPLETE")
+      .field(
+        "result",
+        JSON.stringify({
+          outcome: "Valuation consistent with neighborhood",
+          notes: "Market rates benchmarked.",
+        }),
+      );
+    expect(valuationResponse.status).toBe(200);
+
+    const amenitiesResponse = await request(app)
+      .patch(
+        `/api/v1/admin/verification/agent-assignments/${assignmentId}/checklist/${amenitiesVerif.id}`,
+      )
+      .set("Authorization", `Bearer ${agentToken}`)
+      .field("status", "COMPLETE")
+      .field(
+        "result",
+        JSON.stringify({
+          outcome: "Amenities confirmed",
+          notes: "Tarred access road and electricity present.",
+        }),
+      );
+    expect(amenitiesResponse.status).toBe(200);
 
     const reportResponse = await request(app)
       .post(`/api/v1/admin/verification/agent-assignments/${assignmentId}/report`)
@@ -206,12 +262,37 @@ describe("Tier-specific agent report workflow", () => {
           media: [{ url: "https://cdn.test/tiered-report-file", fileName: "site.jpg" }],
         },
         {
-          key: "local_enquiries",
-          result: { outcome: "No disputes reported", notes: "Two nearby residents asked." },
+          key: "court_crime_verification",
+          result: {
+            outcome: "No court or crime records found",
+            notes: "Checked local records.",
+          },
+        },
+        {
+          key: "title_deeds_verification",
+          result: {
+            outcome: "Title deeds verified",
+            notes: "Deed of assignment confirmed.",
+          },
+          media: [{ url: "https://cdn.test/tiered-report-file", fileName: "deed.jpg" }],
+        },
+        {
+          key: "valuation_verification",
+          result: {
+            outcome: "Valuation consistent with neighborhood",
+            notes: "Market rates benchmarked.",
+          },
+        },
+        {
+          key: "amenities_environment_verification",
+          result: {
+            outcome: "Amenities confirmed",
+            notes: "Tarred access road and electricity present.",
+          },
         },
       ],
     });
-    expect(report.checklistItems).toHaveLength(2);
+    expect(report.checklistItems).toHaveLength(5);
     expect(report.checklistItems.every((item) => item.reportId === reportId)).toBe(true);
     expect(report.subscriptionPeriodId).toBeNull();
 
@@ -221,16 +302,46 @@ describe("Tier-specific agent report workflow", () => {
     expect(reportView.status).toBe(200);
     expect(reportView.body.checklist).toEqual([
       {
-        label: "Physical/site visit",
+        label: "Physical verification",
         status: "COMPLETE",
         sectionKey: "site_visit",
         result: { visitOutcome: "Property accessible", notes: "Exterior inspected." },
       },
       {
-        label: "Local enquiries",
+        label: "Court/crime verification",
         status: "COMPLETE",
-        sectionKey: "local_enquiries",
-        result: { outcome: "No disputes reported", notes: "Two nearby residents asked." },
+        sectionKey: "court_crime_verification",
+        result: {
+          outcome: "No court or crime records found",
+          notes: "Checked local records.",
+        },
+      },
+      {
+        label: "Title deeds and documentation verification",
+        status: "COMPLETE",
+        sectionKey: "title_deeds_verification",
+        result: {
+          outcome: "Title deeds verified",
+          notes: "Deed of assignment confirmed.",
+        },
+      },
+      {
+        label: "Valuation verification",
+        status: "COMPLETE",
+        sectionKey: "valuation_verification",
+        result: {
+          outcome: "Valuation consistent with neighborhood",
+          notes: "Market rates benchmarked.",
+        },
+      },
+      {
+        label: "Amenities and environment verification",
+        status: "COMPLETE",
+        sectionKey: "amenities_environment_verification",
+        result: {
+          outcome: "Amenities confirmed",
+          notes: "Tarred access road and electricity present.",
+        },
       },
     ]);
   });

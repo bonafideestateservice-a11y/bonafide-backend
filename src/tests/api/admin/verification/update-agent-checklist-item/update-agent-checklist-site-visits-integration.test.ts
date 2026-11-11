@@ -205,7 +205,10 @@ describe("Recurring site-visit checklist synchronization", () => {
     expect(start.body.checklist.map((item: { sectionKey: string }) => item.sectionKey)).toEqual([
       "site_visit_1",
       "site_visit_2",
-      "local_enquiries",
+      "court_crime_verification",
+      "title_deeds_verification",
+      "valuation_verification",
+      "amenities_environment_verification",
     ]);
 
     const siteVisitItems = start.body.checklist.filter((item: { id: string; sectionKey: string }) =>

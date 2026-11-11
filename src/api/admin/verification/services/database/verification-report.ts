@@ -297,6 +297,23 @@ export const submitAgentAssignmentReport = async (
 
       if (!assignment) return null;
 
+      const period = assignment.transaction?.subscriptionPeriod;
+      if (
+        period &&
+        period.requiredSiteVisits > 0 &&
+        period.completedSiteVisits < period.requiredSiteVisits
+      ) {
+        const remainingSiteVisits = period.requiredSiteVisits - period.completedSiteVisits;
+        const progressPercent = Math.round(
+          (period.completedSiteVisits / period.requiredSiteVisits) * 100,
+        );
+        return {
+          kind: "INCOMPLETE_SITE_VISITS" as const,
+          progressPercent,
+          remainingSiteVisits,
+        };
+      }
+
       const totalItems = assignment.checklistItems.length;
       const completedItems = assignment.checklistItems.filter(
         (item) => item.status === "COMPLETE",
