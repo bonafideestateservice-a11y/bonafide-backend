@@ -129,10 +129,10 @@ describe("initializeVerificationPaymentPaystack (unit)", () => {
         customer: "CUS_1",
         amount: 18000000,
         currency: "NGN",
-        plan: "PLN_monthly",
         transactionId: "t1",
       }),
     );
+    expect(mockedSession.mock.calls[0][0].plan).toBeUndefined();
     expect(prisma.transaction.update).toHaveBeenCalledWith({
       where: { id: "t1" },
       data: {

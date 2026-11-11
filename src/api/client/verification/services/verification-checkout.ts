@@ -169,11 +169,15 @@ export const createPaystackVerificationCheckout = async (
       });
     }
 
+    // Note: Do not pass `plan` here. Paystack's transaction/initialize overrides
+    // the `amount` with the plan's recurring price whenever `plan` is set, which
+    // would drop the upfront verification package fee. The total upfront amount
+    // (package + first monitoring period) is charged here, and the recurring
+    // subscription is created with the authorization code on charge.success.
     const session = await createPaystackSession({
       userId,
       email: pricing.request.user.email,
       customer: customerCode,
-      plan: pricing.monitoringPriceVersion?.providerPriceId ?? undefined,
       amount: pricing.amountMinor,
       currency: pricing.currency,
       paymentMethod: "CARD",

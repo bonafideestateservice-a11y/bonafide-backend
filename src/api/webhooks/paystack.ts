@@ -14,7 +14,7 @@ import {
 } from "../services/database/property-request";
 import { logger } from "../../utils/logger";
 import { paymentPages, withQuery } from "../../utils/payment-pages";
-import { verifyPaystackTransaction } from "../../libs/paystack/paystack";
+import { createPaystackSubscription, verifyPaystackTransaction } from "../../libs/paystack/paystack";
 import { prismaClient } from "../../utils/prisma";
 import { appEvents, AppEventTypes } from "../../events";
 import {
@@ -41,6 +41,7 @@ type PaystackEvent = {
     invoice_code?: string;
     email_token?: string;
     customer?: { customer_code?: string; email?: string };
+    authorization?: { authorization_code?: string; reusable?: boolean };
     plan?: { plan_code?: string };
     next_payment_date?: string;
     paid_at?: string;
@@ -408,6 +409,76 @@ const handleChargeSuccess = async (event: PaystackEvent) => {
       periodStart: period.periodStart,
       periodEnd: period.periodEnd,
     });
+  }
+
+  // When an initial payment completes and includes a monitoring plan, subscribe the
+  // customer in Paystack using the tokenized card authorization. The next billing date
+  // is scheduled at the end of the first period that was paid for today.
+  if (newlyPaid && transaction.purpose !== "RENEWAL") {
+    const snapshot =
+      transaction.pricingSnapshot &&
+      typeof transaction.pricingSnapshot === "object" &&
+      !Array.isArray(transaction.pricingSnapshot)
+        ? (transaction.pricingSnapshot as Record<string, unknown>)
+        : null;
+    const monitoringTerms =
+      snapshot?.monitoring &&
+      typeof snapshot.monitoring === "object" &&
+      !Array.isArray(snapshot.monitoring)
+        ? (snapshot.monitoring as Record<string, unknown>)
+        : null;
+
+    if (monitoringTerms && monitoringTerms.providerPriceVersionId) {
+      const existingSub = await prismaClient.monitoringSubscription.findFirst({
+        where: { verificationRequestId: transaction.verificationRequestId },
+      });
+
+      if (!existingSub) {
+        const providerPriceVersion = await prismaClient.providerPriceVersion.findFirst({
+          where: {
+            id: String(monitoringTerms.providerPriceVersionId),
+            provider: PaymentProvider.PAYSTACK,
+            monitoringPlanId: { not: null },
+          },
+        });
+
+        const authCode = event.data?.authorization?.authorization_code;
+        const customerCode = event.data?.customer?.customer_code;
+
+        if (authCode && customerCode && providerPriceVersion?.providerPriceId) {
+          const paidAt = paystackDate(event.data?.paid_at) ?? new Date();
+          const interval = monitoringTerms.planCode as MonitoringInterval;
+          const intervalCount = Number(monitoringTerms.intervalCount ?? 1);
+          const nextPaymentDate = addMonitoringInterval(paidAt, interval, intervalCount);
+
+          try {
+            const sub = (await createPaystackSubscription(
+              customerCode,
+              providerPriceVersion.providerPriceId,
+              authCode,
+              nextPaymentDate.toISOString(),
+            )) as { subscription_code?: string; email_token?: string } | undefined;
+
+            if (sub?.subscription_code) {
+              await activateMonitoringForPaidTransaction({
+                transactionId: transaction.id,
+                provider: PaymentProvider.PAYSTACK,
+                providerSubscriptionId: sub.subscription_code,
+                customerCode,
+                emailToken: sub.email_token,
+                startedAt: paidAt,
+                periodStart: paidAt,
+                periodEnd: nextPaymentDate,
+              });
+            }
+          } catch (subError) {
+            logger.error(
+              `Failed to create Paystack recurring subscription for transaction ${transaction.id}: ${subError}`,
+            );
+          }
+        }
+      }
+    }
   }
 
   const paidTransaction = await prismaClient.transaction.findUnique({

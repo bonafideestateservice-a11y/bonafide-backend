@@ -7,7 +7,7 @@ const prismaMock = {
     create: jest.fn(),
     upsert: jest.fn(),
   },
-  monitoringSubscription: { findUnique: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
+  monitoringSubscription: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), updateMany: jest.fn() },
   providerPriceVersion: { findFirst: jest.fn() },
   paystackSubscription: {
     findUnique: jest.fn(),
