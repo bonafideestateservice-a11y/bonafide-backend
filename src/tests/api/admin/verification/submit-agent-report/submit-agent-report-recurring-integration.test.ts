@@ -196,6 +196,7 @@ describe("Recurring verification report workflow", () => {
       const response = await submitReport(assignmentId);
 
       expect(response.status).toBe(201);
+      expect(response.body.reviewStatus).toBe("APPROVED");
       reportId = response.body.id;
 
       const report = await prismaClient.verificationReport.findUniqueOrThrow({
@@ -206,6 +207,7 @@ describe("Recurring verification report workflow", () => {
         transactionId: firstPeriodId,
         submittedByAgentId: agentId,
         additionalNotes: "September inspection notes.",
+        reviewStatus: "APPROVED",
       });
       // The checklist outlives the deleted assignment.
       expect(report.checklistItems).toEqual(

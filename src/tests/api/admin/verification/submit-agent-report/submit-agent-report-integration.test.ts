@@ -225,6 +225,7 @@ describe("Agent assignment report workflow", () => {
     });
     expect(report.additionalNotes).toBe("Inspection completed.");
     expect(report.submittedByAgentId).toBe(agentId);
+    expect(report.reviewStatus).toBe("APPROVED");
     expect(report.checklistItems.map((item) => item.id).sort()).toEqual(
       [completeItemId, pendingItemId, ...otherItemIds].sort(),
     );

@@ -880,10 +880,9 @@ router.post("/verification/agent-assignments/:id/start", checkJwt, adminOrAgent,
  *       Requires a valid PDF file in the multipart `report_document` field. Tiered requests must
  *       complete every package-specific checklist section, required structured field, and required
  *       supporting upload. Requests without a tier retain the legacy checklist behavior.
- *       Creates a PENDING report for the assignment's paid period, or updates the existing report
- *       and replaces its report document if already created. The uploaded file is saved as a
- *       report document, assignment notes are copied, checklist items are linked to the report,
- *       and the client is notified.
+ *       Creates or updates the report for the assignment's paid period and immediately approves
+ *       it. The uploaded file is saved as a report document, assignment notes are copied,
+ *       checklist items are linked to the report, and the client is notified.
  *       One-time requests: the assignment becomes REPORT_SUBMITTED and the request COMPLETED
  *       (unless CANCELLED). Recurring plans: the assignment is deleted (so
  *       GET /verification/agent-assignments/{id}/report and the other assignment endpoints then

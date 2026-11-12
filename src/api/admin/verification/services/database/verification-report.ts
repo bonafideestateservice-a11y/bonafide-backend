@@ -449,7 +449,7 @@ export const submitAgentAssignmentReport = async (
               findings: reportFindings,
               additionalNotes: assignment.additionalNotes,
               reportUrl: reportDocument.url,
-              reviewStatus: ReportReviewStatus.PENDING,
+              reviewStatus: ReportReviewStatus.APPROVED,
               generatedAt,
             },
             select: reportSelect,
@@ -467,6 +467,7 @@ export const submitAgentAssignmentReport = async (
               packageScopeSnapshot,
               summary: reportSummary,
               findings: reportFindings,
+              reviewStatus: ReportReviewStatus.APPROVED,
             },
           });
         }
@@ -523,7 +524,7 @@ export const submitAgentAssignmentReport = async (
         return {
           kind: "SUBMITTED" as const,
           id: report.id,
-          reviewStatus: report.reviewStatus,
+          reviewStatus: ReportReviewStatus.APPROVED,
           generatedAt: report.generatedAt ?? generatedAt,
           reportDocument: savedReportDocument,
         };

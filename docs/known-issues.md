@@ -24,7 +24,7 @@ Severity:
 | 9   | High     | Paystack signature is checked against re-serialised JSON, not the raw body |
 | 10  | High     | Uploading checklist photos without a status resets a completed item        |
 | 11  | High     | A report can be submitted for an assignment that was never started         |
-| 12  | High     | Clients see reports that haven't been reviewed                             |
+| 12  | High     | **Fixed 12 Nov 2026.** Reports are approved when submitted                   |
 | 13  | Medium   | **Partly fixed 15 Oct 2026.** Bad input (malformed JSON, wrong upload field, non-string OTP) returns 500 |
 | 14  | Medium   | Uploads have no size or type limits, and run before ownership checks       |
 | 15  | Medium   | `viewedAt` is never set, so "unviewed reports" counts every report         |
@@ -123,11 +123,11 @@ Severity:
 - **Problem:** an assignment with no checklist items (start was never called) has nothing "remaining", so the report is accepted.
 - **Fix:** reject submission when the checklist is empty or the assignment is still `ASSIGNED`.
 
-### 12. Clients see reports that haven't been reviewed
+### 12. Clients see reports that haven't been reviewed (Fixed 12 Nov 2026)
 
-- **Where:** `report-summary`, `report/full` and `reports` in `src/api/client/verification/` don't filter on `reviewStatus`.
-- **Problem:** reports that are `PENDING` review or `REVISION_REQUESTED` are shown to clients.
-- **Decide:** whether clients should only see `APPROVED` reports. There's no approval endpoint yet, so filtering now would hide every report.
+- **Where:** reports were created as `PENDING` in `submitAgentAssignmentReport`.
+- **Problem:** the flow expected admin review, but reports are not reviewed by admins.
+- **Fix:** approve reports as part of agent submission and backfill existing `PENDING` reports to `APPROVED`.
 
 ---
 
