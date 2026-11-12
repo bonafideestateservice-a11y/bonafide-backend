@@ -129,6 +129,45 @@ describe("Premium quote notification flows", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("returns payment checkout object on GET quote when quote is accepted", async () => {
+    mockFindPremiumQuote.mockResolvedValueOnce({
+      ...issuedQuote,
+      status: "ACCEPTED",
+      acceptedAt: new Date(),
+      transactions: [
+        {
+          id: "txn-1",
+          provider: "PAYSTACK",
+          currency: "NGN",
+          authorizationUrl: "https://checkout.paystack.com/session-1",
+          providerRef: "ref-1",
+          status: "PENDING",
+        },
+      ],
+    });
+
+    const { res, next } = await callHandler(getVerificationRequestQuote, {
+      params: { id: "request-1" },
+      user: { id: "user-1" },
+    });
+
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "ACCEPTED",
+        payment: {
+          provider: "PAYSTACK",
+          currency: "NGN",
+          checkoutUrl: "https://checkout.paystack.com/session-1",
+          checkoutExpiresAt: null,
+          reference: "ref-1",
+          transactionId: "txn-1",
+          status: "PENDING",
+        },
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("creates and emails a country-selected hosted checkout after acceptance", async () => {
     const { res, next } = await callHandler(acceptVerificationRequestQuote, {
       params: { id: "request-1" },

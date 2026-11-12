@@ -1158,6 +1158,10 @@ export const findPremiumQuoteForUser = async (verificationRequestId: string, use
             additionalNote: true,
           },
         },
+        transactions: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
       orderBy: { createdAt: "desc" },
     });
