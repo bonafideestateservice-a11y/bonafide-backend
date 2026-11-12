@@ -118,7 +118,7 @@ const router = Router();
  *           type: string
  *           nullable: true
  *           description: The request's current VerificationStatus, as on the verification requests list; null for PROPERTY_ADDED.
- *           enum: [DRAFT, PENDING_PAYMENT, PAYMENT_FAILED, SUBMITTED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED]
+ *           enum: [DRAFT, PENDING_PAYMENT, PAYMENT_FAILED, SUBMITTED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED, QUOTE_REQUIRED]
  *           example: IN_PROGRESS
  *         verificationRequestId: { type: string, nullable: true, example: cmg4x2k1p0001 }
  *         property:
@@ -149,7 +149,7 @@ const router = Router();
  *           example: 5
  *     AdminDashboardVerificationRequest:
  *       type: object
- *       required: [id, client, propertyType, location, status, agent, createdAt]
+ *       required: [id, client, propertyType, location, status, quote, agent, createdAt]
  *       properties:
  *         id:
  *           type: string
@@ -193,8 +193,26 @@ const router = Router();
  *             The request's VerificationStatus. DRAFT and PENDING_PAYMENT are unpaid; SUBMITTED is paid and
  *             waiting for an agent; IN_PROGRESS from the moment an agent is assigned until the period's
  *             report is submitted.
- *           enum: [DRAFT, PENDING_PAYMENT, PAYMENT_FAILED, SUBMITTED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED]
+ *           enum: [DRAFT, PENDING_PAYMENT, PAYMENT_FAILED, SUBMITTED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED, QUOTE_REQUIRED]
  *           example: SUBMITTED
+ *         quote:
+ *           type: object
+ *           nullable: true
+ *           description: The latest Premium quote request, or null when no quote has been requested.
+ *           required: [status, intendedUse, notes]
+ *           properties:
+ *             status:
+ *               type: string
+ *               enum: [REQUESTED, ISSUED, ACCEPTED, EXPIRED, CANCELLED]
+ *               example: REQUESTED
+ *             intendedUse:
+ *               type: string
+ *               nullable: true
+ *               example: Residential rental investment
+ *             notes:
+ *               type: string
+ *               nullable: true
+ *               example: Please include a valuation of the existing structure.
  *         agent:
  *           type: object
  *           nullable: true
@@ -459,8 +477,9 @@ router.get("/dashboard/activities", checkJwt, checkIsAdmin, getAllActivitiesHand
  *     tags: [Admin Dashboard]
  *     summary: List verification requests for the dashboard
  *     description: >
- *       Paginated list of all verification requests with per-tab counts. Each item's status is a
- *       display status (see AdminDashboardVerificationRequest.status). Admin only.
+ *       Paginated list of all verification requests with per-tab counts. Each item's status is the
+ *       request status; quote contains the latest Premium quote status and client-provided details.
+ *       Admin only.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -954,7 +973,21 @@ router.post("/agents", checkJwt, checkIsAdmin, createAgentHandler);
  *               type: object
  *               properties:
  *                 id: { type: string }
- *                 status: { type: string, description: "The request's VerificationStatus, as on the list", enum: [DRAFT, PENDING_PAYMENT, PAYMENT_FAILED, SUBMITTED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED], example: SUBMITTED }
+ *                 status: { type: string, description: "The request's VerificationStatus, as on the list", enum: [DRAFT, PENDING_PAYMENT, PAYMENT_FAILED, SUBMITTED, IN_PROGRESS, AWAITING_RENEWAL, COMPLETED, CANCELLED, QUOTE_REQUIRED], example: SUBMITTED }
+ *                 quote:
+ *                   type: object
+ *                   nullable: true
+ *                   description: The latest Premium quote request, or null when no quote has been requested.
+ *                   required: [id, status, quoteUsdCents, quoteNgnKobo, scopeSummary, expiresAt, intendedUse, notes]
+ *                   properties:
+ *                     id: { type: string }
+ *                     status: { type: string, enum: [REQUESTED, ISSUED, ACCEPTED, EXPIRED, CANCELLED] }
+ *                     quoteUsdCents: { type: integer, nullable: true }
+ *                     quoteNgnKobo: { type: integer, nullable: true }
+ *                     scopeSummary: { type: string, nullable: true }
+ *                     expiresAt: { type: string, format: date-time, nullable: true }
+ *                     intendedUse: { type: string, nullable: true }
+ *                     notes: { type: string, nullable: true }
  *                 client:
  *                   type: object
  *                   properties:

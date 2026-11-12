@@ -26,6 +26,8 @@ const requestSelect = {
   id: true,
   status: true,
   details: true,
+  intendedUse: true,
+  additionalNote: true,
   createdAt: true,
   updatedAt: true,
   user: {
@@ -48,6 +50,11 @@ const requestSelect = {
     select: { status: true, amountInCents: true, currency: true },
     orderBy: { createdAt: "desc" as const },
     take: 1,
+  },
+  premiumQuotes: {
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+    select: { status: true },
   },
 } satisfies Prisma.VerificationRequestSelect;
 
@@ -217,10 +224,24 @@ export const getVerificationRequestForAdmin = (id: string) =>
       id: true,
       status: true,
       details: true,
+      intendedUse: true,
+      additionalNote: true,
       createdAt: true,
       user: { select: { id: true, fullName: true, email: true, phone: true, profilePhoto: true } },
       verificationType: { select: { name: true } },
       verificationPlan: { select: { name: true, frequency: true } },
+      premiumQuotes: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          status: true,
+          quoteUsdCents: true,
+          quoteNgnKobo: true,
+          scopeSummary: true,
+          expiresAt: true,
+        },
+      },
       agentAssignment: { select: { status: true, agent: { select: { id: true, name: true } } } },
       transactions: {
         orderBy: { createdAt: "desc" },

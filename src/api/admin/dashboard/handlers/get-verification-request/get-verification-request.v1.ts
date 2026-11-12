@@ -14,9 +14,17 @@ export const getVerificationRequestHandler = async (
     if (!request) return next(new NotFoundError("Verification request not found."));
 
     const { user, agentAssignment, verificationPlan, transactions, reports } = request;
+    const latestQuote = request.premiumQuotes[0];
     res.status(HttpStatusCode.OK).json({
       id: request.id,
       status: request.status,
+      quote: latestQuote
+        ? {
+            ...latestQuote,
+            intendedUse: request.intendedUse,
+            notes: request.additionalNote,
+          }
+        : null,
       client: {
         id: user.id,
         name: user.fullName,

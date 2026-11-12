@@ -46,6 +46,10 @@ const issuedQuote = {
   scopeSummary: "Valuation and feasibility assessment",
   expiresAt: new Date("2026-11-18T23:59:59.000Z"),
   createdAt: new Date("2026-11-04T20:30:00.000Z"),
+  verificationRequest: {
+    intendedUse: "Residential rental investment",
+    additionalNote: "Include a valuation of the existing structure.",
+  },
 };
 
 describe("Premium quote notification flows", () => {
@@ -116,7 +120,11 @@ describe("Premium quote notification flows", () => {
     });
 
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ scopeSummary: "Valuation and feasibility assessment" }),
+      expect.objectContaining({
+        scopeSummary: "Valuation and feasibility assessment",
+        intendedUse: "Residential rental investment",
+        notes: "Include a valuation of the existing structure.",
+      }),
     );
     expect(next).not.toHaveBeenCalled();
   });

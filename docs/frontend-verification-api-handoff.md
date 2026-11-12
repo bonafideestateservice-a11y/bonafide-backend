@@ -251,6 +251,48 @@ quote read falls back to the Premium tier description. An internal admin note is
 The email review link uses `CLIENT_APP_URL` from the backend environment; it appends
 `/verification-requests/{id}/quote` to that base URL.
 
+### Frontend screens to add for Premium quotes
+
+The current admin request-details page does not expose a quote action, and the admin Pricing
+screen only edits the Premium quote range. Add the following UI using the quote APIs above:
+
+1. **Admin Premium quote requests queue** — add a Quotes entry in the admin navigation (or a
+   clearly discoverable quote-request filter in Verification Requests). List requests whose
+   latest quote is `REQUESTED`, with request/property reference, client, submitted date, and an
+   **Issue quote** action. Include loading, empty, and error states. Open the existing request
+   details page for the selected request; do not make a second quote record just to display it.
+2. **Admin request-details quote panel and issue form** — show the quote request's intended use
+   and client notes, then collect:
+   - **Amount (USD):** display dollars to the admin but send `amountUsdCents` as an integer number
+     of cents. Show the configured Premium minimum and maximum from `GET /api/v1/admin/pricing`
+     and reject amounts outside that range before submission.
+   - **Scope summary:** client-facing description of what the Premium verification covers.
+   - **Expiry date and time:** required by the API; do not rely on an implicit two-week default.
+
+   Preview the NGN conversion using the active rate when available, but treat the backend response
+   as authoritative. Submit to `POST /api/v1/admin/verification-requests/{id}/quote`. On success,
+   show the issued amount in both currencies, conversion rate, expiry, and `ISSUED` status. For an
+   already-issued quote, show its details instead of presenting it as a new request.
+3. **Client quote review screen** — provide or reuse the route ending in
+   `/verification-requests/{id}/quote`, which is also the route linked from the quote email. Read
+   with `GET /api/v1/client/verification-requests/{id}/quote`; show the scope, USD and NGN amounts,
+   expiry, and an **Accept quote** action. On acceptance, open the returned
+   `payment.checkoutUrl`. Handle loading, not-found/not-yet-issued, expired, and payment errors.
+
+The admin form must not create the client's quote request: that is the client-side
+`POST /api/v1/client/verification-requests/{id}/quote` step. If no quote has been requested yet,
+the admin issue endpoint returns `404` (`Premium quote request not found.`); show that state and
+direct the client to submit the Premium request first.
+
+**Email delivery caveat:** the supplied ZeptoMail logs report `TM_3601` / `SMI_115` (trial
+account's 100-per-day sending limit exhausted) and show `VERIFICATION_REQUEST_CREATED` delivery
+jobs failing after retries. This is a provider/account sending limit, not a quote-form validation
+error. The quote endpoint currently reports email as `QUEUED`; that is not proof the email was
+delivered, and the frontend cannot query final delivery status through this endpoint. After issuing
+a quote, tell the admin it was issued and email was queued—not that it was delivered—and keep the
+client quote screen reachable independently of email. The ZeptoMail sending quota/account must be
+resolved separately for email notifications to resume.
+
 ### 5. Client reviews and accepts
 
 The client reads the issued quote at `GET /api/v1/client/verification-requests/{id}/quote`, then

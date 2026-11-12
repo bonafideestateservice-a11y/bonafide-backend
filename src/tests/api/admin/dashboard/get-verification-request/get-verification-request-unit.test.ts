@@ -20,10 +20,22 @@ describe("getVerificationRequestHandler (unit)", () => {
       id: "vr-1",
       status: "IN_PROGRESS",
       details: { propertyType: "Land" },
+      intendedUse: "Commercial development",
+      additionalNote: "Include a zoning review.",
       createdAt: new Date("2026-01-08T09:00:00Z"),
       user: { id: "u1", fullName: "Ada", email: "a@x.com", phone: null, profilePhoto: null },
       verificationType: { name: "Land Verification" },
       verificationPlan: { name: "Monthly", frequency: "MONTHLY" },
+      premiumQuotes: [
+        {
+          id: "quote-1",
+          status: "REQUESTED",
+          quoteUsdCents: null,
+          quoteNgnKobo: null,
+          scopeSummary: null,
+          expiresAt: null,
+        },
+      ],
       agentAssignment: { status: "ACCEPTED", agent: { id: "ag1", name: "Cynthia" } },
       transactions: [{ id: "t1", status: "SUCCESS" }],
       reports: [
@@ -36,6 +48,16 @@ describe("getVerificationRequestHandler (unit)", () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
         status: "IN_PROGRESS",
+        quote: {
+          id: "quote-1",
+          status: "REQUESTED",
+          quoteUsdCents: null,
+          quoteNgnKobo: null,
+          scopeSummary: null,
+          expiresAt: null,
+          intendedUse: "Commercial development",
+          notes: "Include a zoning review.",
+        },
         client: { id: "u1", name: "Ada", email: "a@x.com", phone: null, avatarUrl: null },
         verificationType: "Land Verification",
         agent: { id: "ag1", name: "Cynthia", assignmentStatus: "ACCEPTED" },

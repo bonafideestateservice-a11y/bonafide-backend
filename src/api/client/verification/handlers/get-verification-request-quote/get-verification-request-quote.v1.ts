@@ -35,6 +35,8 @@ export const getVerificationRequestQuote = async (
       id: quote.id,
       verificationRequestId: quote.verificationRequestId,
       status: quote.status,
+      intendedUse: quote.verificationRequest.intendedUse,
+      notes: quote.verificationRequest.additionalNote,
       amountUsdCents: quote.quoteUsdCents ?? null,
       amountNgnKobo: quote.quoteNgnKobo ?? null,
       ngnConversionRate: quote.usdToNgnRate?.toString() ?? null,

@@ -737,6 +737,9 @@ router.post("/verification-requests/:id/quote", checkJwt, postVerificationReques
  *   get:
  *     tags: [Verification]
  *     summary: Read the latest Premium quote
+ *     description: >
+ *       Returns the latest quote together with the intended use and optional notes saved when the
+ *       client requested it.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -750,7 +753,7 @@ router.post("/verification-requests/:id/quote", checkJwt, postVerificationReques
  *         schema: { type: string }
  *     responses:
  *       200:
- *         description: Quote details including the saved client-facing scope summary.
+ *         description: Quote details, the saved intended use and client notes, and the client-facing scope summary.
  *       401:
  *         description: Missing, invalid or expired token.
  *       404:

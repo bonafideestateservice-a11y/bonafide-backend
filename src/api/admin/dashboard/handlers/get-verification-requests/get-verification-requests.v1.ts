@@ -113,6 +113,13 @@ export const getVerificationRequestsHandler = async (
               : request.verificationType.name,
           location,
           status: request.status,
+          quote: request.premiumQuotes[0]
+            ? {
+                status: request.premiumQuotes[0].status,
+                intendedUse: request.intendedUse,
+                notes: request.additionalNote,
+              }
+            : null,
           agent: request.agentAssignment?.agent
             ? { id: request.agentAssignment.agent.id, name: request.agentAssignment.agent.name }
             : null,

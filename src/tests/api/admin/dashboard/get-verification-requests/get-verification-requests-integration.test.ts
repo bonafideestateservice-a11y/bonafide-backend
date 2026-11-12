@@ -10,7 +10,10 @@ let agentUserId: string;
 let agentId: string;
 let serviceId: string;
 let typeId: string;
+let premiumTierId: string;
+let createdPremiumTier = false;
 let requestIds: string[] = [];
+let quoteId: string;
 const assignmentIds: string[] = [];
 let adminToken: string;
 
@@ -59,9 +62,25 @@ beforeAll(async () => {
   });
   typeId = type.id;
 
+  const existingPremiumTier = await prismaClient.verificationTier.findUnique({
+    where: { code: "PREMIUM" },
+  });
+  const premiumTier =
+    existingPremiumTier ??
+    (await prismaClient.verificationTier.create({
+      data: {
+        code: "PREMIUM",
+        name: "Premium",
+        description: "Premium verification",
+        quoteRequired: true,
+      },
+    }));
+  premiumTierId = premiumTier.id;
+  createdPremiumTier = !existingPremiumTier;
+
   const requestData = [
     {
-      status: "SUBMITTED" as const,
+      status: "QUOTE_REQUIRED" as const,
       propertyType: "RESIDENTIAL",
       propertyAddress: "Lagos, Nigeria",
     },
@@ -84,6 +103,13 @@ beforeAll(async () => {
           userId: clientIds[index],
           verificationTypeId: typeId,
           status: data.status,
+          ...(index === 0
+            ? {
+                verificationTierId: premiumTierId,
+                intendedUse: "Residential rental investment",
+                additionalNote: "Please include a valuation.",
+              }
+            : {}),
           details: {
             propertyType: data.propertyType,
             propertyAddress: data.propertyAddress,
@@ -93,6 +119,14 @@ beforeAll(async () => {
     ),
   );
   requestIds = verificationRequests.map((item) => item.id);
+  const quote = await prismaClient.premiumQuote.create({
+    data: {
+      verificationRequestId: requestIds[0],
+      verificationTierId: premiumTierId,
+      status: "REQUESTED",
+    },
+  });
+  quoteId = quote.id;
 
   const agent = await prismaClient.verificationAgent.create({
     data: { userId: agentUserId, name: "Verification Requests Agent", region: "Lagos" },
@@ -124,7 +158,11 @@ afterAll(async () => {
     return;
   }
   await prismaClient.agentAssignment.deleteMany({ where: { id: { in: assignmentIds } } });
+  if (quoteId) await prismaClient.premiumQuote.delete({ where: { id: quoteId } });
   await prismaClient.verificationRequest.deleteMany({ where: { id: { in: requestIds } } });
+  if (createdPremiumTier) {
+    await prismaClient.verificationTier.delete({ where: { id: premiumTierId } });
+  }
   await prismaClient.verificationAgent.delete({ where: { id: agentId } });
   await prismaClient.verificationType.delete({ where: { id: typeId } });
   await prismaClient.service.delete({ where: { id: serviceId } });
@@ -156,7 +194,7 @@ describe("GET /api/v1/admin/verification-requests", () => {
     expect(res.body.meta).toEqual({ page: 1, limit: 10, totalItems: 1, totalPages: 1 });
     expect(res.body.counts).toEqual({
       all: 1,
-      pending: 1,
+      pending: 0,
       assigned: 0,
       inProgress: 0,
       completed: 0,
@@ -167,7 +205,12 @@ describe("GET /api/v1/admin/verification-requests", () => {
         client: expect.objectContaining({ name: "Verification Pending Client" }),
         propertyType: "RESIDENTIAL",
         location: { city: "Lagos", country: "Nigeria" },
-        status: "SUBMITTED",
+        status: "QUOTE_REQUIRED",
+        quote: {
+          status: "REQUESTED",
+          intendedUse: "Residential rental investment",
+          notes: "Please include a valuation.",
+        },
         agent: null,
       }),
     ]);

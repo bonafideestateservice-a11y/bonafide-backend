@@ -76,6 +76,8 @@ describe("getVerificationRequests handler (unit)", () => {
           id: "request-1",
           status: "SUBMITTED",
           details: { propertyType: "RESIDENTIAL", propertyAddress: "Lagos, Nigeria" },
+          intendedUse: "Residential rental investment",
+          additionalNote: "Please include a valuation.",
           createdAt: new Date("2026-01-06T00:00:00.000Z"),
           updatedAt: new Date("2026-01-06T00:00:00.000Z"),
           user: {
@@ -87,6 +89,7 @@ describe("getVerificationRequests handler (unit)", () => {
           verificationType: { id: "type-1", name: "Residential Property", slug: "residential" },
           agentAssignment: null,
           transactions: [],
+          premiumQuotes: [{ status: "REQUESTED" }],
         },
       ],
       meta: { page: 1, limit: 10, totalItems: 1, totalPages: 1 },
@@ -108,6 +111,11 @@ describe("getVerificationRequests handler (unit)", () => {
           propertyType: "RESIDENTIAL",
           location: { city: "Lagos", country: "Nigeria" },
           status: "SUBMITTED",
+          quote: {
+            status: "REQUESTED",
+            intendedUse: "Residential rental investment",
+            notes: "Please include a valuation.",
+          },
           agent: null,
           createdAt: "2026-01-06T00:00:00.000Z",
         },

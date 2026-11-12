@@ -1151,6 +1151,12 @@ export const findPremiumQuoteForUser = async (verificationRequestId: string, use
       include: {
         verificationTier: true,
         monitoringPlan: true,
+        verificationRequest: {
+          select: {
+            intendedUse: true,
+            additionalNote: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
