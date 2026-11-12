@@ -150,7 +150,10 @@ export interface EmailTemplateData {
     companyName: string;
     quoteId: string;
     verificationRequestId: string;
-    amount: string;
+    quoteAmount: string;
+    monitoringPlanName: string | null;
+    monitoringAmount: string;
+    totalAmount: string;
     currency: string;
     checkoutUrl: string;
   };

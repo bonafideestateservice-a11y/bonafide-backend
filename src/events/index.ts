@@ -89,6 +89,10 @@ export interface PremiumQuoteAcceptedPayload {
   provider: string;
   currency: string;
   checkoutUrl: string;
+  quoteAmountMinor: number;
+  monitoringPlanName: string | null;
+  monitoringAmountMinor: number;
+  totalAmountMinor: number;
 }
 
 export interface PropertyRequestCreatedPayload {

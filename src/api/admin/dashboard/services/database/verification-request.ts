@@ -238,6 +238,7 @@ export const getVerificationRequestForAdmin = (id: string) =>
           status: true,
           quoteUsdCents: true,
           quoteNgnKobo: true,
+          usdToNgnRate: true,
           scopeSummary: true,
           expiresAt: true,
         },

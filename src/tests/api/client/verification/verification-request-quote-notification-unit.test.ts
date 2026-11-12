@@ -79,7 +79,15 @@ describe("Premium quote notification flows", () => {
       checkoutUrl: "https://checkout.paystack.com/session-1",
       reference: "ref-1",
       transactionId: "txn-1",
-      pricing: { currency: "NGN" },
+      pricing: {
+        currency: "NGN",
+        verificationAmountNgnKobo: 22500000,
+        verificationAmountUsdCents: 15000,
+        monitoringAmountNgnKobo: 4900000,
+        monitoringAmountUsdCents: 3500,
+        amountMinor: 27400000,
+        request: { monitoringPlan: { name: "Weekly Monitoring" } },
+      },
     });
     mockEnqueueNotification.mockResolvedValue(undefined);
   });
@@ -182,6 +190,10 @@ describe("Premium quote notification flows", () => {
       provider: "PAYSTACK",
       currency: "NGN",
       checkoutUrl: "https://checkout.paystack.com/session-1",
+      quoteAmountMinor: 22500000,
+      monitoringPlanName: "Weekly Monitoring",
+      monitoringAmountMinor: 4900000,
+      totalAmountMinor: 27400000,
     });
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -207,7 +219,15 @@ describe("Premium quote notification flows", () => {
       reference: "cs-1",
       sessionId: "cs-1",
       transactionId: "txn-1",
-      pricing: { currency: "USD" },
+      pricing: {
+        currency: "USD",
+        verificationAmountNgnKobo: 22500000,
+        verificationAmountUsdCents: 15000,
+        monitoringAmountNgnKobo: 0,
+        monitoringAmountUsdCents: 0,
+        amountMinor: 15000,
+        request: { monitoringPlan: null },
+      },
     });
 
     await callHandler(acceptVerificationRequestQuote, {

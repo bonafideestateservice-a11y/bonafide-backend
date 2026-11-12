@@ -506,15 +506,18 @@ Fields:
 
 - **Sent to:** the client after provider-hosted checkout has been created
 - **Variable:** `ZEPTO_TEMPLATE_PREMIUM_QUOTE_ACCEPTED`
-- **Includes:** the country-applicable quote amount, Bonafide name, and direct provider checkout link
+- **Includes:** the quote amount, optional selected monitoring plan and first-period amount, total due, and direct provider checkout link
 
 Fields:
 
 - `firstName`: client's full name
 - `companyName`: `Bonafide`
 - `quoteId`: accepted quote
-- `verificationRequestId`: paid request
-- `amount`: quoted amount in major units
+- `verificationRequestId`: request awaiting checkout payment
+- `quoteAmount`: quote amount in major units
+- `monitoringPlanName`: selected monitoring plan, or empty when none is selected
+- `monitoringAmount`: first monitoring-period amount in major units
+- `totalAmount`: total amount due in major units, matching the provider checkout
 - `currency`: `NGN` or `USD`
 - `checkoutUrl`: provider-hosted Stripe or Paystack checkout
 

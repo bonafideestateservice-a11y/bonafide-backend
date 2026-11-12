@@ -456,6 +456,10 @@ describe("notification event handlers", () => {
       provider: "PAYSTACK",
       currency: "NGN",
       checkoutUrl: "https://checkout.paystack.com/session",
+      quoteAmountMinor: 22500000,
+      monitoringPlanName: "Weekly Monitoring",
+      monitoringAmountMinor: 4900000,
+      totalAmountMinor: 27400000,
     });
 
     expect(emailFor(deliveries, "user-1")).toEqual({
@@ -465,7 +469,10 @@ describe("notification event handlers", () => {
         companyName: "Bonafide",
         quoteId: "quote-1",
         verificationRequestId: "vr-1",
-        amount: "225,000.00",
+        quoteAmount: "225,000.00",
+        monitoringPlanName: "Weekly Monitoring",
+        monitoringAmount: "49,000.00",
+        totalAmount: "274,000.00",
         currency: "NGN",
         checkoutUrl: "https://checkout.paystack.com/session",
       },

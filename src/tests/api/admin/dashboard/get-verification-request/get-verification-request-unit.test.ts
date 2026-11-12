@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+
 jest.mock("../../../../../api/admin/dashboard/services/database/verification-request", () => ({
   ...jest.requireActual(
     "../../../../../api/admin/dashboard/services/database/verification-request",
@@ -29,11 +31,12 @@ describe("getVerificationRequestHandler (unit)", () => {
       premiumQuotes: [
         {
           id: "quote-1",
-          status: "REQUESTED",
-          quoteUsdCents: null,
-          quoteNgnKobo: null,
-          scopeSummary: null,
-          expiresAt: null,
+          status: "ISSUED",
+          quoteUsdCents: 10000,
+          quoteNgnKobo: 16000000,
+          usdToNgnRate: new Prisma.Decimal("1600.00000000"),
+          scopeSummary: "Land verification",
+          expiresAt: new Date("2026-01-22T09:00:00Z"),
         },
       ],
       agentAssignment: { status: "ACCEPTED", agent: { id: "ag1", name: "Cynthia" } },
@@ -50,11 +53,12 @@ describe("getVerificationRequestHandler (unit)", () => {
         status: "IN_PROGRESS",
         quote: {
           id: "quote-1",
-          status: "REQUESTED",
-          quoteUsdCents: null,
-          quoteNgnKobo: null,
-          scopeSummary: null,
-          expiresAt: null,
+          status: "ISSUED",
+          quoteUsdCents: 10000,
+          quoteNgnKobo: 16000000,
+          ngnConversionRate: "1600",
+          scopeSummary: "Land verification",
+          expiresAt: new Date("2026-01-22T09:00:00Z"),
           intendedUse: "Commercial development",
           notes: "Include a zoning review.",
         },

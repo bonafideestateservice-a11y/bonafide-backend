@@ -40,15 +40,30 @@ const resolvePayment = async (verificationRequestId: string) => {
     countryCode === "NG"
       ? await createPaystackVerificationCheckout(verificationRequestId, request.userId)
       : await createStripeVerificationCheckout(verificationRequestId, request.userId);
+  const pricing = checkout.pricing;
+  const quoteAmountMinor =
+    pricing.currency === "NGN"
+      ? pricing.verificationAmountNgnKobo
+      : pricing.verificationAmountUsdCents;
+  if (quoteAmountMinor === null) {
+    throw new Error(`Quote amount is unavailable for requestId=${verificationRequestId}`);
+  }
 
   return {
     provider: checkout.provider,
-    currency: checkout.pricing.currency,
+    currency: pricing.currency,
     checkoutUrl: checkout.checkoutUrl,
     checkoutExpiresAt: null,
     reference: checkout.reference,
     transactionId: checkout.transactionId,
     status: "PENDING",
+    quoteAmountMinor,
+    monitoringPlanName: pricing.request.monitoringPlan?.name ?? null,
+    monitoringAmountMinor:
+      pricing.currency === "NGN"
+        ? pricing.monitoringAmountNgnKobo
+        : pricing.monitoringAmountUsdCents,
+    totalAmountMinor: pricing.amountMinor,
   };
 };
 
@@ -89,6 +104,10 @@ export const acceptVerificationRequestQuote = async (
       provider: payment.provider,
       currency: payment.currency,
       checkoutUrl: payment.checkoutUrl,
+      quoteAmountMinor: payment.quoteAmountMinor,
+      monitoringPlanName: payment.monitoringPlanName,
+      monitoringAmountMinor: payment.monitoringAmountMinor,
+      totalAmountMinor: payment.totalAmountMinor,
     });
     const response = {
       id: accepted.quote.id,

@@ -108,18 +108,27 @@ const htmlEmails: {
   },
   [EmailTemplate.PREMIUM_QUOTE_ACCEPTED]: (data) => {
     const d = escaped(data);
+    const details: [string, string][] = [
+      ["Quote ID", d.quoteId],
+      ["Verification quote", `${d.currency} ${d.quoteAmount}`],
+    ];
+    if (d.monitoringPlanName) {
+      details.push(
+        ["Monitoring plan", d.monitoringPlanName],
+        ["Monitoring (first period)", `${d.currency} ${d.monitoringAmount}`],
+      );
+    }
+    details.push(["Total amount due", `${d.currency} ${d.totalAmount}`]);
+
     return {
       subject: "Quote accepted - complete your payment",
       html: renderEmailHtml({
         heading: "Complete Your Payment",
         paragraphs: [
           `Hi ${d.firstName},`,
-          "Thank you for accepting your verification quote. Please complete your payment to begin the verification process.",
+          "Thank you for accepting your verification quote. The total below includes the quote and, if selected, the first monitoring period.",
         ],
-        details: [
-          ["Quote ID", d.quoteId],
-          ["Amount due", `${d.currency} ${d.amount}`],
-        ],
+        details,
         button: {
           label: "Complete Payment",
           url: data.checkoutUrl,

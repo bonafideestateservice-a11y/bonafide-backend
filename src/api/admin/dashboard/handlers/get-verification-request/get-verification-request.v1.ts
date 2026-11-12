@@ -20,7 +20,13 @@ export const getVerificationRequestHandler = async (
       status: request.status,
       quote: latestQuote
         ? {
-            ...latestQuote,
+            id: latestQuote.id,
+            status: latestQuote.status,
+            quoteUsdCents: latestQuote.quoteUsdCents,
+            quoteNgnKobo: latestQuote.quoteNgnKobo,
+            scopeSummary: latestQuote.scopeSummary,
+            expiresAt: latestQuote.expiresAt,
+            ngnConversionRate: latestQuote.usdToNgnRate?.toString() ?? null,
             intendedUse: request.intendedUse,
             notes: request.additionalNote,
           }

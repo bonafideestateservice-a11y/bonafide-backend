@@ -497,10 +497,6 @@ const handlePremiumQuoteAccepted: EventHandler<AppEventTypes.PREMIUM_QUOTE_ACCEP
     throw new Error(`Accepted Premium quote has no checkout URL quoteId=${quote.id}`);
   }
   const recipient = quote.verificationRequest.user;
-  const amount = payload.currency === "NGN" ? quote.quoteNgnKobo : quote.quoteUsdCents;
-  if (amount === null) {
-    throw new Error(`Accepted Premium quote has no ${payload.currency} amount quoteId=${quote.id}`);
-  }
   return [
     {
       channel: "email",
@@ -512,7 +508,10 @@ const handlePremiumQuoteAccepted: EventHandler<AppEventTypes.PREMIUM_QUOTE_ACCEP
           companyName: "Bonafide",
           quoteId: quote.id,
           verificationRequestId: quote.verificationRequestId,
-          amount: formatAmount(amount),
+          quoteAmount: formatAmount(payload.quoteAmountMinor),
+          monitoringPlanName: payload.monitoringPlanName,
+          monitoringAmount: formatAmount(payload.monitoringAmountMinor),
+          totalAmount: formatAmount(payload.totalAmountMinor),
           currency: payload.currency,
           checkoutUrl: payload.checkoutUrl,
         },

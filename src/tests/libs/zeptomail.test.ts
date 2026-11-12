@@ -105,7 +105,10 @@ describe("sendTemplateEmail", () => {
           companyName: "Bonafide",
           quoteId: "quote-123",
           verificationRequestId: "vr-123",
-          amount: "140,000.00",
+          quoteAmount: "140,000.00",
+          monitoringPlanName: "Weekly Monitoring",
+          monitoringAmount: "49,000.00",
+          totalAmount: "189,000.00",
           currency: "NGN",
           checkoutUrl: "https://checkout.paystack.com/access-123",
         },
@@ -116,9 +119,40 @@ describe("sendTemplateEmail", () => {
     const [{ subject, htmlbody, email_address }] = clientSendMail.mock.calls[0];
     expect(email_address).toBe("ada@example.com");
     expect(subject).toBe("Quote accepted - complete your payment");
+    expect(htmlbody).toContain("Verification quote");
     expect(htmlbody).toContain("NGN 140,000.00");
+    expect(htmlbody).toContain("Weekly Monitoring");
+    expect(htmlbody).toContain("NGN 49,000.00");
+    expect(htmlbody).toContain("Total amount due");
+    expect(htmlbody).toContain("NGN 189,000.00");
     expect(htmlbody).toContain("https://checkout.paystack.com/access-123");
     expect(htmlbody).toContain("Complete Payment");
+  });
+
+  it("omits monitoring details when no monitoring plan was selected", async () => {
+    await sendTemplateEmail({
+      to,
+      content: {
+        template: EmailTemplate.PREMIUM_QUOTE_ACCEPTED,
+        data: {
+          firstName: "Ada",
+          companyName: "Bonafide",
+          quoteId: "quote-123",
+          verificationRequestId: "vr-123",
+          quoteAmount: "140,000.00",
+          monitoringPlanName: null,
+          monitoringAmount: "0.00",
+          totalAmount: "140,000.00",
+          currency: "NGN",
+          checkoutUrl: "https://checkout.paystack.com/access-123",
+        },
+      },
+    });
+
+    const [{ htmlbody }] = clientSendMail.mock.calls[0];
+    expect(htmlbody).toContain("Total amount due");
+    expect(htmlbody).toContain("NGN 140,000.00");
+    expect(htmlbody).not.toContain("Monitoring plan");
   });
 
   it("sends the other emails with their ZeptoMail template key", async () => {
