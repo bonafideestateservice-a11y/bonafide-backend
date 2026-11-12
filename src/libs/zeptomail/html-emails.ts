@@ -5,7 +5,11 @@ import { EmailContent, EmailTemplate, EmailTemplateData } from "./templates";
  * Emails sent as HTML from here instead of a ZeptoMail template, so they need no template key.
  */
 type HtmlEmailTemplate =
-  EmailTemplate.USER_REGISTERED | EmailTemplate.FORGOT_PASSWORD | EmailTemplate.PAYMENT_RECEIVED;
+  | EmailTemplate.USER_REGISTERED
+  | EmailTemplate.FORGOT_PASSWORD
+  | EmailTemplate.PAYMENT_RECEIVED
+  | EmailTemplate.PREMIUM_QUOTE_ISSUED
+  | EmailTemplate.PREMIUM_QUOTE_ACCEPTED;
 
 const escapeHtml = (value: string) =>
   value
@@ -71,6 +75,55 @@ const htmlEmails: {
           ["Receipt ID", d.receipt_id],
           ["Request ID", d.booking_ref],
         ],
+      }),
+    };
+  },
+  [EmailTemplate.PREMIUM_QUOTE_ISSUED]: (data) => {
+    const d = escaped(data);
+    const expiryDate = new Date(data.expiresAt);
+    const formattedExpiry = Number.isNaN(expiryDate.getTime())
+      ? d.expiresAt
+      : expiryDate.toUTCString();
+
+    return {
+      subject: "Your property verification quote is ready",
+      html: renderEmailHtml({
+        heading: "Your Quote is Ready",
+        paragraphs: [
+          `Hi ${d.firstName},`,
+          "We have prepared a custom quote for your property verification request. Please review the pricing and scope details below.",
+        ],
+        details: [
+          ["Quote ID", d.quoteId],
+          ["Amount (USD)", `$${d.amountUsd}`],
+          ["Amount (NGN)", `₦${d.amountNgn}`],
+          ["Valid until", formattedExpiry],
+        ],
+        button: {
+          label: "Review Quote",
+          url: data.reviewUrl,
+        },
+      }),
+    };
+  },
+  [EmailTemplate.PREMIUM_QUOTE_ACCEPTED]: (data) => {
+    const d = escaped(data);
+    return {
+      subject: "Quote accepted - complete your payment",
+      html: renderEmailHtml({
+        heading: "Complete Your Payment",
+        paragraphs: [
+          `Hi ${d.firstName},`,
+          "Thank you for accepting your verification quote. Please complete your payment to begin the verification process.",
+        ],
+        details: [
+          ["Quote ID", d.quoteId],
+          ["Amount due", `${d.currency} ${d.amount}`],
+        ],
+        button: {
+          label: "Complete Payment",
+          url: data.checkoutUrl,
+        },
       }),
     };
   },

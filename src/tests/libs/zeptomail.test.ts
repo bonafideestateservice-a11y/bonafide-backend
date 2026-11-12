@@ -67,6 +67,60 @@ describe("sendTemplateEmail", () => {
     expect(htmlbody).toEqual(expect.stringContaining("Land Verification"));
   });
 
+  it("sends PREMIUM_QUOTE_ISSUED as HTML with price, expiry and review button", async () => {
+    await sendTemplateEmail({
+      to,
+      content: {
+        template: EmailTemplate.PREMIUM_QUOTE_ISSUED,
+        data: {
+          firstName: "Ada",
+          companyName: "Bonafide",
+          quoteId: "quote-123",
+          verificationRequestId: "vr-123",
+          amountUsd: "100.00",
+          amountNgn: "140,000.00",
+          expiresAt: "2026-11-13T15:35:00.000Z",
+          reviewUrl: "https://bonafide.example.com/verification-requests/vr-123/quote",
+        },
+      },
+    });
+
+    expect(clientSendMailWithTemplate).not.toHaveBeenCalled();
+    const [{ subject, htmlbody, email_address }] = clientSendMail.mock.calls[0];
+    expect(email_address).toBe("ada@example.com");
+    expect(subject).toBe("Your property verification quote is ready");
+    expect(htmlbody).toContain("$100.00");
+    expect(htmlbody).toContain("₦140,000.00");
+    expect(htmlbody).toContain("https://bonafide.example.com/verification-requests/vr-123/quote");
+    expect(htmlbody).toContain("Review Quote");
+  });
+
+  it("sends PREMIUM_QUOTE_ACCEPTED as HTML with amount and payment checkout button", async () => {
+    await sendTemplateEmail({
+      to,
+      content: {
+        template: EmailTemplate.PREMIUM_QUOTE_ACCEPTED,
+        data: {
+          firstName: "Ada",
+          companyName: "Bonafide",
+          quoteId: "quote-123",
+          verificationRequestId: "vr-123",
+          amount: "140,000.00",
+          currency: "NGN",
+          checkoutUrl: "https://checkout.paystack.com/access-123",
+        },
+      },
+    });
+
+    expect(clientSendMailWithTemplate).not.toHaveBeenCalled();
+    const [{ subject, htmlbody, email_address }] = clientSendMail.mock.calls[0];
+    expect(email_address).toBe("ada@example.com");
+    expect(subject).toBe("Quote accepted - complete your payment");
+    expect(htmlbody).toContain("NGN 140,000.00");
+    expect(htmlbody).toContain("https://checkout.paystack.com/access-123");
+    expect(htmlbody).toContain("Complete Payment");
+  });
+
   it("sends the other emails with their ZeptoMail template key", async () => {
     const data = {
       firstName: "Tunde",
