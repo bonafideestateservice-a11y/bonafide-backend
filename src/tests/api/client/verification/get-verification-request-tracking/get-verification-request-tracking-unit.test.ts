@@ -170,6 +170,49 @@ describe("GET /verification-requests/:id/tracking - Unit", () => {
     });
   });
 
+  it("reports the current period complete when its report exists even if the counter is stale", async () => {
+    (databaseService.getVerificationRequestTrackingForUser as jest.Mock).mockResolvedValue({
+      id: "req-123",
+      details: { propertyAddress: "123 Main St" },
+      createdAt: new Date("2026-11-12T10:00:00Z"),
+      notifyOnInspectionStart: true,
+      notifyOnReportReady: true,
+      verificationType: { name: "Property Verification" },
+      agentAssignment: null,
+      reports: [{ generatedAt: new Date("2026-11-12T10:30:00Z"), transactionId: "txn-current" }],
+      monitoringSubscriptions: [
+        {
+          status: "ACTIVE",
+          interval: "MONTHLY",
+          monitoringPlan: { code: "MONTHLY" },
+        },
+      ],
+      subscriptionPeriods: [
+        {
+          id: "period-current",
+          paidTransactionId: "txn-current",
+          status: "IN_PROGRESS",
+          periodStart: new Date("2026-11-12T10:00:00Z"),
+          periodEnd: new Date("2026-12-12T10:00:00Z"),
+          requiredSiteVisits: 2,
+          completedSiteVisits: 2,
+          requiredReports: 1,
+          reportCount: 0,
+          siteVisits: [],
+        },
+      ],
+    });
+
+    await getVerificationRequestTracking(req as Request, res as Response, next);
+
+    expect(
+      (res.json as jest.Mock).mock.calls[0][0].data.monitoring.currentPeriod.reportStatus,
+    ).toBe("COMPLETED");
+    expect((res.json as jest.Mock).mock.calls[0][0].data.timeline.reportReadyAt).toBe(
+      "2026-11-12T10:30:00.000Z",
+    );
+  });
+
   describe("reportReadyAt", () => {
     const buildTracking = (assignmentPeriod: string | null, reportPeriod: string | null) => ({
       id: "req-123",

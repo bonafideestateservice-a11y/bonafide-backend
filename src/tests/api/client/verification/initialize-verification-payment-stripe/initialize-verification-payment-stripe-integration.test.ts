@@ -4,6 +4,7 @@ jest.mock("../../../../../libs/stripe/stripe", () => ({
   createStripeSession,
 }));
 
+import { VerificationTierCode } from "@prisma/client";
 import request from "supertest";
 import app from "../../../../../app";
 import { prismaClient } from "../../../../../utils/prisma";
@@ -11,44 +12,112 @@ import { createFixtures } from "../../../../helpers/fixtures";
 
 const fx = createFixtures("stripe-init");
 let client: Awaited<ReturnType<typeof fx.createUser>>;
-let planId: string;
 let typeId: string;
+let tierId: string;
+let tierPriceUsdCents: number;
+let stripePriceId: string;
+let createdPriceVersionId: string | undefined;
+let createdTier = false;
 const requestIds: string[] = [];
 
 beforeAll(async () => {
   client = await fx.createUser("CLIENT", "client");
   typeId = (await fx.createPaidRequest(client.id)).verificationTypeId;
-  planId = (
-    await prismaClient.verificationPlan.create({
+
+  const existingTier = await prismaClient.verificationTier.findUnique({
+    where: { code: VerificationTierCode.BASIC },
+  });
+  const tier =
+    existingTier ??
+    (await prismaClient.verificationTier.create({
       data: {
-        verificationTypeId: typeId,
-        frequency: "ONE_TIME",
-        name: "One-time",
+        code: VerificationTierCode.BASIC,
+        name: "Basic",
+        description: "Stripe integration-test tier",
         priceUsdCents: 4500,
-        priceNgnKobo: 7200000,
-        stripePriceId: `price_${fx.tag}`,
       },
-    })
-  ).id;
-  createStripeSession.mockImplementation(
-    async () => `https://checkout.stripe.com/c/pay/cs_${Date.now()}`,
-  );
+    }));
+  tierId = tier.id;
+  tierPriceUsdCents = tier.priceUsdCents ?? 4500;
+  createdTier = !existingTier;
+
+  const existingPriceVersion = await prismaClient.providerPriceVersion.findFirst({
+    where: {
+      verificationTierId: tierId,
+      provider: "STRIPE",
+      currency: "USD",
+      syncStatus: "READY",
+      activeForNewCheckout: true,
+    },
+    select: { providerPriceId: true, usdAmountCents: true, amountMinor: true },
+  });
+  if (
+    existingPriceVersion?.providerPriceId &&
+    existingPriceVersion.usdAmountCents === tierPriceUsdCents &&
+    existingPriceVersion.amountMinor === tierPriceUsdCents
+  ) {
+    stripePriceId = existingPriceVersion.providerPriceId;
+  } else {
+    const activePriceVersion = await prismaClient.providerPriceVersion.findFirst({
+      where: {
+        verificationTierId: tierId,
+        provider: "STRIPE",
+        currency: "USD",
+        activeForNewCheckout: true,
+      },
+    });
+    if (activePriceVersion) {
+      throw new Error("The active Stripe price does not match the Basic tier price.");
+    }
+    const latestPriceVersion = await prismaClient.providerPriceVersion.findFirst({
+      where: { verificationTierId: tierId, provider: "STRIPE" },
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
+    const priceVersion = await prismaClient.providerPriceVersion.create({
+      data: {
+        verificationTierId: tierId,
+        provider: "STRIPE",
+        currency: "USD",
+        amountMinor: tierPriceUsdCents,
+        usdAmountCents: tierPriceUsdCents,
+        version: (latestPriceVersion?.version ?? 0) + 1,
+        syncStatus: "READY",
+        activeForNewCheckout: true,
+        providerPriceId: `price_${fx.tag}`,
+      },
+      select: { id: true, providerPriceId: true },
+    });
+    createdPriceVersionId = priceVersion.id;
+    if (!priceVersion.providerPriceId) {
+      throw new Error("Stripe provider price was not created for the integration test.");
+    }
+    stripePriceId = priceVersion.providerPriceId;
+  }
+
+  createStripeSession.mockImplementation(async () => ({
+    id: `cs_${Date.now()}`,
+    url: `https://checkout.stripe.com/c/pay/cs_${Date.now()}`,
+  }));
 });
 afterAll(async () => {
   const where = { verificationRequestId: { in: requestIds } };
   await prismaClient.transaction.deleteMany({ where });
   await prismaClient.verificationRequest.deleteMany({ where: { id: { in: requestIds } } });
-  await prismaClient.verificationPlan.deleteMany({ where: { verificationTypeId: typeId } });
+  if (createdPriceVersionId) {
+    await prismaClient.providerPriceVersion.delete({ where: { id: createdPriceVersionId } });
+  }
+  if (createdTier) await prismaClient.verificationTier.delete({ where: { id: tierId } });
   await fx.cleanup();
   await prismaClient.$disconnect();
 });
 
-const draftRequest = async (verificationPlanId: string | null = planId) => {
+const draftRequest = async (verificationTierId: string | null = tierId, userId = client.id) => {
   const draft = await prismaClient.verificationRequest.create({
     data: {
-      userId: client.id,
+      userId,
       verificationTypeId: typeId,
-      verificationPlanId,
+      verificationTierId,
       status: "DRAFT",
       details: { propertyType: "HOUSE", propertyAddress: "Lekki, Lagos" },
     },
@@ -77,7 +146,10 @@ describe("POST /api/v1/client/verification-requests/:id/payment/initialize-strip
     expect(again.body).toEqual(first.body);
     expect(createStripeSession.mock.calls.length - before).toBe(1);
     expect(createStripeSession).toHaveBeenLastCalledWith(
-      expect.objectContaining({ priceId: `price_${fx.tag}`, mode: "payment" }),
+      expect.objectContaining({
+        lineItems: [{ price: stripePriceId, quantity: 1 }],
+        mode: "payment",
+      }),
     );
     const saved = await prismaClient.verificationRequest.findUniqueOrThrow({
       where: { id },
@@ -87,7 +159,7 @@ describe("POST /api/v1/client/verification-requests/:id/payment/initialize-strip
     expect(saved.transactions).toEqual([
       expect.objectContaining({
         status: "PENDING",
-        amountInCents: 4500,
+        amountInCents: tierPriceUsdCents,
         currency: "USD",
         authorizationUrl: first.body.url,
       }),
@@ -110,22 +182,15 @@ describe("POST /api/v1/client/verification-requests/:id/payment/initialize-strip
     expect(retry.status).toBe(200);
   });
 
-  it("returns 400 for a request without a plan or a plan not set up in Stripe", async () => {
-    const noPlan = await draftRequest(null);
-    expect((await pay(noPlan)).body.message).toBe("Select a verification plan before payment.");
+  it("returns 400 when no tier is selected or Stripe is not the client's provider", async () => {
+    const noTier = await draftRequest(null);
+    expect((await pay(noTier)).body.message).toBe("Verification tier is unavailable");
 
-    const unconfigured = await prismaClient.verificationPlan.create({
-      data: {
-        verificationTypeId: typeId,
-        frequency: "MONTHLY",
-        name: "Monthly",
-        priceUsdCents: 3500,
-        priceNgnKobo: 5600000,
-      },
-    });
-    const response = await pay(await draftRequest(unconfigured.id));
+    const nigerianClient = await fx.createUser("CLIENT", "nigerian-client", "NG");
+    const nigerianRequest = await draftRequest(tierId, nigerianClient.id);
+    const response = await pay(nigerianRequest, nigerianClient.token);
     expect(response.status).toBe(400);
-    expect(response.body.message).toBe("The selected plan is not configured in Stripe.");
+    expect(response.body.message).toBe("Payment provider does not match the request country");
   });
 
   it("returns 403 for another client's request, 404 for an unknown one and 401 without a token", async () => {

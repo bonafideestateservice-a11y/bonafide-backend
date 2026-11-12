@@ -74,6 +74,7 @@ export const getVerificationRequestTracking = async (
       latestReport && (!assignmentPeriod || latestReport.transactionId === assignmentPeriod)
         ? latestReport
         : undefined;
+    const currentReportCount = Math.max(currentPeriod?.reportCount ?? 0, currentReport ? 1 : 0);
     const monitoringSubscription = tracking.monitoringSubscriptions?.[0];
     const monitoring = monitoringSubscription
       ? {
@@ -86,9 +87,9 @@ export const getVerificationRequestTracking = async (
                 checksIncluded: currentPeriod.requiredSiteVisits,
                 checksCompleted: currentPeriod.completedSiteVisits,
                 reportStatus:
-                  currentPeriod.reportCount >= currentPeriod.requiredReports
+                  currentReportCount >= currentPeriod.requiredReports
                     ? "COMPLETED"
-                    : currentPeriod.reportCount > 0
+                    : currentReportCount > 0
                       ? "IN_PROGRESS"
                       : "PENDING",
                 siteVisits: currentPeriod.siteVisits.map((visit) => ({

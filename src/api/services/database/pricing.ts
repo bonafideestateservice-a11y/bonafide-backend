@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import {
   MonitoringInterval,
   MonitoringPlan,
@@ -1411,7 +1412,7 @@ export const reservePricedTransaction = async (
               }
               const sameSnapshot =
                 existing.pricingSnapshot !== null &&
-                JSON.stringify(existing.pricingSnapshot) === JSON.stringify(data.pricingSnapshot);
+                isDeepStrictEqual(existing.pricingSnapshot, data.pricingSnapshot);
               const checkoutReady =
                 data.provider === PaymentProvider.STRIPE
                   ? Boolean(existing.providerRef && existing.authorizationUrl)
