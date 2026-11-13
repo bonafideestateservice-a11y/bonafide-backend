@@ -204,3 +204,9 @@ export async function createStripeCheckout({
   });
   return { id: session.id, url: session.url };
 }
+
+export async function cancelStripeSubscription(
+  subscriptionId: string,
+): Promise<Stripe.Subscription> {
+  return getStripeClient().subscriptions.cancel(subscriptionId);
+}

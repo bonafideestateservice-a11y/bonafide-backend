@@ -25,6 +25,7 @@ import { postVerificationRequestQuote } from "./handlers/post-verification-reque
 import { getVerificationRequestQuote } from "./handlers/get-verification-request-quote";
 import { acceptVerificationRequestQuote } from "./handlers/accept-verification-request-quote";
 import { getVerificationRequestCheckoutSummary } from "./handlers/get-verification-request-checkout-summary";
+import { cancelVerificationRequestSubscription } from "./handlers/cancel-verification-request-subscription";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -927,6 +928,73 @@ router.get("/verification-requests/reports-summary", checkJwt, getVerificationRe
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
 router.get("/verification-requests/:id", checkJwt, getVerificationRequest);
+
+/**
+ * @swagger
+ * /api/{version}/client/verification-requests/{id}/subscription/cancel:
+ *   post:
+ *     tags: [Verification]
+ *     summary: Cancel subscription billing for a verification request
+ *     description: >
+ *       Cancels the authenticated user's Paystack or Stripe subscription through its provider and
+ *       updates the matching local subscription after provider confirmation. Requests owned by
+ *       another user return 404. Already inactive or non-renewing subscriptions return success
+ *       without another provider call.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: version
+ *         required: true
+ *         schema: { type: string, enum: [v1], default: v1 }
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Verification request id
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Subscription cancelled or already inactive
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [status, message, data]
+ *               properties:
+ *                 status: { type: string, enum: [success], example: success }
+ *                 message: { type: string, example: Subscription cancelled successfully. }
+ *                 data:
+ *                   type: object
+ *                   required: [provider, subscriptionStatus]
+ *                   properties:
+ *                     provider: { type: string, enum: [PAYSTACK, STRIPE], example: PAYSTACK }
+ *                     subscriptionStatus: { type: string, enum: [DISABLED, INACTIVE, EXPIRED, NON_RENEWING] }
+ *       401:
+ *         description: Missing, invalid or expired token, or the token's user no longer exists
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       404:
+ *         description: The request does not exist or belongs to another user
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       409:
+ *         description: No subscription is associated with the request or cancellation details are missing
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ *       500:
+ *         description: Payment provider or database failure ("Unable to cancel subscription.")
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
+router.post(
+  "/verification-requests/:id/subscription/cancel",
+  checkJwt,
+  cancelVerificationRequestSubscription,
+);
 
 /**
  * @swagger
