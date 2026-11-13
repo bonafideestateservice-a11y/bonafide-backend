@@ -500,8 +500,9 @@ router.post(
  *       required: [additionalNotes]
  *       properties:
  *         additionalNotes:
- *           type: string
- *           description: Replaces the assignment's notes. An empty string is allowed.
+ *           description: >
+ *             Replaces the assignment's notes. Accepts any JSON value; non-string values are
+ *             serialized as JSON text. An empty string is allowed.
  *           example: Owner was present during inspection.
  *     AdminVerificationUpdateNotesResponse:
  *       type: object
@@ -1189,7 +1190,7 @@ router.patch(
  *           application/json:
  *             schema: { $ref: '#/components/schemas/AdminVerificationUpdateNotesResponse' }
  *       400:
- *         description: "additionalNotes is missing or not a string (`additionalNotes must be a string.`)."
+ *         description: additionalNotes is missing or is not a JSON value.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }

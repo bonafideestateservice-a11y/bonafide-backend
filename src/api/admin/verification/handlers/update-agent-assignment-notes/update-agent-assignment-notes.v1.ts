@@ -20,8 +20,19 @@ export const updateAgentAssignmentNotes = async (
     if (!userId) {
       return next(new ApiError(HttpStatusCode.UNAUTHORIZED, "Authentication required."));
     }
-    if (typeof req.body.additionalNotes !== "string") {
-      return next(new BadRequestError("additionalNotes must be a string."));
+    const body: unknown = req.body;
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !Object.prototype.hasOwnProperty.call(body, "additionalNotes")
+    ) {
+      return next(new BadRequestError("additionalNotes is required."));
+    }
+    const notesValue = (body as Record<string, unknown>).additionalNotes;
+    const additionalNotes =
+      typeof notesValue === "string" ? notesValue : JSON.stringify(notesValue);
+    if (additionalNotes === undefined) {
+      return next(new BadRequestError("additionalNotes must be a JSON value."));
     }
 
     const agent = await getVerificationAgentByUserId(userId);
@@ -30,13 +41,13 @@ export const updateAgentAssignmentNotes = async (
     const updated = await updateAssignmentNotesService(
       agent.id,
       req.params.id,
-      req.body.additionalNotes,
+      additionalNotes,
     );
     if (!updated) return next(new NotFoundError("Assignment not found."));
 
     res.status(HttpStatusCode.OK).json({
       id: req.params.id,
-      additionalNotes: req.body.additionalNotes,
+      additionalNotes,
     });
   } catch (error) {
     logger.error(`Error updating agent assignment notes: ${error}`);

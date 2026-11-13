@@ -109,4 +109,18 @@ describe("Agent assignment update endpoints", () => {
       prismaClient.agentAssignment.findUnique({ where: { id: assignmentId } }),
     ).resolves.toEqual(expect.objectContaining({ additionalNotes: "Call before arrival." }));
   });
+
+  it("serializes non-string JSON notes before storing them", async () => {
+    const response = await request(app)
+      .patch(`/api/v1/admin/verification/agent-assignments-notes/${assignmentId}`)
+      .set("Authorization", `Bearer ${agentToken}`)
+      .send({ additionalNotes: { source: "inspection", tags: ["follow-up"] } });
+
+    const serializedNotes = '{"source":"inspection","tags":["follow-up"]}';
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ id: assignmentId, additionalNotes: serializedNotes });
+    await expect(
+      prismaClient.agentAssignment.findUnique({ where: { id: assignmentId } }),
+    ).resolves.toEqual(expect.objectContaining({ additionalNotes: serializedNotes }));
+  });
 });

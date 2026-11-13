@@ -49,6 +49,33 @@ describe("updateAgentAssignmentNotes handler (unit)", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it("serializes non-string JSON notes before updating", async () => {
+    mockedUpdateNotes.mockResolvedValue(true);
+    const { req, res, next } = buildMockReqRes({
+      additionalNotes: { access: ["call", "text"], confirmed: true },
+    });
+
+    await updateAgentAssignmentNotes(req, res, next);
+
+    const serializedNotes = '{"access":["call","text"],"confirmed":true}';
+    expect(mockedUpdateNotes).toHaveBeenCalledWith("agent-1", "assignment-1", serializedNotes);
+    expect(res.json).toHaveBeenCalledWith({
+      id: "assignment-1",
+      additionalNotes: serializedNotes,
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("serializes null notes as JSON text", async () => {
+    mockedUpdateNotes.mockResolvedValue(true);
+    const { req, res, next } = buildMockReqRes({ additionalNotes: null });
+
+    await updateAgentAssignmentNotes(req, res, next);
+
+    expect(mockedUpdateNotes).toHaveBeenCalledWith("agent-1", "assignment-1", "null");
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it("rejects a missing notes value", async () => {
     const { req, res, next } = buildMockReqRes();
 
